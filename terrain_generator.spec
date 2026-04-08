@@ -12,6 +12,7 @@ Or install PyInstaller first:
 import sys
 import os
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_submodules
 
 block_cipher = None
 
@@ -23,17 +24,6 @@ else:
         PROJECT_ROOT = Path(__file__).parent.absolute()
     except NameError:
         PROJECT_ROOT = Path.cwd()
-
-# Collect PySide6 data files
-hiddenimports = [
-    'PySide6.QtCore',
-    'PySide6.QtGui',
-    'PySide6.QtWidgets',
-    'PySide6.QtOpenGL',
-    'PySide6.QtNetwork',
-    'shiboken6',
-]
-datas = []
 
 # Collect PySide6 data files (icons, translations, etc.)
 hiddenimports = collect_submodules('PySide6')
