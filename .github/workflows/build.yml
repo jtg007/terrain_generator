@@ -31,25 +31,16 @@ jobs:
 
       - name: Display output
         run: |
-          ls -la dist/
-          $size = (Get-Item dist/TerrainGenerator.exe).Length / 1MB
-          Write-Host "Executable size: $size MB"
+          Get-ChildItem dist/ -Recurse -File | Select-Object FullName, @{Name="SizeMB";Expression={[math]::Round($_.Length/1MB,2)}}
+          $size = [math]::Round((Get-ChildItem dist/ -Recurse -File | Measure-Object -Property Length -Sum).Sum / 1MB, 2)
+          Write-Host "Total build size: $size MB"
 
-      - name: Upload executable
+      - name: Upload all artifacts
         uses: actions/upload-artifact@v4
         with:
           name: TerrainGenerator-Windows
-          path: dist/TerrainGenerator.exe
-          compression-level: 9
-
-      - name: Upload all artifacts (optional)
-        uses: actions/upload-artifact@v4
-        with:
-          name: TerrainGenerator-AllFiles
           path: |
             dist/TerrainGenerator/
-            dist/*.exe
-          if-no-files-found: ignore
 
   lint:
     runs-on: ubuntu-latest
