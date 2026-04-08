@@ -1,0 +1,5 @@
+worldengine>=0.4.0
+Pillow>=10.0
+numpy>=1.24
+vmflib>=0.1.1
+PySide6>=6.5.0

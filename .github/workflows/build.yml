@@ -1,0 +1,69 @@
+name: Build Windows Executable
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install -r config/requirements.txt
+          pip install pyinstaller
+
+      - name: Build executable
+        run: |
+          pyinstaller terrain_generator.spec --onefile --windowed --clean
+
+      - name: Display output
+        run: |
+          ls -la dist/
+          $size = (Get-Item dist/TerrainGenerator.exe).Length / 1MB
+          Write-Host "Executable size: $size MB"
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: TerrainGenerator-Windows
+          path: dist/TerrainGenerator.exe
+          compression-level: 9
+
+      - name: Upload all artifacts (optional)
+        uses: actions/upload-artifact@v4
+        with:
+          name: TerrainGenerator-AllFiles
+          path: |
+            dist/TerrainGenerator/
+            dist/*.exe
+          if-no-files-found: ignore
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          
+      - name: Install ruff
+        run: pip install ruff
+        
+      - name: Run linting
+        run: |
+          ruff check src/ tools/*.py

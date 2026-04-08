@@ -1,0 +1,21 @@
+{
+  "skyboxes": [
+    "empsky_day1",
+    "empsky_day2",
+    "empsky_day3",
+    "empsky_day3_hdr",
+    "empsky_glycen",
+    "empsky_mvalley",
+    "empsky_mvalley2",
+    "empsky_mvalley2_silk",
+    "empsky_overcast1",
+    "empsky_overcast2",
+    "empsky_overcast3yellow",
+    "empsky_sunset1",
+    "empsky_sunset2",
+    "sky134",
+    "sky20",
+    "sky92"
+  ],
+  "count": 16
+}

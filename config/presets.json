@@ -1,0 +1,56 @@
+{
+    "presets": {
+        "flat": {
+            "name": "Flat",
+            "description": "Mostly flat terrain suitable for vehicle combat",
+            "tiles_x": 16,
+            "tiles_y": 16,
+            "roughness": 0.1,
+            "erosion_strength": 0.05,
+            "height_scale": 512,
+            "displacement_power": 3,
+            "terrain_material": "common/nature/blend_grass_mountainwall_000",
+            "skybox": "empsky_overcast3yellow"
+        },
+        "hills": {
+            "name": "Hills",
+            "description": "Rolling hills for mixed infantry and vehicle scenarios",
+            "tiles_x": 20,
+            "tiles_y": 20,
+            "roughness": 0.4,
+            "erosion_strength": 0.3,
+            "height_scale": 1536,
+            "displacement_power": 3,
+            "terrain_material": "common/nature/blend_grass_mountainwall_000",
+            "skybox": "empsky_day1"
+        },
+        "rugged": {
+            "name": "Rugged",
+            "description": "Highly varied terrain with deep valleys and mountains",
+            "tiles_x": 20,
+            "tiles_y": 20,
+            "roughness": 0.7,
+            "erosion_strength": 0.6,
+            "height_scale": 2560,
+            "displacement_power": 3,
+            "terrain_material": "nature/terrain/blend_grass1_rock1",
+            "skybox": "empsky_overcast2"
+        },
+        "competitive": {
+            "name": "Competitive",
+            "description": "Symmetrical balanced noise distribution for fair matches",
+            "tiles_x": 16,
+            "tiles_y": 16,
+            "roughness": 0.3,
+            "erosion_strength": 0.2,
+            "height_scale": 1024,
+            "displacement_power": 3,
+            "terrain_material": "common/nature/blend_grass_mountainwall_000",
+            "skybox": "empsky_overcast1",
+            "base_clear_radius": 1024,
+            "base_flatness": 1.0,
+            "center_flatten": 0.8,
+            "center_flatten_radius": 0.5
+        }
+    }
+}
