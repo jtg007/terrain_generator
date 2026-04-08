@@ -37,32 +37,21 @@ jobs:
           $size = [math]::Round((Get-ChildItem dist/ -Recurse -File | Measure-Object -Property Length -Sum).Sum / 1MB, 2)
           Write-Host "Total build size: $size MB"
 
+      - name: Create zip for release
+        run: |
+          Compress-Archive -Path "dist/TerrainGenerator/*" -DestinationPath "dist/TerrainGenerator-Windows.zip" -Force
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/TerrainGenerator-Windows.zip
+
       - name: Upload all artifacts
         uses: actions/upload-artifact@v4
         with:
           name: TerrainGenerator-Windows
           path: |
             dist/TerrainGenerator/
-
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: dist/TerrainGenerator.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload to Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          Compress-Archive -Path "dist/TerrainGenerator/*" -DestinationPath "dist/TerrainGenerator.zip" -Force
-        shell: pwsh
-
-      - name: Upload Release Asset
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: dist/TerrainGenerator.zip
 
   lint:
     runs-on: ubuntu-latest
