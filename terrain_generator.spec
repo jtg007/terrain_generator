@@ -12,12 +12,25 @@ Or install PyInstaller first:
 import sys
 import os
 from pathlib import Path
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 block_cipher = None
 
-# Project root directory
-PROJECT_ROOT = Path(__file__).parent.absolute()
+# Project root directory - use sys._MEIPASS when bundled, otherwise use script location
+if getattr(sys, 'frozen', False):
+    PROJECT_ROOT = Path(sys._MEIPASS)
+else:
+    PROJECT_ROOT = Path(__file__).parent.absolute()
+
+# Collect PySide6 data files
+hiddenimports = [
+    'PySide6.QtCore',
+    'PySide6.QtGui',
+    'PySide6.QtWidgets',
+    'PySide6.QtOpenGL',
+    'PySide6.QtNetwork',
+    'shiboken6',
+]
+datas = []
 
 # Collect PySide6 data files (icons, translations, etc.)
 hiddenimports = collect_submodules('PySide6')
