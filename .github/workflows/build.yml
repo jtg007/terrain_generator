@@ -3,8 +3,6 @@ name: Build Windows Executable
 on:
   push:
     branches: [main, master]
-    tags:
-      - 'v*'
   pull_request:
     branches: [main, master]
   workflow_dispatch:
@@ -36,16 +34,6 @@ jobs:
           Get-ChildItem dist/ -Recurse -File | Select-Object FullName, @{Name="SizeMB";Expression={[math]::Round($_.Length/1MB,2)}}
           $size = [math]::Round((Get-ChildItem dist/ -Recurse -File | Measure-Object -Property Length -Sum).Sum / 1MB, 2)
           Write-Host "Total build size: $size MB"
-
-      - name: Create zip for release
-        run: |
-          Compress-Archive -Path "dist/TerrainGenerator/*" -DestinationPath "dist/TerrainGenerator-Windows.zip" -Force
-
-      - name: Upload to Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create ${{ github.ref_name }} --title "Terrain Generator ${{ github.ref_name }}" --notes "Windows executable for Empires Terrain Generator" dist/TerrainGenerator-Windows.zip
 
       - name: Upload all artifacts
         uses: actions/upload-artifact@v4
