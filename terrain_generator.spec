@@ -19,7 +19,10 @@ block_cipher = None
 if getattr(sys, 'frozen', False):
     PROJECT_ROOT = Path(sys._MEIPASS)
 else:
-    PROJECT_ROOT = Path(__file__).parent.absolute()
+    try:
+        PROJECT_ROOT = Path(__file__).parent.absolute()
+    except NameError:
+        PROJECT_ROOT = Path.cwd()
 
 # Collect PySide6 data files
 hiddenimports = [
