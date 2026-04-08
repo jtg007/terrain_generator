@@ -3,6 +3,11 @@ import json
 import random
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / "config"))
+
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -19,14 +24,10 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QFileDialog,
     QCheckBox,
+    QLineEdit,
 )
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QFont
-
-# Ensure correct path resolution to import from src
-PROJECT_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(PROJECT_ROOT / "src"))
-sys.path.insert(0, str(PROJECT_ROOT))
 
 from PIL import Image
 import numpy as np
@@ -40,9 +41,6 @@ from src.vmf_gen import (
     DEFAULT_SAFE_SKYBOX,
 )
 from src.steam_paths import validate_empires_path
-
-# Import config from config module
-sys.path.insert(0, str(PROJECT_ROOT / "config"))
 from config import Config
 
 
