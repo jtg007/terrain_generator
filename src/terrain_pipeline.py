@@ -19,10 +19,16 @@ All coordinate calculations use integer grid positions to prevent T-junctions.
 
 import math
 import random
+import sys
 from typing import List, Tuple
 
-from terrain_spec import TerrainSpec, HeightGrid, TerrainCell, UnderlayBrush
-from noise import NoiseGenerator
+if getattr(sys, "frozen", False):
+    from terrain_spec import TerrainSpec, HeightGrid, TerrainCell, UnderlayBrush
+    from noise import NoiseGenerator
+else:
+    from src.terrain_spec import TerrainSpec, HeightGrid, TerrainCell, UnderlayBrush
+    from src.noise import NoiseGenerator
+
 from PIL import Image, ImageOps
 
 
@@ -996,7 +1002,10 @@ def run_pipeline(spec: TerrainSpec) -> dict:
 
 
 if __name__ == "__main__":
-    from terrain_spec import create_default_spec
+    if getattr(sys, "frozen", False):
+        from terrain_spec import create_default_spec
+    else:
+        from src.terrain_spec import create_default_spec
 
     result = run_pipeline(create_default_spec())
 

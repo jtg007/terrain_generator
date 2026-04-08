@@ -1,7 +1,12 @@
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Tuple, Optional
-from src.terrain_spec import TerrainSpec
+import sys
+
+if getattr(sys, "frozen", False):
+    from terrain_spec import TerrainSpec
+else:
+    from src.terrain_spec import TerrainSpec
 
 
 @dataclass
