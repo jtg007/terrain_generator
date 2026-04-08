@@ -52,6 +52,14 @@ from src.vmf_gen import (
 from src.steam_paths import validate_empires_path
 from config import Config
 
+# Ensure OUTPUT_DIR is outside of _internal when bundled
+if getattr(sys, "frozen", False):
+    OUTPUT_DIR = Path(sys.executable).parent / "output"
+else:
+    OUTPUT_DIR = PROJECT_ROOT / "output"
+
+# Make sure it exists
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 def heightgrid_to_heightmap(
     grid, target_rows: int = 0, target_cols: int = 0
@@ -81,7 +89,6 @@ def heightgrid_to_heightmap(
     return normalized
 
 
-OUTPUT_DIR = PROJECT_ROOT / "output"
 COMPILE_SAFE_NODETAIL_MATERIAL = "common/terrain/blend_grass01a_dirt01a_nodetail"
 
 

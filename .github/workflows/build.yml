@@ -31,7 +31,7 @@ jobs:
 
       - name: Build executable
         run: |
-          pyinstaller terrain_generator.spec --clean
+          python build_exe.py --onedir
 
       - name: Display output
         run: |
