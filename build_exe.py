@@ -39,17 +39,18 @@ def install_pyinstaller():
             return False
 
 
+import os
+
 def build(mode="onefile"):
     """Build the executable."""
     print(f"\nBuilding Terrain Generator ({mode} mode)...")
 
     # Build command
-    if mode == "onedir":
-        cmd = ["pyinstaller", str(SPEC_FILE), "--onedir"]
-    else:
-        cmd = ["pyinstaller", str(SPEC_FILE), "--onefile", "--windowed"]
+    env = os.environ.copy()
+    env["BUILD_MODE"] = mode
+    cmd = [sys.executable, "-m", "PyInstaller", str(SPEC_FILE)]
 
-    result = subprocess.run(cmd, cwd=PROJECT_ROOT)
+    result = subprocess.run(cmd, cwd=PROJECT_ROOT, env=env)
 
     if result.returncode == 0:
         print("\nBuild successful!")
