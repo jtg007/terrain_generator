@@ -12,6 +12,11 @@ sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "config"))
 
+import os
+
+if not getattr(sys, "frozen", False):
+    os.chdir(PROJECT_ROOT)
+
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,

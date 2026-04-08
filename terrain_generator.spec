@@ -39,15 +39,15 @@ hiddenimports += [
 # Collect data files from packages
 datas = []
 
-# Config directory - only bundle presets, textures, skyboxes (not config.json which is user-specific)
+# Config directory - bundle config.py and config files
 config_dir = PROJECT_ROOT / 'config'
 if config_dir.exists():
-    # Bundle presets, textures, skyboxes, requirements
-    for f in ['presets.json', 'textures.json', 'skyboxes.json', 'requirements.txt']:
+    # Bundle config.py and config files
+    for f in ['config.py', 'presets.json', 'textures.json', 'skyboxes.json', 'requirements.txt']:
         fp = config_dir / f
         if fp.exists():
             datas.append((str(fp), 'config'))
-    # Exclude config.json - it contains user-specific paths
+    # Exclude config.json - user-specific paths, created at runtime
 
 # Source modules - place at root level so imports work
 src_dir = PROJECT_ROOT / 'src'
