@@ -9,14 +9,18 @@
 - **Auto-Detection** - Finds your Empires installation automatically
 - **Entity Placement** - Bases, resource nodes, and player spawns
 
-## How to Use
+## Installation
 
 1. Download `TerrainGenerator-Windows.zip` from [Releases](https://github.com/jtg007/terrain_generator/releases)
-2. Extract and run `TerrainGenerator.exe`
-3. Select a **Preset** (Flat, Hills, Rugged, Competitive)
-4. Click **Generate**
-5. Click **Compile**
-6. Open in Empires → Create Server → Select your map
+2. **Extract the entire zip** into a folder (e.g., `TerrainGenerator/`)
+3. Run `TerrainGenerator.exe` from that folder
+
+## How to Use
+
+1. Select a **Preset** (Flat, Hills, Rugged, Competitive)
+2. Click **Generate**
+3. Click **Compile**
+4. Open in Empires → Create Server → Select your map
 
 ## Requirements
 - Windows 10/11 (or Linux with Wine for compilation)
