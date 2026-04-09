@@ -994,7 +994,9 @@ class TerrainGeneratorGUI(QMainWindow):
         self.btn_compile.setEnabled(False)
         self.btn_compile.setText("Compiling...")
 
-        self.compile_worker = CompileWorker(vmf_path)
+        empires_path = self.config.get("empires_path", "")
+
+        self.compile_worker = CompileWorker(vmf_path, empires_path)
         self.compile_worker.finished.connect(self.on_compile_finished)
         self.compile_worker.start()
 
@@ -1011,9 +1013,10 @@ class TerrainGeneratorGUI(QMainWindow):
 class CompileWorker(QThread):
     finished = Signal(bool, str)
 
-    def __init__(self, vmf_path):
+    def __init__(self, vmf_path, empires_path=""):
         super().__init__()
         self.vmf_path = vmf_path
+        self.empires_path = empires_path
 
     def run(self):
         try:
@@ -1026,6 +1029,9 @@ class CompileWorker(QThread):
                 self.vmf_path,
                 "--nodetail",
             ]
+            if self.empires_path:
+                cmd.extend(["--empires-path", self.empires_path])
+
             result = subprocess.run(
                 cmd,
                 cwd=str(PROJECT_ROOT),
