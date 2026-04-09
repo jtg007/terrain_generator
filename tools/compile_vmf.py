@@ -40,7 +40,14 @@ def compile_vmf(
     vmf_name = vmf_path.name
 
     if not sdk_path:
-        sdk_path = find_empires_bin()
+        if empires_path:
+            # empires_path is the "empires" directory inside the Empires game directory
+            # e.g., /path/to/Empires/empires
+            # The bin directory is at /path/to/Empires/bin
+            empires_game_dir = os.path.dirname(os.path.normpath(empires_path))
+            sdk_path = os.path.join(empires_game_dir, "bin")
+        else:
+            sdk_path = find_empires_bin()
 
     if not sdk_path or not os.path.exists(sdk_path):
         print("Error: Empires bin not found.")
