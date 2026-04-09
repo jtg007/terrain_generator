@@ -89,7 +89,7 @@ def main():
         print(f"Saved: {hm_path}")
         args.heightmap = str(hm_path)
 
-    print(f"\nGenerating VMF...")
+    print("\nGenerating VMF...")
     print(f"  Heightmap: {args.heightmap}")
     print(f"  Tiles: {args.tiles_x}x{args.tiles_y}")
     print(f"  Tile size: {args.tile_size}")

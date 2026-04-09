@@ -343,7 +343,7 @@ def main():
         print(f"Error: Heightmap not found: {args.heightmap}")
         sys.exit(1)
 
-    print(f"=== Terrain Blending System ===")
+    print("=== Terrain Blending System ===")
     print(f"Heightmap: {args.heightmap}")
     print(f"Blend Type: {args.blend_type}")
     print()

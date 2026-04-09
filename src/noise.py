@@ -7,7 +7,7 @@ Uses seeded permutation table for reproducible results.
 """
 
 import math
-from typing import List, Tuple
+from typing import List
 
 
 class SeededRandom:
@@ -192,7 +192,6 @@ def generate_heightmap_from_spec(
 
 
 if __name__ == "__main__":
-    import json
 
     hm = generate_heightmap(12345, 17, 17, scale=0.02, octaves=4, amplitude=256)
 
