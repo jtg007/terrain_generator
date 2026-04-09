@@ -81,13 +81,15 @@ def compile_vmf(
     # Run VBSP with OS-appropriate command
     if is_windows():
         # Windows: Run VBSP directly
-        cmd = ["vbsp.exe", "-game", "..\\empires", vmf_name]
+        cmd = ["vbsp.exe", "-game", "..\\empires"]
     else:
         # Linux: Run via Wine
-        cmd = ["wine", "vbsp.exe", "-game", "../empires", vmf_name]
+        cmd = ["wine", "vbsp.exe", "-game", "../empires"]
 
     if nodetail:
-        cmd.insert(2, "-nodetail")
+        cmd.append("-nodetail")
+
+    cmd.append(vmf_name)
 
     try:
         result = subprocess.run(
