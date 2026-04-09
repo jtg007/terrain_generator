@@ -11,12 +11,9 @@ Usage:
 
 import os
 import sys
-import re
 import argparse
-import json
-import subprocess
 from pathlib import Path
-from typing import List, Tuple, Dict
+from typing import List, Tuple
 
 
 class VmfBlendProcessor:
@@ -133,7 +130,6 @@ class VmfBlendProcessor:
         self, face_coords: List[Tuple[int, int]], power: int
     ) -> List[str]:
         """Generate alpha values for a displacement face based on heightmap."""
-        import numpy as np
 
         heightmap = self._load_heightmap()
         h, w = heightmap.shape

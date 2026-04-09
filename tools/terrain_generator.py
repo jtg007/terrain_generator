@@ -1020,27 +1020,44 @@ class CompileWorker(QThread):
 
     def run(self):
         try:
-            import subprocess
+            if getattr(sys, "frozen", False):
+                import io
+                import contextlib
+                from tools.compile_vmf import compile_vmf
 
-            compile_script = PROJECT_ROOT / "tools" / "compile_vmf.py"
-            cmd = [
-                sys.executable,
-                str(compile_script),
-                self.vmf_path,
-                "--nodetail",
-            ]
-            if self.empires_path:
-                cmd.extend(["--empires-path", self.empires_path])
+                f = io.StringIO()
+                with contextlib.redirect_stdout(f), contextlib.redirect_stderr(f):
+                    success = compile_vmf(
+                        vmf_path=str(self.vmf_path),
+                        sdk_path="",
+                        empires_path=self.empires_path,
+                        nodetail=True,
+                    )
 
-            result = subprocess.run(
-                cmd,
-                cwd=str(PROJECT_ROOT),
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode != 0:
-                err = result.stderr.strip() if result.stderr else result.stdout.strip()
-                raise RuntimeError(err or "Compile failed")
+                if not success:
+                    raise RuntimeError(f.getvalue().strip() or "Compile failed")
+            else:
+                import subprocess
+
+                compile_script = PROJECT_ROOT / "tools" / "compile_vmf.py"
+                cmd = [
+                    sys.executable,
+                    str(compile_script),
+                    str(self.vmf_path),
+                    "--nodetail",
+                ]
+                if self.empires_path:
+                    cmd.extend(["--empires-path", self.empires_path])
+
+                result = subprocess.run(
+                    cmd,
+                    cwd=str(PROJECT_ROOT),
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode != 0:
+                    err = result.stderr.strip() if result.stderr else result.stdout.strip()
+                    raise RuntimeError(err or "Compile failed")
 
             self.finished.emit(
                 True,

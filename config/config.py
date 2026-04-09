@@ -3,7 +3,6 @@
 Config Manager - Saves and loads user settings
 """
 
-import sys
 import json
 import os
 import platform

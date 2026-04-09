@@ -3,7 +3,6 @@ Terrain Generator Core Logic
 Generates heightmaps for Source Engine using WorldEngine
 """
 
-import os
 import json
 import numpy as np
 from PIL import Image
@@ -288,16 +287,16 @@ class TerrainGenerator:
             "compression": "None",
             "flags": resolution * 4,
             "steps": [
-                f"1. Open Hammer++ Editor",
-                f"2. Create a large brush for the terrain",
-                f"3. Texture one side with 'tools/toolstrigger'",
-                f"4. Select the face → 'Displacement' → 'Create'",
-                f"5. Click 'Load...' → Select the .raw file",
-                f"6. Settings:",
-                f"   - Compression: None",
+                "1. Open Hammer++ Editor",
+                "2. Create a large brush for the terrain",
+                "3. Texture one side with 'tools/toolstrigger'",
+                "4. Select the face → 'Displacement' → 'Create'",
+                "5. Click 'Load...' → Select the .raw file",
+                "6. Settings:",
+                "   - Compression: None",
                 f"   - Dimension: {resolution}x{resolution}",
                 f"   - Flags: ~{resolution * 4}",
-                f"7. Click 'Apply'",
-                f"8. Assign textures using 'Paint Geometry'",
+                "7. Click 'Apply'",
+                "8. Assign textures using 'Paint Geometry'",
             ],
         }
