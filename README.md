@@ -2,7 +2,10 @@
 
 **GUI application** for generating displacement terrain maps for Empires Mod.
 
+<img width="1122" height="1292" alt="tool" src="https://github.com/user-attachments/assets/dc739f25-5908-4710-8dfc-c5dbbd9dd734" />
+
 ## Features
+
 - **Procedural Terrain** - Mountains and valleys using noise and erosion
 - **Graphical Interface** - Easy-to-use GUI with preset selection
 - **Automatic Compilation** - One-click generate and compile
