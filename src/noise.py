@@ -192,7 +192,6 @@ def generate_heightmap_from_spec(
 
 
 if __name__ == "__main__":
-
     hm = generate_heightmap(12345, 17, 17, scale=0.02, octaves=4, amplitude=256)
 
     print("Generated 17x17 heightmap with seed 12345:")

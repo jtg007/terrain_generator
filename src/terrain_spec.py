@@ -40,6 +40,13 @@ class TerrainSpec:
     center_flatten: float = 0.0
     center_flatten_radius: float = 0.5
 
+    # Spawn settings
+    disable_commander: bool = False
+    disable_buildings: bool = False
+    disable_resource_nodes: bool = False
+    minimal_map: bool = False
+    terrain_only: bool = False
+
     def __post_init__(self):
         if self.displacement_power not in (2, 3):
             raise ValueError(
