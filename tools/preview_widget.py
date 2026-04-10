@@ -17,7 +17,7 @@ class MapPreviewWidget(QLabel):
 
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setAlignment(Qt.AlignCenter)
-        self.setStyleSheet("background-color: #0f0f10; border: 1px solid #333338;")
+        self.setStyleSheet("background-color: #0d0d10; border: 1px solid #2e2e36; border-radius: 4px;")
 
         self.map_image = None
         self.pixmap_rect = QRectF()

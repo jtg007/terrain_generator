@@ -36,9 +36,11 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QCheckBox,
     QLineEdit,
+    QSplitter,
+    QScrollArea,
 )
 from PySide6.QtCore import Qt, QThread, Signal, QTimer
-from PySide6.QtGui import QFont, QImage
+from PySide6.QtGui import QFont, QImage, QKeySequence, QShortcut
 from tools.preview_widget import MapPreviewWidget
 
 from PIL import Image
@@ -260,8 +262,9 @@ class GenerationWorker(QThread):
 class TerrainGeneratorGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Modern Terrain Generator")
-        self.resize(1150, 750)
+        self.setWindowTitle("Terrain Generator — Source Engine VMF Builder")
+        self.resize(1200, 780)
+        self.setMinimumSize(820, 560)
 
         self.config_model = GUIConfigModel()
         self.config = Config()
@@ -281,6 +284,43 @@ class TerrainGeneratorGUI(QMainWindow):
             "hills"
         )
         self.update_validation_status()
+
+        # F12 screenshot
+        sc = QShortcut(QKeySequence("F12"), self)
+        sc.activated.connect(self.take_screenshot)
+
+    def take_screenshot(self):
+        import datetime
+        import subprocess
+        import shutil
+        out_dir = PROJECT_ROOT / "docs" / "screenshots"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        path = str(out_dir / f"gui_{ts}.png")
+        canonical = str(out_dir / "gui_preview.png")
+
+        # self.grab() captures this window — works on Wayland
+        pixmap = self.grab()
+        if not pixmap.isNull():
+            ok = pixmap.save(path, "PNG")
+            if ok:
+                shutil.copy(path, canonical)
+                QMessageBox.information(self, "Screenshot saved", f"Saved to:\n{path}")
+                return
+
+        # Fallback: spectacle (KDE)
+        try:
+            result = subprocess.run(
+                ["spectacle", "-b", "-a", "-n", "-o", path],
+                timeout=8, capture_output=True,
+            )
+            if Path(path).exists() and Path(path).stat().st_size > 0:
+                shutil.copy(path, canonical)
+                QMessageBox.information(self, "Screenshot saved", f"Saved to:\n{path}")
+            else:
+                QMessageBox.warning(self, "Screenshot failed", "Could not capture screen.")
+        except Exception as e:
+            QMessageBox.warning(self, "Screenshot failed", str(e))
 
     def load_presets(self):
         presets_path = PROJECT_ROOT / "config" / "presets.json"
@@ -311,82 +351,101 @@ class TerrainGeneratorGUI(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout(central_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # Root splitter: sidebar | main area
+        self._root_splitter = QSplitter(Qt.Horizontal)
+        main_layout.addWidget(self._root_splitter)
 
         # --- Sidebar ---
         sidebar = QWidget()
+        sidebar.setObjectName("Sidebar")
         sidebar_layout = QVBoxLayout(sidebar)
-        sidebar.setFixedWidth(250)
+        sidebar_layout.setContentsMargins(12, 14, 12, 12)
+        sidebar_layout.setSpacing(8)
+        sidebar.setMinimumWidth(190)
+        sidebar.setMaximumWidth(300)
 
-        title = QLabel("Terrain Gen")
-        title.setFont(QFont("Arial", 16, QFont.Bold))
-        title.setAlignment(Qt.AlignCenter)
+        # Clean title
+        title = QLabel("Terrain Generator")
+        title.setAlignment(Qt.AlignLeft)
+        title.setObjectName("BrandTitle")
         sidebar_layout.addWidget(title)
 
-        preset_group = QGroupBox("Presets")
-        preset_layout = QVBoxLayout(preset_group)
+        # Divider
+        div1 = QWidget()
+        div1.setFixedHeight(1)
+        div1.setObjectName("Divider")
+        sidebar_layout.addWidget(div1)
+
+        # Presets — checkable to show active
+        preset_label = QLabel("PRESETS")
+        preset_label.setObjectName("SectionLabel")
+        sidebar_layout.addWidget(preset_label)
+
+        self._preset_group = QButtonGroup(self)
+        self._preset_group.setExclusive(True)
+        preset_grid = QGridLayout()
+        preset_grid.setSpacing(4)
         self.btn_flat = QPushButton("Flat")
         self.btn_hills = QPushButton("Hills")
         self.btn_rugged = QPushButton("Rugged")
         self.btn_comp = QPushButton("Competitive")
-
+        for btn in (self.btn_flat, self.btn_hills, self.btn_rugged, self.btn_comp):
+            btn.setObjectName("PresetButton")
+            btn.setCheckable(True)
+            btn.setMinimumHeight(30)
+            self._preset_group.addButton(btn)
         self.btn_flat.clicked.connect(lambda: self.apply_preset("flat"))
         self.btn_hills.clicked.connect(lambda: self.apply_preset("hills"))
         self.btn_rugged.clicked.connect(lambda: self.apply_preset("rugged"))
         self.btn_comp.clicked.connect(lambda: self.apply_preset("competitive"))
+        preset_grid.addWidget(self.btn_flat, 0, 0)
+        preset_grid.addWidget(self.btn_hills, 0, 1)
+        preset_grid.addWidget(self.btn_rugged, 1, 0)
+        preset_grid.addWidget(self.btn_comp, 1, 1)
+        sidebar_layout.addLayout(preset_grid)
 
-        preset_layout.addWidget(self.btn_flat)
-        preset_layout.addWidget(self.btn_hills)
-        preset_layout.addWidget(self.btn_rugged)
-        preset_layout.addWidget(self.btn_comp)
-        sidebar_layout.addWidget(preset_group)
+        # Divider
+        div2 = QWidget()
+        div2.setFixedHeight(1)
+        div2.setObjectName("Divider")
+        sidebar_layout.addWidget(div2)
 
-        # Empires Path Configuration
-        empires_group = QGroupBox("Empires Path")
-        empires_layout = QVBoxLayout(empires_group)
+        # Empires path — compact
+        path_label = QLabel("COMPILE PATH")
+        path_label.setObjectName("SectionLabel")
+        sidebar_layout.addWidget(path_label)
 
-        empires_desc = QLabel("Required for compiling maps")
-        empires_desc.setStyleSheet("color: #888; font-size: 10px;")
-        empires_layout.addWidget(empires_desc)
-
-        empires_path_layout = QHBoxLayout()
         self.edit_empires_path = QLineEdit()
-        self.edit_empires_path.setPlaceholderText("Select Empires folder...")
-        empires_path_layout.addWidget(self.edit_empires_path)
+        self.edit_empires_path.setPlaceholderText("Empires install folder...")
+        sidebar_layout.addWidget(self.edit_empires_path)
 
-        self.btn_browse_empires = QPushButton("Browse")
-        self.btn_browse_empires.setFixedWidth(70)
-        self.btn_browse_empires.clicked.connect(self.browse_empires_path)
-        empires_path_layout.addWidget(self.btn_browse_empires)
-        empires_layout.addLayout(empires_path_layout)
-
+        empires_bottom = QHBoxLayout()
+        empires_bottom.setSpacing(6)
         self.lbl_empires_status = QLabel()
-        self.lbl_empires_status.setStyleSheet("color: #888; font-size: 10px;")
-        empires_layout.addWidget(self.lbl_empires_status)
+        self.lbl_empires_status.setObjectName("HintLabel")
+        empires_bottom.addWidget(self.lbl_empires_status, 1)
+        self.btn_browse_empires = QPushButton("Browse")
+        self.btn_browse_empires.setObjectName("SmallButton")
+        self.btn_browse_empires.clicked.connect(self.browse_empires_path)
+        empires_bottom.addWidget(self.btn_browse_empires)
+        sidebar_layout.addLayout(empires_bottom)
 
-        sidebar_layout.addWidget(empires_group)
-
-        # Connect text changes to save and validate
         self.edit_empires_path.textChanged.connect(self.on_empires_path_changed)
 
         sidebar_layout.addStretch()
 
-        self.btn_reset = QPushButton("Reset to Safe Preset")
-        self.btn_reset.clicked.connect(self.reset_to_safe)
-        sidebar_layout.addWidget(self.btn_reset)
-
-        self.btn_generate = QPushButton("Generate Safe Map")
-        self.btn_generate.setFixedHeight(40)
-        self.btn_generate.setStyleSheet(
-            "background-color: #2196F3; color: white; font-weight: bold;"
-        )
+        self.btn_generate = QPushButton("Generate VMF")
+        self.btn_generate.setObjectName("GenerateButton")
+        self.btn_generate.setMinimumHeight(40)
         self.btn_generate.clicked.connect(self.generate_map)
         sidebar_layout.addWidget(self.btn_generate)
 
         self.btn_compile = QPushButton("Compile (VBSP)")
-        self.btn_compile.setFixedHeight(40)
-        self.btn_compile.setStyleSheet(
-            "background-color: #4CAF50; color: white; font-weight: bold;"
-        )
+        self.btn_compile.setObjectName("CompileButton")
+        self.btn_compile.setMinimumHeight(40)
         self.btn_compile.clicked.connect(self.compile_map)
         sidebar_layout.addWidget(self.btn_compile)
 
@@ -396,289 +455,302 @@ class TerrainGeneratorGUI(QMainWindow):
         main_area_layout = QVBoxLayout(main_area)
         main_area_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Settings Layout
-        settings_group = QGroupBox("Configuration")
-        grid = QGridLayout(settings_group)
-        grid.setSpacing(10)
-        grid.setColumnMinimumWidth(0, 100)
-        grid.setColumnStretch(1, 2)
-        grid.setColumnMinimumWidth(2, 100)
-        grid.setColumnStretch(3, 2)
+        # ── Helper: create a slider row with live value label ──
+        def make_slider_row(slider, value_label, suffix=""):
+            row_layout = QHBoxLayout()
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(8)
+            row_layout.addWidget(slider, 1)
+            value_label.setFixedWidth(48)
+            value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            value_label.setObjectName("SliderValue")
+            row_layout.addWidget(value_label)
+            w = QWidget()
+            w.setLayout(row_layout)
+            return w
 
-        row = 0
-        col = 0
+        # ── Helper: section divider inside scroll area ──
+        def make_section_label(text):
+            lbl = QLabel(text)
+            lbl.setObjectName("ConfigSection")
+            return lbl
 
-        def next_cell():
-            nonlocal row, col
-            col += 2
-            if col > 2:
-                col = 0
-                row += 1
+        # ── Helper: thin horizontal line ──
+        def make_divider():
+            d = QWidget()
+            d.setFixedHeight(1)
+            d.setObjectName("Divider")
+            return d
 
-        def add_setting(label_text, widget):
-            lbl = QLabel(label_text)
-            lbl.setStyleSheet("font-weight: bold;")
-            grid.addWidget(lbl, row, col)
-            grid.addWidget(widget, row, col + 1)
-            next_cell()
+        # ── Config scroll content ──
+        config_layout = QVBoxLayout()
+        config_layout.setSpacing(6)
+        config_layout.setContentsMargins(14, 10, 14, 10)
+
+        # ─── GENERAL ───
+        config_layout.addWidget(make_section_label("GENERAL"))
 
         # Map Name
+        name_row = QHBoxLayout()
+        name_row.setSpacing(8)
+        name_lbl = QLabel("Map Name")
+        name_lbl.setObjectName("FieldLabel")
+        name_row.addWidget(name_lbl)
         self.txt_map_name = QLineEdit()
         self.txt_map_name.setText("gui_terrain")
         self.txt_map_name.setPlaceholderText("Enter map name...")
-        add_setting("Map Name:", self.txt_map_name)
-
-        # Data Source (Custom Image)
-        source_layout = QHBoxLayout()
-        self.chk_custom_image = QCheckBox("Enable")
-        self.btn_browse = QPushButton("Browse...")
-        self.lbl_image_path = QLabel("None")
-        self.btn_browse.setEnabled(False)
-        self.lbl_image_path.setStyleSheet("color: #888; font-size: 10px;")
-        source_layout.addWidget(self.chk_custom_image)
-        source_layout.addWidget(self.btn_browse)
-        source_layout.addWidget(self.lbl_image_path)
-        source_widget = QWidget()
-        source_widget.setLayout(source_layout)
-        add_setting("Custom Image:", source_widget)
-
-        self.chk_custom_image.toggled.connect(self.toggle_custom_image)
-        self.btn_browse.clicked.connect(self.browse_image)
+        name_row.addWidget(self.txt_map_name, 1)
+        config_layout.addLayout(name_row)
 
         # Seed
+        seed_row = QHBoxLayout()
+        seed_row.setSpacing(8)
+        seed_lbl = QLabel("Seed")
+        seed_lbl.setObjectName("FieldLabel")
+        seed_row.addWidget(seed_lbl)
         self.spin_seed = QSpinBox()
         self.spin_seed.setRange(0, 999999999)
+        seed_row.addWidget(self.spin_seed, 1)
         self.btn_random_seed = QPushButton("🎲")
-        self.btn_random_seed.setFixedWidth(40)
+        self.btn_random_seed.setFixedSize(34, 30)
+        self.btn_random_seed.setToolTip("Randomize seed")
         self.btn_random_seed.clicked.connect(
             lambda: self.spin_seed.setValue(random.randint(0, 999999999))
         )
-        seed_layout = QHBoxLayout()
-        seed_layout.addWidget(self.spin_seed)
-        seed_layout.addWidget(self.btn_random_seed)
-        seed_widget = QWidget()
-        seed_widget.setLayout(seed_layout)
-        add_setting("Seed:", seed_widget)
+        seed_row.addWidget(self.btn_random_seed)
+        config_layout.addLayout(seed_row)
         self.spin_seed.valueChanged.connect(self.sync_to_model)
 
-        # Map Size X in tiles
-        tilesx_container = QVBoxLayout()
-        tilesx_desc = QLabel("Width in 512-unit tiles")
-        tilesx_desc.setStyleSheet("color: #888; font-size: 10px;")
-        tilesx_container.addWidget(tilesx_desc)
-        tilesx_sub = QHBoxLayout()
-        tilesx_sub.addWidget(QLabel("1"))
+        # Custom Image
+        img_row = QHBoxLayout()
+        img_row.setSpacing(8)
+        img_lbl = QLabel("Heightmap")
+        img_lbl.setObjectName("FieldLabel")
+        img_row.addWidget(img_lbl)
+        self.chk_custom_image = QCheckBox("Custom")
+        img_row.addWidget(self.chk_custom_image)
+        self.btn_browse = QPushButton("Browse…")
+        self.btn_browse.setEnabled(False)
+        img_row.addWidget(self.btn_browse)
+        self.lbl_image_path = QLabel("None")
+        self.lbl_image_path.setObjectName("HintLabel")
+        img_row.addWidget(self.lbl_image_path, 1)
+        config_layout.addLayout(img_row)
+        self.chk_custom_image.toggled.connect(self.toggle_custom_image)
+        self.btn_browse.clicked.connect(self.browse_image)
+
+        config_layout.addWidget(make_divider())
+
+        # ─── MAP DIMENSIONS ───
+        config_layout.addWidget(make_section_label("MAP DIMENSIONS"))
+
+        dim_grid = QGridLayout()
+        dim_grid.setSpacing(6)
+        dim_grid.setColumnStretch(1, 1)
+        dim_grid.setColumnStretch(3, 1)
+
+        lbl_tx = QLabel("Tiles X")
+        lbl_tx.setObjectName("FieldLabel")
+        lbl_tx.setToolTip("Number of displacement tiles horizontally (each is 512 world units)")
+        dim_grid.addWidget(lbl_tx, 0, 0)
         self.spin_tiles_x = QSpinBox()
         self.spin_tiles_x.setRange(1, 64)
-        tilesx_sub.addWidget(self.spin_tiles_x)
-        tilesx_sub.addWidget(QLabel("64"))
-        tilesx_container.addLayout(tilesx_sub)
-        tilesx_widget = QWidget()
-        tilesx_widget.setLayout(tilesx_container)
-        add_setting("Tiles X:", tilesx_widget)
-        self.spin_tiles_x.valueChanged.connect(self.sync_to_model)
+        dim_grid.addWidget(self.spin_tiles_x, 0, 1)
 
-        # Map Size Y in tiles
-        tilesy_container = QVBoxLayout()
-        tilesy_desc = QLabel("Height in 512-unit tiles")
-        tilesy_desc.setStyleSheet("color: #888; font-size: 10px;")
-        tilesy_container.addWidget(tilesy_desc)
-        tilesy_sub = QHBoxLayout()
-        tilesy_sub.addWidget(QLabel("1"))
+        lbl_ty = QLabel("Tiles Y")
+        lbl_ty.setObjectName("FieldLabel")
+        lbl_ty.setToolTip("Number of displacement tiles vertically (each is 512 world units)")
+        dim_grid.addWidget(lbl_ty, 0, 2)
         self.spin_tiles_y = QSpinBox()
         self.spin_tiles_y.setRange(1, 64)
-        tilesy_sub.addWidget(self.spin_tiles_y)
-        tilesy_sub.addWidget(QLabel("64"))
-        tilesy_container.addLayout(tilesy_sub)
-        tilesy_widget = QWidget()
-        tilesy_widget.setLayout(tilesy_container)
-        add_setting("Tiles Y:", tilesy_widget)
-        self.spin_tiles_y.valueChanged.connect(self.sync_to_model)
+        dim_grid.addWidget(self.spin_tiles_y, 0, 3)
 
-        # Height Scale
-        height_container = QVBoxLayout()
-        height_desc = QLabel("Max height in world units")
-        height_desc.setStyleSheet("color: #888; font-size: 10px;")
-        height_container.addWidget(height_desc)
-        height_sub = QHBoxLayout()
-        height_sub.addWidget(QLabel("128"))
+        lbl_hs = QLabel("Height")
+        lbl_hs.setObjectName("FieldLabel")
+        lbl_hs.setToolTip("Maximum terrain height in world units")
+        dim_grid.addWidget(lbl_hs, 1, 0)
         self.spin_height = QSpinBox()
         self.spin_height.setRange(128, 4096)
-        height_sub.addWidget(self.spin_height)
-        height_sub.addWidget(QLabel("4096"))
-        height_container.addLayout(height_sub)
-        height_widget = QWidget()
-        height_widget.setLayout(height_container)
-        add_setting("Height Scale:", height_widget)
-        self.spin_height.valueChanged.connect(self.sync_to_model)
+        dim_grid.addWidget(self.spin_height, 1, 1)
 
-        # Displacement Power
-        power_container = QVBoxLayout()
-        power_desc = QLabel("Vertices per tile")
-        power_desc.setStyleSheet("color: #888; font-size: 10px;")
-        power_container.addWidget(power_desc)
+        lbl_pw = QLabel("Detail")
+        lbl_pw.setObjectName("FieldLabel")
+        lbl_pw.setToolTip("Displacement power — vertices per tile edge")
+        dim_grid.addWidget(lbl_pw, 1, 2)
         self.combo_power = QComboBox()
-        self.combo_power.addItems(
-            ["2 (5×5) - Fast", "3 (9×9) - Balanced", "4 (17×17) - Detailed"]
-        )
-        power_container.addWidget(self.combo_power)
-        power_widget = QWidget()
-        power_widget.setLayout(power_container)
-        add_setting("Detail Level:", power_widget)
+        self.combo_power.addItems(["2 (5×5)", "3 (9×9)", "4 (17×17)"])
+        dim_grid.addWidget(self.combo_power, 1, 3)
+
+        config_layout.addLayout(dim_grid)
+
+        # Live map-size info label
+        self.lbl_map_info = QLabel()
+        self.lbl_map_info.setObjectName("HintLabel")
+        config_layout.addWidget(self.lbl_map_info)
+
+        self.spin_tiles_x.valueChanged.connect(self.sync_to_model)
+        self.spin_tiles_y.valueChanged.connect(self.sync_to_model)
+        self.spin_height.valueChanged.connect(self.sync_to_model)
         self.combo_power.currentIndexChanged.connect(self.sync_to_model)
 
-        # Roughness Slider
-        rough_container = QVBoxLayout()
-        rough_desc = QLabel("Low=Smooth, High=Mountainous")
-        rough_desc.setStyleSheet("color: #888; font-size: 10px;")
-        rough_container.addWidget(rough_desc)
-        rough_sub = QHBoxLayout()
-        rough_sub.addWidget(QLabel("Smooth"))
+        config_layout.addWidget(make_divider())
+
+        # ─── TERRAIN SHAPE ───
+        config_layout.addWidget(make_section_label("TERRAIN SHAPE"))
+
+        # Roughness
+        rough_row = QHBoxLayout()
+        rough_row.setSpacing(8)
+        lbl_r = QLabel("Roughness")
+        lbl_r.setObjectName("FieldLabel")
+        lbl_r.setToolTip("Low = smooth rolling hills, High = jagged mountains")
+        rough_row.addWidget(lbl_r)
         self.slider_rough = QSlider(Qt.Horizontal)
         self.slider_rough.setRange(0, 100)
-        rough_sub.addWidget(self.slider_rough)
-        rough_sub.addWidget(QLabel("Rugged"))
-        rough_container.addLayout(rough_sub)
-        rough_widget = QWidget()
-        rough_widget.setLayout(rough_container)
-        add_setting("Roughness:", rough_widget)
-        self.slider_rough.valueChanged.connect(self.sync_to_model)
+        self.lbl_rough_val = QLabel("50%")
+        rough_row.addWidget(make_slider_row(self.slider_rough, self.lbl_rough_val, "%"), 1)
+        config_layout.addLayout(rough_row)
 
-        # Erosion Strength Slider
-        eros_container = QVBoxLayout()
-        eros_desc = QLabel("Low=Sharp, High=Smooth")
-        eros_desc.setStyleSheet("color: #888; font-size: 10px;")
-        eros_container.addWidget(eros_desc)
-        eros_sub = QHBoxLayout()
-        eros_sub.addWidget(QLabel("Sharp"))
+        # Erosion
+        eros_row = QHBoxLayout()
+        eros_row.setSpacing(8)
+        lbl_e = QLabel("Erosion")
+        lbl_e.setObjectName("FieldLabel")
+        lbl_e.setToolTip("Hydraulic erosion — smooths sharp features naturally")
+        eros_row.addWidget(lbl_e)
         self.slider_erosion = QSlider(Qt.Horizontal)
         self.slider_erosion.setRange(0, 100)
-        eros_sub.addWidget(self.slider_erosion)
-        eros_sub.addWidget(QLabel("Smooth"))
-        eros_container.addLayout(eros_sub)
-        eros_widget = QWidget()
-        eros_widget.setLayout(eros_container)
-        add_setting("Erosion:", eros_widget)
+        self.lbl_erosion_val = QLabel("50%")
+        eros_row.addWidget(make_slider_row(self.slider_erosion, self.lbl_erosion_val, "%"), 1)
+        config_layout.addLayout(eros_row)
+
+        # Connect slider value displays
+        self.slider_rough.valueChanged.connect(
+            lambda v: self.lbl_rough_val.setText(f"{v}%")
+        )
+        self.slider_erosion.valueChanged.connect(
+            lambda v: self.lbl_erosion_val.setText(f"{v}%")
+        )
+        self.slider_rough.valueChanged.connect(self.sync_to_model)
         self.slider_erosion.valueChanged.connect(self.sync_to_model)
 
-        # Base Clear Radius Slider
-        radius_container = QVBoxLayout()
-        radius_desc = QLabel("Size of flat area (0=disabled)")
-        radius_desc.setStyleSheet("color: #888; font-size: 10px;")
-        radius_container.addWidget(radius_desc)
-        radius_sub = QHBoxLayout()
-        radius_sub.addWidget(QLabel("0"))
+        config_layout.addWidget(make_divider())
+
+        # ─── BASE AREAS ───
+        config_layout.addWidget(make_section_label("BASE AREAS"))
+
+        # Base Radius
+        br_row = QHBoxLayout()
+        br_row.setSpacing(8)
+        lbl_br = QLabel("Clear Radius")
+        lbl_br.setObjectName("FieldLabel")
+        lbl_br.setToolTip("Radius of flat area around bases (0 = disabled)")
+        br_row.addWidget(lbl_br)
         self.slider_base_radius = QSlider(Qt.Horizontal)
         self.slider_base_radius.setRange(0, 4096)
-        radius_sub.addWidget(self.slider_base_radius)
-        radius_sub.addWidget(QLabel("4096"))
-        radius_container.addLayout(radius_sub)
-        radius_widget = QWidget()
-        radius_widget.setLayout(radius_container)
-        add_setting("Base Radius:", radius_widget)
-        self.slider_base_radius.valueChanged.connect(self.sync_to_model)
+        self.lbl_base_radius_val = QLabel("0")
+        br_row.addWidget(make_slider_row(self.slider_base_radius, self.lbl_base_radius_val), 1)
+        config_layout.addLayout(br_row)
 
-        # Base Flatness Slider
-        flat_container = QVBoxLayout()
-        flat_desc = QLabel("0=natural, 100=flat")
-        flat_desc.setStyleSheet("color: #888; font-size: 10px;")
-        flat_container.addWidget(flat_desc)
-        flat_sub = QHBoxLayout()
-        flat_sub.addWidget(QLabel("Natural"))
+        # Base Flatness
+        bf_row = QHBoxLayout()
+        bf_row.setSpacing(8)
+        lbl_bf = QLabel("Flatness")
+        lbl_bf.setObjectName("FieldLabel")
+        lbl_bf.setToolTip("How flat the base area is (0 = natural, 100 = perfectly flat)")
+        bf_row.addWidget(lbl_bf)
         self.slider_base_flatness = QSlider(Qt.Horizontal)
         self.slider_base_flatness.setRange(0, 100)
-        flat_sub.addWidget(self.slider_base_flatness)
-        flat_sub.addWidget(QLabel("Flat"))
-        flat_container.addLayout(flat_sub)
-        flat_widget = QWidget()
-        flat_widget.setLayout(flat_container)
-        add_setting("Base Flatness:", flat_widget)
-        self.slider_base_flatness.valueChanged.connect(self.sync_to_model)
+        self.lbl_base_flat_val = QLabel("0%")
+        bf_row.addWidget(make_slider_row(self.slider_base_flatness, self.lbl_base_flat_val, "%"), 1)
+        config_layout.addLayout(bf_row)
 
-        # Center Flatten Amount Slider
-        cf_container = QVBoxLayout()
-        cf_desc = QLabel("0=disabled, 100=flat")
-        cf_desc.setStyleSheet("color: #888; font-size: 10px;")
-        cf_container.addWidget(cf_desc)
-        cf_sub = QHBoxLayout()
-        cf_sub.addWidget(QLabel("Off"))
+        # Center Flatten
+        cf_row = QHBoxLayout()
+        cf_row.setSpacing(8)
+        lbl_cf = QLabel("Center Flatten")
+        lbl_cf.setObjectName("FieldLabel")
+        lbl_cf.setToolTip("Flatten terrain towards the map center (0 = disabled)")
+        cf_row.addWidget(lbl_cf)
         self.slider_center_flatten = QSlider(Qt.Horizontal)
         self.slider_center_flatten.setRange(0, 100)
-        cf_sub.addWidget(self.slider_center_flatten)
-        cf_sub.addWidget(QLabel("Max"))
-        cf_container.addLayout(cf_sub)
-        cf_widget = QWidget()
-        cf_widget.setLayout(cf_container)
-        add_setting("Center Flatten:", cf_widget)
-        self.slider_center_flatten.valueChanged.connect(self.sync_to_model)
+        self.lbl_cf_val = QLabel("0%")
+        cf_row.addWidget(make_slider_row(self.slider_center_flatten, self.lbl_cf_val, "%"), 1)
+        config_layout.addLayout(cf_row)
 
-        # Center Flatten Radius Slider
-        cfr_container = QVBoxLayout()
-        cfr_desc = QLabel("10-50% of map size")
-        cfr_desc.setStyleSheet("color: #888; font-size: 10px;")
-        cfr_container.addWidget(cfr_desc)
-        cfr_sub = QHBoxLayout()
-        cfr_sub.addWidget(QLabel("10%"))
+        # Center Radius
+        cr_row = QHBoxLayout()
+        cr_row.setSpacing(8)
+        lbl_cr = QLabel("Center Radius")
+        lbl_cr.setObjectName("FieldLabel")
+        lbl_cr.setToolTip("Size of center flatten zone (10–50% of map)")
+        cr_row.addWidget(lbl_cr)
         self.slider_center_radius = QSlider(Qt.Horizontal)
         self.slider_center_radius.setRange(10, 50)
-        cfr_sub.addWidget(self.slider_center_radius)
-        cfr_sub.addWidget(QLabel("50%"))
-        cfr_container.addLayout(cfr_sub)
-        cfr_widget = QWidget()
-        cfr_widget.setLayout(cfr_container)
-        add_setting("Center Radius:", cfr_widget)
+        self.lbl_cr_val = QLabel("10%")
+        cr_row.addWidget(make_slider_row(self.slider_center_radius, self.lbl_cr_val, "%"), 1)
+        config_layout.addLayout(cr_row)
+
+        self.slider_base_radius.valueChanged.connect(
+            lambda v: self.lbl_base_radius_val.setText(str(v))
+        )
+        self.slider_base_flatness.valueChanged.connect(
+            lambda v: self.lbl_base_flat_val.setText(f"{v}%")
+        )
+        self.slider_center_flatten.valueChanged.connect(
+            lambda v: self.lbl_cf_val.setText(f"{v}%")
+        )
+        self.slider_center_radius.valueChanged.connect(
+            lambda v: self.lbl_cr_val.setText(f"{v}%")
+        )
+        self.slider_base_radius.valueChanged.connect(self.sync_to_model)
+        self.slider_base_flatness.valueChanged.connect(self.sync_to_model)
+        self.slider_center_flatten.valueChanged.connect(self.sync_to_model)
         self.slider_center_radius.valueChanged.connect(self.sync_to_model)
 
-        # Terrain Material
-        mat_container = QVBoxLayout()
-        mat_desc = QLabel("Ground surface blend")
-        mat_desc.setStyleSheet("color: #888; font-size: 10px;")
-        mat_container.addWidget(mat_desc)
+        config_layout.addWidget(make_divider())
+
+        # ─── MATERIALS ───
+        config_layout.addWidget(make_section_label("MATERIALS"))
+
+        mat_row = QHBoxLayout()
+        mat_row.setSpacing(8)
+        lbl_mat = QLabel("Texture")
+        lbl_mat.setObjectName("FieldLabel")
+        lbl_mat.setToolTip("Ground surface blend material")
+        mat_row.addWidget(lbl_mat)
         self.combo_material = QComboBox()
         self.combo_material.addItems(self.terrain_materials)
         self.combo_material.setCurrentText("common/nature/blend_grass_mountainwall_000")
-        mat_container.addWidget(self.combo_material)
-        mat_widget = QWidget()
-        mat_widget.setLayout(mat_container)
-        add_setting("Terrain Texture:", mat_widget)
+        mat_row.addWidget(self.combo_material, 1)
+        config_layout.addLayout(mat_row)
         self.combo_material.currentIndexChanged.connect(self.sync_to_model)
 
-        # Skybox
-        sky_container = QVBoxLayout()
-        sky_desc = QLabel("Sky background")
-        sky_desc.setStyleSheet("color: #888; font-size: 10px;")
-        sky_container.addWidget(sky_desc)
+        sky_row = QHBoxLayout()
+        sky_row.setSpacing(8)
+        lbl_sky = QLabel("Skybox")
+        lbl_sky.setObjectName("FieldLabel")
+        sky_row.addWidget(lbl_sky)
         self.combo_skybox = QComboBox()
         self.combo_skybox.addItems(self.skyboxes)
         self.combo_skybox.setCurrentText("empsky_overcast3yellow")
-        sky_container.addWidget(self.combo_skybox)
-        sky_widget = QWidget()
-        sky_widget.setLayout(sky_container)
-        add_setting("Skybox:", sky_widget)
+        sky_row.addWidget(self.combo_skybox, 1)
+        config_layout.addLayout(sky_row)
         self.combo_skybox.currentIndexChanged.connect(self.sync_to_model)
 
-        # Advance row for full width group
-        if col != 0:
-            row += 1
-            col = 0
+        config_layout.addWidget(make_divider())
 
-        # Spawn Settings
-        lbl_spawn = QLabel("Spawn Settings:")
-        lbl_spawn.setStyleSheet("font-weight: bold;")
-        grid.addWidget(lbl_spawn, row, 0)
-
-        spawn_container = QVBoxLayout()
-        spawn_desc = QLabel("Control what entities are generated on the map")
-        spawn_desc.setStyleSheet("color: #888; font-size: 10px;")
-        spawn_container.addWidget(spawn_desc)
+        # ─── SPAWN SETTINGS ───
+        config_layout.addWidget(make_section_label("SPAWN SETTINGS"))
 
         spawn_grid = QGridLayout()
+        spawn_grid.setSpacing(4)
 
-        self.chk_disable_commander = QCheckBox("Disable Commander")
-        self.chk_disable_buildings = QCheckBox("Disable Base Buildings")
-        self.chk_disable_resources = QCheckBox("Disable Resource Nodes")
-        self.chk_minimal_map = QCheckBox("Minimal Map (Playable, No Props)")
-        self.chk_terrain_only = QCheckBox("Terrain Only (No Spawns)")
+        self.chk_disable_commander = QCheckBox("No Commander")
+        self.chk_disable_buildings = QCheckBox("No Buildings")
+        self.chk_disable_resources = QCheckBox("No Resources")
+        self.chk_minimal_map = QCheckBox("Minimal (No Props)")
+        self.chk_terrain_only = QCheckBox("Terrain Only")
 
         self.chk_disable_commander.toggled.connect(self.sync_to_model)
         self.chk_disable_buildings.toggled.connect(self.sync_to_model)
@@ -689,17 +761,13 @@ class TerrainGeneratorGUI(QMainWindow):
         def update_spawn_checks():
             minimal = self.chk_minimal_map.isChecked()
             terrain_only = self.chk_terrain_only.isChecked()
-
             if terrain_only:
                 self.chk_minimal_map.setChecked(False)
                 minimal = False
-
             disable_individual = minimal or terrain_only
-
             self.chk_disable_commander.setEnabled(not disable_individual)
             self.chk_disable_buildings.setEnabled(not disable_individual)
             self.chk_disable_resources.setEnabled(not disable_individual)
-
             if disable_individual:
                 self.chk_disable_commander.setChecked(False)
                 self.chk_disable_buildings.setChecked(False)
@@ -713,91 +781,86 @@ class TerrainGeneratorGUI(QMainWindow):
         spawn_grid.addWidget(self.chk_disable_resources, 1, 0)
         spawn_grid.addWidget(self.chk_minimal_map, 1, 1)
         spawn_grid.addWidget(self.chk_terrain_only, 2, 0)
+        config_layout.addLayout(spawn_grid)
 
-        spawn_container.addLayout(spawn_grid)
-
-        spawn_widget = QWidget()
-        spawn_widget.setLayout(spawn_container)
-        grid.addWidget(spawn_widget, row, 1, 1, 3)  # Span 3 columns
-        row += 1
-
-        # Use a scroll area for settings to ensure it fits in small windows
-        from PySide6.QtWidgets import QScrollArea
-
-        # Validation Feedback Panel
-        self.val_group = QGroupBox("Validation Status")
-        val_layout = QVBoxLayout(self.val_group)
-        self.lbl_validation = QLabel("Checks passed.")
+        # ─── VALIDATION ───
+        config_layout.addWidget(make_divider())
+        self.lbl_validation = QLabel("✓  All checks passed")
+        self.lbl_validation.setObjectName("ValidationLabel")
         self.lbl_validation.setWordWrap(True)
-        val_layout.addWidget(self.lbl_validation)
+        config_layout.addWidget(self.lbl_validation)
 
+        config_layout.addStretch()
+
+        # Wrap in scroll area
         scroll_content = QWidget()
-        scroll_layout = QVBoxLayout(scroll_content)
-        scroll_layout.setContentsMargins(0, 0, 0, 0)
-        scroll_layout.addWidget(settings_group)
-        scroll_layout.addWidget(self.val_group)
-        scroll_layout.addStretch()
+        scroll_content.setLayout(config_layout)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(scroll_content)
         scroll.setFrameShape(QScrollArea.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setMinimumWidth(320)
 
-        # Ensure scroll area doesn't force a horizontal scrollbar unnecessarily
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # ── Preview Area ──
+        preview_container = QWidget()
+        preview_container_layout = QVBoxLayout(preview_container)
+        preview_container_layout.setContentsMargins(0, 6, 6, 6)
+        preview_container_layout.setSpacing(6)
 
-        # Split main area into settings and preview
-        split_layout = QHBoxLayout()
-        split_layout.addWidget(scroll, 1)
-
-        # Preview Area
-        preview_group = QGroupBox("Map Preview")
-        preview_layout = QVBoxLayout(preview_group)
+        # Preview header
+        preview_header = QLabel("MAP PREVIEW")
+        preview_header.setObjectName("ConfigSection")
+        preview_container_layout.addWidget(preview_header)
 
         self.preview_widget = MapPreviewWidget()
-        preview_layout.addWidget(self.preview_widget)
+        self.preview_widget.setMinimumSize(200, 200)
+        preview_container_layout.addWidget(self.preview_widget, 1)
 
-        # Layout Validation Errors
-        self.lbl_layout_validation = QLabel("")
-        self.lbl_layout_validation.setStyleSheet("color: #F44336; font-weight: bold;")
-        self.lbl_layout_validation.setWordWrap(True)
-        preview_layout.addWidget(self.lbl_layout_validation)
-
-        # Tools layout
-        tools_layout = QHBoxLayout()
-        tools_layout.setSpacing(10)
+        # Tools toolbar
+        tools_row = QHBoxLayout()
+        tools_row.setSpacing(6)
         self.tool_group = QButtonGroup(self)
 
-        self.rbtn_none = QRadioButton("Move/Drag")
+        tool_names = [("Move", "ToolButton", 0),
+                      ("Imp Base", "ToolButtonBlue", 1),
+                      ("NF Base", "ToolButtonRed", 2),
+                      ("Resource", "ToolButtonGreen", 3)]
+        self.rbtn_none = None
+        self.rbtn_imp = None
+        self.rbtn_nf = None
+        self.rbtn_res = None
+        tool_refs = []
+        for label, obj_name, tid in tool_names:
+            btn = QPushButton(label)
+            btn.setCheckable(True)
+            btn.setObjectName(obj_name)
+            self.tool_group.addButton(btn, tid)
+            tools_row.addWidget(btn)
+            tool_refs.append(btn)
+        self.rbtn_none, self.rbtn_imp, self.rbtn_nf, self.rbtn_res = tool_refs
         self.rbtn_none.setChecked(True)
-        self.tool_group.addButton(self.rbtn_none, 0)
-        tools_layout.addWidget(self.rbtn_none)
 
-        self.rbtn_imp = QRadioButton("Set Imp Base (Blue)")
-        self.rbtn_imp.setStyleSheet("color: #3498db; font-weight: bold;")
-        self.tool_group.addButton(self.rbtn_imp, 1)
-        tools_layout.addWidget(self.rbtn_imp)
+        tools_row.addStretch()
 
-        self.rbtn_nf = QRadioButton("Set NF Base (Red)")
-        self.rbtn_nf.setStyleSheet("color: #e74c3c; font-weight: bold;")
-        self.tool_group.addButton(self.rbtn_nf, 2)
-        tools_layout.addWidget(self.rbtn_nf)
-
-        self.rbtn_res = QRadioButton("Add Resource (Green)")
-        self.rbtn_res.setStyleSheet("color: #2ecc71; font-weight: bold;")
-        self.tool_group.addButton(self.rbtn_res, 3)
-        tools_layout.addWidget(self.rbtn_res)
-
-        self.btn_clear_res = QPushButton("Clear Resources")
+        self.btn_clear_res = QPushButton("Clear")
+        self.btn_clear_res.setObjectName("SmallButton")
+        self.btn_clear_res.setToolTip("Clear all resource nodes")
         self.btn_clear_res.clicked.connect(self.clear_resources)
-        tools_layout.addWidget(self.btn_clear_res)
+        tools_row.addWidget(self.btn_clear_res)
 
-        tools_layout.addStretch()
-        preview_layout.addLayout(tools_layout)
+        preview_container_layout.addLayout(tools_row)
 
-        split_layout.addWidget(preview_group, 1)
+        # Inner splitter: config scroll | preview
+        self._inner_splitter = QSplitter(Qt.Horizontal)
+        self._inner_splitter.addWidget(scroll)
+        self._inner_splitter.addWidget(preview_container)
+        self._inner_splitter.setStretchFactor(0, 1)
+        self._inner_splitter.setStretchFactor(1, 1)
+        self._inner_splitter.setSizes([480, 520])
 
-        main_area_layout.addLayout(split_layout)
+        main_area_layout.addWidget(self._inner_splitter)
 
         self.preview_timer = QTimer(self)
         self.preview_timer.setSingleShot(True)
@@ -809,8 +872,11 @@ class TerrainGeneratorGUI(QMainWindow):
         self.preview_widget.resource_added.connect(self.on_resource_added)
         self.tool_group.idClicked.connect(self.on_tool_changed)
 
-        main_layout.addWidget(sidebar)
-        main_layout.addWidget(main_area)
+        self._root_splitter.addWidget(sidebar)
+        self._root_splitter.addWidget(main_area)
+        self._root_splitter.setStretchFactor(0, 0)
+        self._root_splitter.setStretchFactor(1, 1)
+        self._root_splitter.setSizes([220, 930])
 
     def validate_current_layout(self):
         spec = self.config_model.make_spec()
@@ -949,130 +1015,400 @@ class TerrainGeneratorGUI(QMainWindow):
             self.preview_widget.set_entities((imp_x, imp_y), (nf_x, nf_y), res, invalid_entities=invalid_entities)
 
     def apply_dark_theme(self):
-        style = """
-        QMainWindow, QWidget {
-            background-color: #1a1a1c;
-            color: #e0e0e0;
-            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+        ACCENT = "#1d6feb"        # steel blue
+        ACCENT_HOVER = "#4d8ef5"  # lighter blue
+        ACCENT_ACTIVE = "#1553c7" # dark blue
+        BG_BASE = "#0f1117"
+        BG_PANEL = "#14161d"
+        BG_WIDGET = "#1c1e28"
+        BG_INPUT = "#22243000".replace("00", "")
+        BG_INPUT = "#21232e"
+        BORDER = "#2a2d3a"
+        BORDER_FOCUS = ACCENT
+        TEXT_PRI = "#e8eaf0"
+        TEXT_SEC = "#8890a4"
+        TEXT_DIM = "#484c5c"
+        GREEN = "#22c55e"
+        RED = "#ef4444"
+        BLUE = ACCENT
+
+        style = f"""
+        /* ── Global ── */
+        QMainWindow, QWidget {{
+            background-color: {BG_BASE};
+            color: {TEXT_PRI};
+            font-family: 'Segoe UI', 'Inter', 'Ubuntu', Helvetica, Arial, sans-serif;
+            font-size: 12px;
+        }}
+
+        /* ── Sidebar ── */
+        QWidget#Sidebar {{
+            background-color: {BG_PANEL};
+            border-right: 1px solid {BORDER};
+        }}
+        QLabel#BrandTitle {{
             font-size: 13px;
-        }
-        QScrollArea {
-            border: none;
-            background-color: transparent;
-        }
-        QGroupBox {
-            border: 1px solid #333338;
-            border-radius: 8px;
-            margin-top: 16px;
             font-weight: bold;
-            color: #ffffff;
-        }
-        QGroupBox::title {
+            color: {TEXT_PRI};
+            border-left: 3px solid {ACCENT};
+            padding-left: 8px;
+            padding-top: 2px;
+            padding-bottom: 2px;
+        }}
+        QLabel#SectionLabel {{
+            font-size: 9px;
+            font-weight: bold;
+            color: {TEXT_DIM};
+            letter-spacing: 1.5px;
+            padding-top: 2px;
+        }}
+        QLabel#HintLabel {{
+            font-size: 10px;
+            color: {TEXT_SEC};
+        }}
+        QWidget#Divider {{
+            background-color: {BORDER};
+        }}
+
+        /* \u2500\u2500 Preset Buttons \u2500\u2500 */
+        QPushButton#PresetButton {{
+            background-color: {BG_WIDGET};
+            border: 1px solid {BORDER};
+            border-radius: 5px;
+            padding: 5px 8px;
+            color: {TEXT_SEC};
+            font-size: 11px;
+        }}
+        QPushButton#PresetButton:hover {{
+            background-color: #2a2a34;
+            border: 1px solid #44444e;
+            color: {TEXT_PRI};
+        }}
+        QPushButton#PresetButton:checked {{
+            background-color: {ACCENT_ACTIVE};
+            border: 1px solid {ACCENT};
+            color: white;
+        }}
+        QPushButton#PresetButton:pressed {{
+            background-color: {ACCENT_ACTIVE};
+        }}
+
+        /* \u2500\u2500 Small Button \u2500\u2500 */
+        QPushButton#SmallButton {{
+            background: transparent;
+            border: 1px solid {BORDER};
+            border-radius: 4px;
+            padding: 3px 10px;
+            color: {TEXT_SEC};
+            font-size: 10px;
+        }}
+        QPushButton#SmallButton:hover {{
+            background: {BG_WIDGET};
+            color: {TEXT_PRI};
+            border: 1px solid #44444e;
+        }}
+
+        /* ── Generate Button ── */
+        QPushButton#GenerateButton {{
+            background: {ACCENT};
+            border: none;
+            border-radius: 7px;
+            color: white;
+            font-weight: 600;
+            font-size: 12px;
+            padding: 10px;
+            letter-spacing: 0.3px;
+        }}
+        QPushButton#GenerateButton:hover {{
+            background: {ACCENT_HOVER};
+        }}
+        QPushButton#GenerateButton:pressed {{
+            background: {ACCENT_ACTIVE};
+        }}
+        QPushButton#GenerateButton:disabled {{
+            background: #1c2030;
+            color: {TEXT_DIM};
+        }}
+
+        /* ── Compile Button ── */
+        QPushButton#CompileButton {{
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #26a854, stop:1 #1a7a3c);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+            padding: 10px;
+        }}
+        QPushButton#CompileButton:hover {{
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #30d068, stop:1 #22a050);
+        }}
+        QPushButton#CompileButton:pressed {{
+            background: #155c30;
+        }}
+        QPushButton#CompileButton:disabled {{
+            background: #1e2e24;
+            color: {TEXT_DIM};
+        }}
+
+        /* ── Generic Buttons ── */
+        QPushButton {{
+            background-color: {BG_WIDGET};
+            border: 1px solid {BORDER};
+            border-radius: 6px;
+            padding: 7px 12px;
+            color: {TEXT_PRI};
+            font-weight: 500;
+        }}
+        QPushButton:hover {{
+            background-color: #2c2c38;
+            border: 1px solid #44444e;
+        }}
+        QPushButton:pressed {{
+            background-color: {BG_INPUT};
+            border: 1px solid {BORDER};
+        }}
+        QPushButton:disabled {{
+            background-color: #1a1a1f;
+            color: {TEXT_DIM};
+            border: 1px solid #22222a;
+        }}
+
+        /* ── GroupBox ── */
+        QGroupBox {{
+            border: 1px solid {BORDER};
+            border-radius: 8px;
+            margin-top: 14px;
+            padding-top: 6px;
+        }}
+        QGroupBox::title {{
             subcontrol-origin: margin;
             left: 12px;
-            padding: 0 4px;
-            color: #a0a0a5;
-        }
-        QPushButton {
-            background-color: #2c2c30;
-            border: 1px solid #3e3e42;
+            padding: 0 6px;
+            font-size: 10px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            color: {TEXT_SEC};
+        }}
+
+        /* ── Inputs ── */
+        QSpinBox, QComboBox, QLineEdit {{
+            background-color: {BG_INPUT};
+            border: 1px solid {BORDER};
             border-radius: 6px;
-            padding: 8px 12px;
-            color: #ffffff;
-            font-weight: 500;
-        }
-        QPushButton:hover {
-            background-color: #38383e;
-            border: 1px solid #505055;
-        }
-        QPushButton:pressed {
-            background-color: #1e1e20;
-            border: 1px solid #2c2c30;
-        }
-        QPushButton:disabled {
-            background-color: #222224;
-            color: #66666a;
-            border: 1px solid #2a2a2c;
-        }
-        QSpinBox, QComboBox, QLineEdit {
-            background-color: #252529;
-            border: 1px solid #38383e;
-            border-radius: 6px;
-            padding: 6px 10px;
-            color: #ffffff;
-            selection-background-color: #0d6efd;
-        }
-        QSpinBox:focus, QComboBox:focus, QLineEdit:focus {
-            border: 1px solid #0d6efd;
-            background-color: #2a2a2f;
-        }
-        QComboBox::drop-down {
+            padding: 5px 9px;
+            color: {TEXT_PRI};
+            selection-background-color: {ACCENT};
+        }}
+        QSpinBox:focus, QComboBox:focus, QLineEdit:focus {{
+            border: 1px solid {BORDER_FOCUS};
+            background-color: #2c2c36;
+        }}
+        QSpinBox::up-button, QSpinBox::down-button {{
+            width: 0;
+            height: 0;
             border: none;
-            width: 24px;
-        }
-        QComboBox::down-arrow {
+        }}
+        QComboBox::drop-down {{
+            border: none;
+            width: 22px;
+        }}
+        QComboBox::down-arrow {{
             image: none;
-            border-left: 5px solid transparent;
-            border-right: 5px solid transparent;
-            border-top: 5px solid #a0a0a5;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-top: 5px solid {TEXT_SEC};
             margin-right: 8px;
-        }
-        QSlider::groove:horizontal {
+        }}
+        QComboBox QAbstractItemView {{
+            background-color: {BG_WIDGET};
+            border: 1px solid {BORDER};
+            selection-background-color: {ACCENT};
+            color: {TEXT_PRI};
+            outline: none;
+        }}
+
+        /* ── Sliders ── */
+        QSlider {{
+            height: 20px;
+        }}
+        QSlider::groove:horizontal {{
             border: none;
-            height: 6px;
-            background: #38383e;
-            border-radius: 3px;
-        }
-        QSlider::sub-page:horizontal {
-            background: #0d6efd;
-            border-radius: 3px;
-        }
-        QSlider::handle:horizontal {
-            background: #ffffff;
-            border: 2px solid #0d6efd;
+            height: 3px;
+            background: #252832;
+            border-radius: 2px;
+            margin: 0 2px;
+        }}
+        QSlider::sub-page:horizontal {{
+            background: {ACCENT};
+            border-radius: 2px;
+        }}
+        QSlider::handle:horizontal {{
+            background: {ACCENT};
+            border: none;
+            width: 3px;
+            height: 14px;
+            margin: -6px 0;
+            border-radius: 2px;
+        }}
+        QSlider::handle:horizontal:hover {{
+            background: {ACCENT_HOVER};
+            width: 3px;
+            height: 16px;
+            margin: -7px 0;
+        }}
+
+        /* ── Checkboxes ── */
+        QCheckBox {{
+            spacing: 7px;
+            color: {TEXT_PRI};
+        }}
+        QCheckBox::indicator {{
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+            border: 1px solid {BORDER};
+            background: {BG_INPUT};
+        }}
+        QCheckBox::indicator:checked {{
+            background: {ACCENT};
+            border: 1px solid {ACCENT};
+        }}
+        QCheckBox::indicator:hover {{
+            border: 1px solid {ACCENT};
+        }}
+        QCheckBox:disabled {{
+            color: {TEXT_DIM};
+        }}
+
+        /* ── Radio Buttons ── */
+        QRadioButton {{
+            spacing: 6px;
+            font-size: 11px;
+            color: {TEXT_PRI};
+        }}
+        QRadioButton::indicator {{
             width: 14px;
             height: 14px;
-            margin: -5px 0;
-            border-radius: 9px;
-        }
-        QSlider::handle:horizontal:hover {
-            background: #e0e0e0;
-            border: 2px solid #0b5ed7;
-        }
-        QCheckBox {
-            spacing: 8px;
-        }
-        QScrollBar:vertical {
+            border-radius: 8px;
+            border: 1px solid {BORDER};
+            background: {BG_INPUT};
+        }}
+        QRadioButton::indicator:checked {{
+            background: {ACCENT};
+            border: 2px solid {ACCENT_HOVER};
+        }}
+
+        /* ── ScrollArea ── */
+        QScrollArea {{
             border: none;
-            background: #1a1a1c;
-            width: 12px;
-            margin: 0px 0px 0px 0px;
-        }
-        QScrollBar::handle:vertical {
-            background: #38383e;
-            min-height: 20px;
-            border-radius: 6px;
-            margin: 2px;
-        }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-            height: 0px;
-        }
-        QScrollBar:horizontal {
+            background-color: transparent;
+        }}
+        QScrollBar:vertical {{
             border: none;
-            background: #1a1a1c;
-            height: 12px;
-            margin: 0px 0px 0px 0px;
-        }
-        QScrollBar::handle:horizontal {
+            background: transparent;
+            width: 8px;
+        }}
+        QScrollBar::handle:vertical {{
             background: #38383e;
-            min-width: 20px;
+            min-height: 24px;
+            border-radius: 4px;
+        }}
+        QScrollBar::handle:vertical:hover {{
+            background: #505060;
+        }}
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+        QScrollBar:horizontal {{
+            border: none;
+            background: transparent;
+            height: 8px;
+        }}
+        QScrollBar::handle:horizontal {{
+            background: #38383e;
+            min-width: 24px;
+            border-radius: 4px;
+        }}
+        QScrollBar::handle:horizontal:hover {{
+            background: #505060;
+        }}
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
+
+        /* ── Splitter ── */
+        QSplitter::handle {{
+            background: {BORDER};
+        }}
+        QSplitter::handle:horizontal {{
+            width: 1px;
+        }}
+        QSplitter::handle:hover {{
+            background: {ACCENT};
+        }}
+
+        /* ── Config panel ── */
+        QLabel#FieldLabel {{
+            font-size: 11px;
+            font-weight: 600;
+            color: {TEXT_SEC};
+            min-width: 80px;
+        }}
+        QLabel#ConfigSection {{
+            font-size: 9px;
+            font-weight: bold;
+            color: {TEXT_DIM};
+            letter-spacing: 1.5px;
+            padding: 6px 0 2px 0;
+        }}
+        QLabel#SliderValue {{
+            font-size: 11px;
+            font-weight: bold;
+            color: {TEXT_SEC};
+            font-family: 'JetBrains Mono', 'Consolas', 'Menlo', monospace;
+            min-width: 36px;
+        }}
+        QLabel#ValidationLabel {{
+            font-size: 11px;
+            padding: 8px 10px;
             border-radius: 6px;
-            margin: 2px;
-        }
-        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-            width: 0px;
-        }
-                """
+        }}
+
+        /* ── Tool Buttons (preview toolbar) ── */
+        QPushButton#ToolButton, QPushButton#ToolButtonBlue,
+        QPushButton#ToolButtonRed, QPushButton#ToolButtonGreen {{
+            background: {BG_WIDGET};
+            border: 1px solid {BORDER};
+            border-radius: 4px;
+            padding: 4px 10px;
+            font-size: 10px;
+            color: {TEXT_SEC};
+        }}
+        QPushButton#ToolButton:checked {{
+            background: {ACCENT_ACTIVE};
+            border: 1px solid {ACCENT};
+            color: white;
+        }}
+        QPushButton#ToolButtonBlue:checked {{
+            background: #1e3a5f;
+            border: 1px solid {BLUE};
+            color: {BLUE};
+        }}
+        QPushButton#ToolButtonRed:checked {{
+            background: #3f1e1e;
+            border: 1px solid {RED};
+            color: {RED};
+        }}
+        QPushButton#ToolButtonGreen:checked {{
+            background: #1e3f24;
+            border: 1px solid {GREEN};
+            color: {GREEN};
+        }}
+        QPushButton#ToolButton:hover, QPushButton#ToolButtonBlue:hover,
+        QPushButton#ToolButtonRed:hover, QPushButton#ToolButtonGreen:hover {{
+            background: #2a2a34;
+            border: 1px solid #44444e;
+        }}
+        """
         self.setStyleSheet(style)
 
     def apply_preset(self, preset_name):
@@ -1157,6 +1493,23 @@ class TerrainGeneratorGUI(QMainWindow):
         if "skybox" in preset:
             self.combo_skybox.setCurrentText(preset["skybox"])
 
+        # Highlight active preset button
+        preset_map = {
+            "flat": self.btn_flat, "hills": self.btn_hills,
+            "rugged": self.btn_rugged, "competitive": self.btn_comp,
+        }
+        btn = preset_map.get(preset_name)
+        if btn:
+            btn.setChecked(True)
+
+        # Update slider value labels
+        self.lbl_rough_val.setText(f"{self.slider_rough.value()}%")
+        self.lbl_erosion_val.setText(f"{self.slider_erosion.value()}%")
+        self.lbl_base_radius_val.setText(str(self.slider_base_radius.value()))
+        self.lbl_base_flat_val.setText(f"{self.slider_base_flatness.value()}%")
+        self.lbl_cf_val.setText(f"{self.slider_center_flatten.value()}%")
+        self.lbl_cr_val.setText(f"{self.slider_center_radius.value()}%")
+
         self.sync_to_model()
 
     def reset_to_safe(self):
@@ -1205,18 +1558,18 @@ class TerrainGeneratorGUI(QMainWindow):
         path = self.edit_empires_path.text()
         if not path:
             self.lbl_empires_status.setText("Not configured")
-            self.lbl_empires_status.setStyleSheet("color: #888; font-size: 10px;")
+            self.lbl_empires_status.setStyleSheet("color: #555560; font-size: 10px;")
         else:
             is_valid, msg = validate_empires_path(path)
             if is_valid:
-                self.lbl_empires_status.setText("Valid")
+                self.lbl_empires_status.setText("✓  Valid")
                 self.lbl_empires_status.setStyleSheet(
-                    "color: #4CAF50; font-size: 10px;"
+                    "color: #22c55e; font-size: 10px; font-weight: bold;"
                 )
             else:
-                self.lbl_empires_status.setText(f"Invalid: {msg}")
+                self.lbl_empires_status.setText(f"✗  {msg}")
                 self.lbl_empires_status.setStyleSheet(
-                    "color: #f44336; font-size: 10px;"
+                    "color: #ef4444; font-size: 10px;"
                 )
 
     def on_empires_path_changed(self, text):
@@ -1339,15 +1692,27 @@ class TerrainGeneratorGUI(QMainWindow):
 
     def update_validation_status(self):
         is_valid, msg = self.config_model.validate()
-        self.lbl_validation.setText(msg)
+
+        # Update map info line
+        tx = self.spin_tiles_x.value()
+        ty = self.spin_tiles_y.value()
+        w = tx * 512
+        h = ty * 512
+        self.lbl_map_info.setText(f"{w}×{h} units  ·  {tx}×{ty} tiles")
 
         if is_valid:
-            self.val_group.setStyleSheet("QGroupBox { border: 1px solid #4CAF50; }")
-            self.lbl_validation.setStyleSheet("color: #4CAF50;")
+            self.lbl_validation.setText("✓  All checks passed")
+            self.lbl_validation.setStyleSheet(
+                "color: #22c55e; font-size: 11px; "
+                "background: #122218; border-radius: 6px; padding: 8px 10px;"
+            )
             self.btn_generate.setEnabled(True)
         else:
-            self.val_group.setStyleSheet("QGroupBox { border: 1px solid #F44336; }")
-            self.lbl_validation.setStyleSheet("color: #F44336;")
+            self.lbl_validation.setText(f"✗  {msg}")
+            self.lbl_validation.setStyleSheet(
+                "color: #ef4444; font-size: 11px; "
+                "background: #221212; border-radius: 6px; padding: 8px 10px;"
+            )
             self.btn_generate.setEnabled(False)
 
     def generate_map(self):
@@ -1366,7 +1731,7 @@ class TerrainGeneratorGUI(QMainWindow):
 
     def on_generation_finished(self, success, msg):
         self.btn_generate.setEnabled(True)
-        self.btn_generate.setText("Generate Safe Map")
+        self.btn_generate.setText("Generate VMF")
 
         if success:
             map_name = self.txt_map_name.text().strip() or "gui_terrain"
