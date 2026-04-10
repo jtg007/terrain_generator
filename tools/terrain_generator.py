@@ -230,7 +230,7 @@ class TerrainGeneratorGUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Modern Terrain Generator")
-        self.resize(900, 600)
+        self.resize(1150, 750)
 
         self.config_model = GUIConfigModel()
         self.config = Config()
@@ -360,34 +360,61 @@ class TerrainGeneratorGUI(QMainWindow):
         sidebar_layout.addWidget(self.btn_compile)
 
         # --- Main Area ---
+
         main_area = QWidget()
         main_area_layout = QVBoxLayout(main_area)
+        main_area_layout.setContentsMargins(0, 0, 0, 0)
 
         # Settings Layout
         settings_group = QGroupBox("Configuration")
         grid = QGridLayout(settings_group)
+        grid.setSpacing(10)
+        grid.setColumnMinimumWidth(0, 100)
+        grid.setColumnStretch(1, 1)
+
+        grid.setColumnStretch(3, 1)
+
         row = 0
+        col = 0
+
+        def next_cell():
+            nonlocal row, col
+            col += 2
+            if col > 2:
+                col = 0
+                row += 1
+
+        def add_setting(label_text, widget):
+            lbl = QLabel(label_text)
+            lbl.setStyleSheet("font-weight: bold;")
+            grid.addWidget(lbl, row, col)
+            grid.addWidget(widget, row, col + 1)
+            next_cell()
+
+        # Map Name
+        self.txt_map_name = QLineEdit()
+        self.txt_map_name.setText("gui_terrain")
+        self.txt_map_name.setPlaceholderText("Enter map name...")
+        add_setting("Map Name:", self.txt_map_name)
 
         # Data Source (Custom Image)
-        grid.addWidget(QLabel("Custom Image:"), row, 0)
         source_layout = QHBoxLayout()
         self.chk_custom_image = QCheckBox("Enable")
         self.btn_browse = QPushButton("Browse...")
         self.lbl_image_path = QLabel("None")
         self.btn_browse.setEnabled(False)
         self.lbl_image_path.setStyleSheet("color: #888; font-size: 10px;")
-
         source_layout.addWidget(self.chk_custom_image)
         source_layout.addWidget(self.btn_browse)
         source_layout.addWidget(self.lbl_image_path)
-        grid.addLayout(source_layout, row, 1)
+        source_widget = QWidget()
+        source_widget.setLayout(source_layout)
+        add_setting("Custom Image:", source_widget)
 
         self.chk_custom_image.toggled.connect(self.toggle_custom_image)
         self.btn_browse.clicked.connect(self.browse_image)
-        row += 1
 
         # Seed
-        grid.addWidget(QLabel("Seed:"), row, 0)
         self.spin_seed = QSpinBox()
         self.spin_seed.setRange(0, 999999999)
         self.btn_random_seed = QPushButton("🎲")
@@ -398,14 +425,14 @@ class TerrainGeneratorGUI(QMainWindow):
         seed_layout = QHBoxLayout()
         seed_layout.addWidget(self.spin_seed)
         seed_layout.addWidget(self.btn_random_seed)
-        grid.addLayout(seed_layout, row, 1)
+        seed_widget = QWidget()
+        seed_widget.setLayout(seed_layout)
+        add_setting("Seed:", seed_widget)
         self.spin_seed.valueChanged.connect(self.sync_to_model)
-        row += 1
 
         # Map Size X in tiles
-        grid.addWidget(QLabel("Tiles X:"), row, 0)
         tilesx_container = QVBoxLayout()
-        tilesx_desc = QLabel("Map width in 512-unit tiles (16 = 8192 units)")
+        tilesx_desc = QLabel("Width in 512-unit tiles")
         tilesx_desc.setStyleSheet("color: #888; font-size: 10px;")
         tilesx_container.addWidget(tilesx_desc)
         tilesx_sub = QHBoxLayout()
@@ -417,14 +444,12 @@ class TerrainGeneratorGUI(QMainWindow):
         tilesx_container.addLayout(tilesx_sub)
         tilesx_widget = QWidget()
         tilesx_widget.setLayout(tilesx_container)
-        grid.addWidget(tilesx_widget, row, 1)
+        add_setting("Tiles X:", tilesx_widget)
         self.spin_tiles_x.valueChanged.connect(self.sync_to_model)
-        row += 1
 
         # Map Size Y in tiles
-        grid.addWidget(QLabel("Tiles Y:"), row, 0)
         tilesy_container = QVBoxLayout()
-        tilesy_desc = QLabel("Map height in 512-unit tiles (16 = 8192 units)")
+        tilesy_desc = QLabel("Height in 512-unit tiles")
         tilesy_desc.setStyleSheet("color: #888; font-size: 10px;")
         tilesy_container.addWidget(tilesy_desc)
         tilesy_sub = QHBoxLayout()
@@ -436,14 +461,12 @@ class TerrainGeneratorGUI(QMainWindow):
         tilesy_container.addLayout(tilesy_sub)
         tilesy_widget = QWidget()
         tilesy_widget.setLayout(tilesy_container)
-        grid.addWidget(tilesy_widget, row, 1)
+        add_setting("Tiles Y:", tilesy_widget)
         self.spin_tiles_y.valueChanged.connect(self.sync_to_model)
-        row += 1
 
         # Height Scale
-        grid.addWidget(QLabel("Height Scale:"), row, 0)
         height_container = QVBoxLayout()
-        height_desc = QLabel("Max terrain height in world units")
+        height_desc = QLabel("Max height in world units")
         height_desc.setStyleSheet("color: #888; font-size: 10px;")
         height_container.addWidget(height_desc)
         height_sub = QHBoxLayout()
@@ -455,14 +478,12 @@ class TerrainGeneratorGUI(QMainWindow):
         height_container.addLayout(height_sub)
         height_widget = QWidget()
         height_widget.setLayout(height_container)
-        grid.addWidget(height_widget, row, 1)
+        add_setting("Height Scale:", height_widget)
         self.spin_height.valueChanged.connect(self.sync_to_model)
-        row += 1
 
         # Displacement Power
-        grid.addWidget(QLabel("Detail Level:"), row, 0)
         power_container = QVBoxLayout()
-        power_desc = QLabel("Vertices per tile: More=detailed but slower to compile")
+        power_desc = QLabel("Vertices per tile")
         power_desc.setStyleSheet("color: #888; font-size: 10px;")
         power_container.addWidget(power_desc)
         self.combo_power = QComboBox()
@@ -472,21 +493,14 @@ class TerrainGeneratorGUI(QMainWindow):
         power_container.addWidget(self.combo_power)
         power_widget = QWidget()
         power_widget.setLayout(power_container)
-        grid.addWidget(power_widget, row, 1)
+        add_setting("Detail Level:", power_widget)
         self.combo_power.currentIndexChanged.connect(self.sync_to_model)
-        row += 1
 
-        # Roughness Slider with better labels
-        rough_label = QLabel("Roughness:")
-        rough_label.setStyleSheet("font-weight: bold;")
-        grid.addWidget(rough_label, row, 0)
-
+        # Roughness Slider
         rough_container = QVBoxLayout()
-
-        rough_desc = QLabel("Detail level: Low=Smooth hills, High=Mountainous")
+        rough_desc = QLabel("Low=Smooth, High=Mountainous")
         rough_desc.setStyleSheet("color: #888; font-size: 10px;")
         rough_container.addWidget(rough_desc)
-
         rough_sub = QHBoxLayout()
         rough_sub.addWidget(QLabel("Smooth"))
         self.slider_rough = QSlider(Qt.Horizontal)
@@ -494,24 +508,16 @@ class TerrainGeneratorGUI(QMainWindow):
         rough_sub.addWidget(self.slider_rough)
         rough_sub.addWidget(QLabel("Rugged"))
         rough_container.addLayout(rough_sub)
-
         rough_widget = QWidget()
         rough_widget.setLayout(rough_container)
-        grid.addWidget(rough_widget, row, 1)
+        add_setting("Roughness:", rough_widget)
         self.slider_rough.valueChanged.connect(self.sync_to_model)
-        row += 1
 
         # Erosion Strength Slider
-        eros_label = QLabel("Erosion:")
-        eros_label.setStyleSheet("font-weight: bold;")
-        grid.addWidget(eros_label, row, 0)
-
         eros_container = QVBoxLayout()
-
-        eros_desc = QLabel("Hydraulic erosion: Low=Sharp peaks, High=Smooth valleys")
+        eros_desc = QLabel("Low=Sharp, High=Smooth")
         eros_desc.setStyleSheet("color: #888; font-size: 10px;")
         eros_container.addWidget(eros_desc)
-
         eros_sub = QHBoxLayout()
         eros_sub.addWidget(QLabel("Sharp"))
         self.slider_erosion = QSlider(Qt.Horizontal)
@@ -519,24 +525,16 @@ class TerrainGeneratorGUI(QMainWindow):
         eros_sub.addWidget(self.slider_erosion)
         eros_sub.addWidget(QLabel("Smooth"))
         eros_container.addLayout(eros_sub)
-
         eros_widget = QWidget()
         eros_widget.setLayout(eros_container)
-        grid.addWidget(eros_widget, row, 1)
+        add_setting("Erosion:", eros_widget)
         self.slider_erosion.valueChanged.connect(self.sync_to_model)
-        row += 1
 
         # Base Clear Radius Slider
-        radius_label = QLabel("Base Radius:")
-        radius_label.setStyleSheet("font-weight: bold;")
-        grid.addWidget(radius_label, row, 0)
-
         radius_container = QVBoxLayout()
-
-        radius_desc = QLabel("Size of flat area around each base (0=disabled)")
+        radius_desc = QLabel("Size of flat area (0=disabled)")
         radius_desc.setStyleSheet("color: #888; font-size: 10px;")
         radius_container.addWidget(radius_desc)
-
         radius_sub = QHBoxLayout()
         radius_sub.addWidget(QLabel("0"))
         self.slider_base_radius = QSlider(Qt.Horizontal)
@@ -544,26 +542,16 @@ class TerrainGeneratorGUI(QMainWindow):
         radius_sub.addWidget(self.slider_base_radius)
         radius_sub.addWidget(QLabel("4096"))
         radius_container.addLayout(radius_sub)
-
         radius_widget = QWidget()
         radius_widget.setLayout(radius_container)
-        grid.addWidget(radius_widget, row, 1)
+        add_setting("Base Radius:", radius_widget)
         self.slider_base_radius.valueChanged.connect(self.sync_to_model)
-        row += 1
 
         # Base Flatness Slider
-        flat_label = QLabel("Base Flatness:")
-        flat_label.setStyleSheet("font-weight: bold;")
-        grid.addWidget(flat_label, row, 0)
-
         flat_container = QVBoxLayout()
-
-        flat_desc = QLabel(
-            "How flat the base area becomes (0=natural, 100=completely flat)"
-        )
+        flat_desc = QLabel("0=natural, 100=flat")
         flat_desc.setStyleSheet("color: #888; font-size: 10px;")
         flat_container.addWidget(flat_desc)
-
         flat_sub = QHBoxLayout()
         flat_sub.addWidget(QLabel("Natural"))
         self.slider_base_flatness = QSlider(Qt.Horizontal)
@@ -571,24 +559,16 @@ class TerrainGeneratorGUI(QMainWindow):
         flat_sub.addWidget(self.slider_base_flatness)
         flat_sub.addWidget(QLabel("Flat"))
         flat_container.addLayout(flat_sub)
-
         flat_widget = QWidget()
         flat_widget.setLayout(flat_container)
-        grid.addWidget(flat_widget, row, 1)
+        add_setting("Base Flatness:", flat_widget)
         self.slider_base_flatness.valueChanged.connect(self.sync_to_model)
-        row += 1
 
         # Center Flatten Amount Slider
-        cf_label = QLabel("Center Flatten:")
-        cf_label.setStyleSheet("font-weight: bold;")
-        grid.addWidget(cf_label, row, 0)
-
         cf_container = QVBoxLayout()
-
-        cf_desc = QLabel("Flatten center of map (0=disabled, 100=completely flat)")
+        cf_desc = QLabel("0=disabled, 100=flat")
         cf_desc.setStyleSheet("color: #888; font-size: 10px;")
         cf_container.addWidget(cf_desc)
-
         cf_sub = QHBoxLayout()
         cf_sub.addWidget(QLabel("Off"))
         self.slider_center_flatten = QSlider(Qt.Horizontal)
@@ -596,24 +576,16 @@ class TerrainGeneratorGUI(QMainWindow):
         cf_sub.addWidget(self.slider_center_flatten)
         cf_sub.addWidget(QLabel("Max"))
         cf_container.addLayout(cf_sub)
-
         cf_widget = QWidget()
         cf_widget.setLayout(cf_container)
-        grid.addWidget(cf_widget, row, 1)
+        add_setting("Center Flatten:", cf_widget)
         self.slider_center_flatten.valueChanged.connect(self.sync_to_model)
-        row += 1
 
         # Center Flatten Radius Slider
-        cfr_label = QLabel("Center Radius:")
-        cfr_label.setStyleSheet("font-weight: bold;")
-        grid.addWidget(cfr_label, row, 0)
-
         cfr_container = QVBoxLayout()
-
-        cfr_desc = QLabel("Size of center flattening area (10-50% of map)")
+        cfr_desc = QLabel("10-50% of map size")
         cfr_desc.setStyleSheet("color: #888; font-size: 10px;")
         cfr_container.addWidget(cfr_desc)
-
         cfr_sub = QHBoxLayout()
         cfr_sub.addWidget(QLabel("10%"))
         self.slider_center_radius = QSlider(Qt.Horizontal)
@@ -621,17 +593,14 @@ class TerrainGeneratorGUI(QMainWindow):
         cfr_sub.addWidget(self.slider_center_radius)
         cfr_sub.addWidget(QLabel("50%"))
         cfr_container.addLayout(cfr_sub)
-
         cfr_widget = QWidget()
         cfr_widget.setLayout(cfr_container)
-        grid.addWidget(cfr_widget, row, 1)
+        add_setting("Center Radius:", cfr_widget)
         self.slider_center_radius.valueChanged.connect(self.sync_to_model)
-        row += 1
 
         # Terrain Material
-        grid.addWidget(QLabel("Terrain Texture:"), row, 0)
         mat_container = QVBoxLayout()
-        mat_desc = QLabel("Ground surface blend material")
+        mat_desc = QLabel("Ground surface blend")
         mat_desc.setStyleSheet("color: #888; font-size: 10px;")
         mat_container.addWidget(mat_desc)
         self.combo_material = QComboBox()
@@ -640,14 +609,12 @@ class TerrainGeneratorGUI(QMainWindow):
         mat_container.addWidget(self.combo_material)
         mat_widget = QWidget()
         mat_widget.setLayout(mat_container)
-        grid.addWidget(mat_widget, row, 1)
+        add_setting("Terrain Texture:", mat_widget)
         self.combo_material.currentIndexChanged.connect(self.sync_to_model)
-        row += 1
 
         # Skybox
-        grid.addWidget(QLabel("Skybox:"), row, 0)
         sky_container = QVBoxLayout()
-        sky_desc = QLabel("Sky background and lighting")
+        sky_desc = QLabel("Sky background")
         sky_desc.setStyleSheet("color: #888; font-size: 10px;")
         sky_container.addWidget(sky_desc)
         self.combo_skybox = QComboBox()
@@ -656,16 +623,25 @@ class TerrainGeneratorGUI(QMainWindow):
         sky_container.addWidget(self.combo_skybox)
         sky_widget = QWidget()
         sky_widget.setLayout(sky_container)
-        grid.addWidget(sky_widget, row, 1)
+        add_setting("Skybox:", sky_widget)
         self.combo_skybox.currentIndexChanged.connect(self.sync_to_model)
-        row += 1
+
+        # Advance row for full width group
+        if col != 0:
+            row += 1
+            col = 0
 
         # Spawn Settings
-        grid.addWidget(QLabel("Spawn Settings:"), row, 0)
+        lbl_spawn = QLabel("Spawn Settings:")
+        lbl_spawn.setStyleSheet("font-weight: bold;")
+        grid.addWidget(lbl_spawn, row, 0)
+
         spawn_container = QVBoxLayout()
         spawn_desc = QLabel("Control what entities are generated on the map")
         spawn_desc.setStyleSheet("color: #888; font-size: 10px;")
         spawn_container.addWidget(spawn_desc)
+
+        spawn_grid = QGridLayout()
 
         self.chk_disable_commander = QCheckBox("Disable Commander")
         self.chk_disable_buildings = QCheckBox("Disable Base Buildings")
@@ -679,7 +655,6 @@ class TerrainGeneratorGUI(QMainWindow):
         self.chk_minimal_map.toggled.connect(self.sync_to_model)
         self.chk_terrain_only.toggled.connect(self.sync_to_model)
 
-        # Disable individual options when minimal or terrain only is selected
         def update_spawn_checks():
             minimal = self.chk_minimal_map.isChecked()
             terrain_only = self.chk_terrain_only.isChecked()
@@ -702,26 +677,41 @@ class TerrainGeneratorGUI(QMainWindow):
         self.chk_minimal_map.toggled.connect(update_spawn_checks)
         self.chk_terrain_only.toggled.connect(update_spawn_checks)
 
-        spawn_container.addWidget(self.chk_disable_commander)
-        spawn_container.addWidget(self.chk_disable_buildings)
-        spawn_container.addWidget(self.chk_disable_resources)
-        spawn_container.addWidget(self.chk_minimal_map)
-        spawn_container.addWidget(self.chk_terrain_only)
+        spawn_grid.addWidget(self.chk_disable_commander, 0, 0)
+        spawn_grid.addWidget(self.chk_disable_buildings, 0, 1)
+        spawn_grid.addWidget(self.chk_disable_resources, 1, 0)
+        spawn_grid.addWidget(self.chk_minimal_map, 1, 1)
+        spawn_grid.addWidget(self.chk_terrain_only, 2, 0)
+
+        spawn_container.addLayout(spawn_grid)
 
         spawn_widget = QWidget()
         spawn_widget.setLayout(spawn_container)
-        grid.addWidget(spawn_widget, row, 1)
+        grid.addWidget(spawn_widget, row, 1, 1, 3)  # Span 3 columns
         row += 1
 
-        main_area_layout.addWidget(settings_group)
+        # Use a scroll area for settings to ensure it fits in small windows
+        from PySide6.QtWidgets import QScrollArea
 
-        # Validation Feedack Panel
+        # Validation Feedback Panel
         self.val_group = QGroupBox("Validation Status")
         val_layout = QVBoxLayout(self.val_group)
         self.lbl_validation = QLabel("Checks passed.")
         self.lbl_validation.setWordWrap(True)
         val_layout.addWidget(self.lbl_validation)
-        main_area_layout.addWidget(self.val_group)
+
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
+        scroll_layout.addWidget(settings_group)
+        scroll_layout.addWidget(self.val_group)
+        scroll_layout.addStretch()
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(scroll_content)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+        main_area_layout.addWidget(scroll)
 
         main_layout.addWidget(sidebar)
         main_layout.addWidget(main_area)
@@ -729,54 +719,128 @@ class TerrainGeneratorGUI(QMainWindow):
     def apply_dark_theme(self):
         style = """
         QMainWindow, QWidget {
-            background-color: #1E1E1E;
-            color: #CCCCCC;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a1c;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+            font-size: 13px;
+        }
+        QScrollArea {
+            border: none;
+            background-color: transparent;
         }
         QGroupBox {
-            border: 1px solid #3A3A3A;
-            border-radius: 5px;
-            margin-top: 10px;
+            border: 1px solid #333338;
+            border-radius: 8px;
+            margin-top: 16px;
             font-weight: bold;
+            color: #ffffff;
         }
         QGroupBox::title {
             subcontrol-origin: margin;
-            left: 10px;
-            padding: 0 3px;
+            left: 12px;
+            padding: 0 4px;
+            color: #a0a0a5;
         }
         QPushButton {
-            background-color: #333333;
-            border: 1px solid #555555;
-            border-radius: 4px;
-            padding: 8px;
+            background-color: #2c2c30;
+            border: 1px solid #3e3e42;
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: #ffffff;
+            font-weight: 500;
         }
         QPushButton:hover {
-            background-color: #444444; border: 1px solid #777777;
+            background-color: #38383e;
+            border: 1px solid #505055;
+        }
+        QPushButton:pressed {
+            background-color: #1e1e20;
+            border: 1px solid #2c2c30;
         }
         QPushButton:disabled {
-            background-color: #2A2A2A; color: #555555;
+            background-color: #222224;
+            color: #66666a;
+            border: 1px solid #2a2a2c;
         }
         QSpinBox, QComboBox, QLineEdit {
-            background-color: #2D2D30;
-            border: 1px solid #3E3E42;
-            border-radius: 3px;
-            padding: 5px;
-            color: white;
+            background-color: #252529;
+            border: 1px solid #38383e;
+            border-radius: 6px;
+            padding: 6px 10px;
+            color: #ffffff;
+            selection-background-color: #0d6efd;
+        }
+        QSpinBox:focus, QComboBox:focus, QLineEdit:focus {
+            border: 1px solid #0d6efd;
+            background-color: #2a2a2f;
+        }
+        QComboBox::drop-down {
+            border: none;
+            width: 24px;
+        }
+        QComboBox::down-arrow {
+            image: none;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 5px solid #a0a0a5;
+            margin-right: 8px;
         }
         QSlider::groove:horizontal {
-            border: 1px solid #3A3A3A;
+            border: none;
             height: 6px;
-            background: #2D2D30;
+            background: #38383e;
+            border-radius: 3px;
+        }
+        QSlider::sub-page:horizontal {
+            background: #0d6efd;
             border-radius: 3px;
         }
         QSlider::handle:horizontal {
-            background: #2196F3;
-            border: 1px solid #2196F3;
+            background: #ffffff;
+            border: 2px solid #0d6efd;
             width: 14px;
-            margin: -4px 0;
-            border-radius: 7px;
+            height: 14px;
+            margin: -5px 0;
+            border-radius: 9px;
         }
-        """
+        QSlider::handle:horizontal:hover {
+            background: #e0e0e0;
+            border: 2px solid #0b5ed7;
+        }
+        QCheckBox {
+            spacing: 8px;
+        }
+        QScrollBar:vertical {
+            border: none;
+            background: #1a1a1c;
+            width: 12px;
+            margin: 0px 0px 0px 0px;
+        }
+        QScrollBar::handle:vertical {
+            background: #38383e;
+            min-height: 20px;
+            border-radius: 6px;
+            margin: 2px;
+        }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+            height: 0px;
+        }
+        QScrollBar:horizontal {
+            border: none;
+            background: #1a1a1c;
+            height: 12px;
+            margin: 0px 0px 0px 0px;
+        }
+        QScrollBar::handle:horizontal {
+            background: #38383e;
+            min-width: 20px;
+            border-radius: 6px;
+            margin: 2px;
+        }
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+            width: 0px;
+        }
+                """
         self.setStyleSheet(style)
 
     def apply_preset(self, preset_name):
@@ -1061,7 +1125,8 @@ class TerrainGeneratorGUI(QMainWindow):
         self.btn_generate.setText("Generating...")
 
         # Run generation in background
-        self.worker = GenerationWorker(self.config_model, "gui_terrain")
+        map_name = self.txt_map_name.text().strip() or "gui_terrain"
+        self.worker = GenerationWorker(self.config_model, map_name)
         self.worker.finished.connect(self.on_generation_finished)
         self.worker.start()
 
@@ -1070,7 +1135,8 @@ class TerrainGeneratorGUI(QMainWindow):
         self.btn_generate.setText("Generate Safe Map")
 
         if success:
-            self._last_vmf_path = str(OUTPUT_DIR / "gui_terrain.vmf")
+            map_name = self.txt_map_name.text().strip() or "gui_terrain"
+            self._last_vmf_path = str(OUTPUT_DIR / f"{map_name}.vmf")
             QMessageBox.information(self, "Success", msg)
         else:
             QMessageBox.critical(self, "Generation Failed", msg)
