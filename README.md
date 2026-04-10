@@ -1,30 +1,67 @@
-# Terrain Generator for Empires Mod
+# Empires Mod Terrain Generator
 
-**GUI application** for generating displacement terrain maps for Empires Mod.
+An advanced **procedural terrain generator and graphical interface** designed specifically for creating compile-ready displacement maps for the Source Engine modification, **Empires Mod**.
 
-<img width="1122" height="1292" alt="tool" src="https://github.com/user-attachments/assets/dc739f25-5908-4710-8dfc-c5dbbd9dd734" />
+![Terrain Generator UI Screenshot](screenshot.png)
 
-## Features
+## Overview
 
-- **Procedural Terrain** - Mountains and valleys using noise and erosion
-- **Graphical Interface** - Easy-to-use GUI with preset selection
-- **Automatic Compilation** - One-click generate and compile
-- **Auto-Detection** - Finds your Empires installation automatically
-- **Entity Placement** - Bases, resource nodes, and player spawns
+The Terrain Generator bridges the gap between procedural noise generation and the strict mapping requirements of the Source Engine. It creates organic, playable maps using multi-layered Fractal Brownian Motion (fBm) and hydraulic erosion, handling all the complex VMF (Valve Map Format) intricacies behind the scenes.
 
-## Installation
+With an interactive graphical interface, map creators can generate, preview, customize, and compile competitive multiplayer maps in minutes instead of weeks.
 
-1. Download `TerrainGenerator-Windows.zip` from [Releases](https://github.com/jtg007/terrain_generator/releases)
-2. **Extract the entire zip** into a folder (e.g., `TerrainGenerator/`)
-3. Run `TerrainGenerator.exe` from that folder
+## Main Features
+
+*   **Interactive Live Map Preview:** Visualize the generated heightmap instantly as you tweak parameters. Changes to the noise seed, size, or ruggedness reflect in real-time.
+*   **Procedural Landscape Engine:** Combines rolling hills, sharp mountain ridges, and hydraulic erosion to create natural-looking, continuous terrain grids.
+*   **Drag-and-Drop Entity Placement:** Directly click and drag on the live preview to custom place the Imperial Commander Base, Northern Faction Base, and Resource Nodes exactly where you want them.
+*   **Intelligent Auto-Balancing:** Built-in algorithms flatten the terrain gently at base locations to ensure builders have a level playing field, while avoiding unnatural sudden drops.
+*   **Source Engine Compliance:** Generates 100% mathematically convex, correctly aligned, airtight displacement geometry designed specifically to avoid VBSP compilation errors or engine crashes.
+*   **Automatic VBSP Compilation:** Automatically locates your Empires Mod installation and directly compiles the generated VMF into a playable BSP format with one click.
+*   **Ready-to-Play Presets:** Select from pre-configured terrain styles like *Flat*, *Hills*, *Rugged*, or *Competitive* to get a fast start.
 
 ## How to Use
 
-1. Select a **Preset** (Flat, Hills, Rugged, Competitive)
-2. Click **Generate**
-3. Click **Compile**
-4. Open in Empires → Create Server → Select your map
+1. **Launch the Application**
+   * Download the latest release from the [Releases page](https://github.com/jtg007/terrain_generator/releases).
+   * Extract the ZIP file and run `TerrainGenerator.exe` (Windows) or launch via Python.
 
-## Requirements
-- Windows 10/11 (or Linux with Wine for compilation)
-- Empires Mod installed via Steam
+2. **Configure Your Map**
+   * Pick a **Preset** on the left to set up a baseline style.
+   * Adjust **Tiles X** and **Tiles Y** for the map size (each tile is 512 units).
+   * Slide **Roughness**, **Erosion**, and **Height Scale** to shape the terrain.
+   * Choose a safe **Skybox** and **Terrain Texture**.
+
+3. **Customize Entity Layout**
+   * Beneath the map preview, select an entity tool (e.g., *Set Imp Base*, *Set NF Base*, *Add Resource*).
+   * Click on the map preview to place or move the entity.
+   * Choose the *Move/Drag* tool to fine-tune placements by dragging the markers.
+
+4. **Generate and Compile**
+   * Ensure your **Empires Path** is correctly selected on the left sidebar.
+   * Click **Generate Safe Map** to bake your terrain and entity layout into a `.vmf` file.
+   * Click **Compile (VBSP)** to convert the VMF into a playable `.bsp` map directly in your game folders.
+
+5. **Play!**
+   * Start Empires Mod.
+   * Create a local server or load the map via the developer console (`map gui_terrain`).
+
+## Local Development Requirements
+
+If you prefer to run the code from the source instead of using the pre-compiled executable:
+
+*   **Python 3.10+**
+*   Empires Mod installed via Steam (for VBSP compiling)
+*   Required packages:
+    ```bash
+    pip install -r config/requirements.txt
+    ```
+
+To launch the GUI from source:
+```bash
+python tools/terrain_generator.py
+```
+
+## Contributing & Rules
+
+Check out `AGENTS.md` for specific architectural guidelines and Source Engine limits (such as Hammer size limits, Float precision on vertex normals, and airtight Skybox dimensions) before making pull requests.
