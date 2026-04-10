@@ -757,6 +757,12 @@ class TerrainGeneratorGUI(QMainWindow):
         self.preview_widget = MapPreviewWidget()
         preview_layout.addWidget(self.preview_widget)
 
+        # Layout Validation Errors
+        self.lbl_layout_validation = QLabel("")
+        self.lbl_layout_validation.setStyleSheet("color: #F44336; font-weight: bold;")
+        self.lbl_layout_validation.setWordWrap(True)
+        preview_layout.addWidget(self.lbl_layout_validation)
+
         # Tools layout
         tools_layout = QHBoxLayout()
         tools_layout.setSpacing(10)
@@ -806,12 +812,29 @@ class TerrainGeneratorGUI(QMainWindow):
         main_layout.addWidget(sidebar)
         main_layout.addWidget(main_area)
 
+    def validate_current_layout(self):
+        spec = self.config_model.to_terrain_spec()
+        layout_result = spec.validate_layout()
+
+        if not layout_result.valid:
+            self.lbl_layout_validation.setText("\n".join(layout_result.errors))
+            self.lbl_layout_validation.show()
+            self.btn_generate.setEnabled(False)
+        else:
+            self.lbl_layout_validation.setText("")
+            self.lbl_layout_validation.hide()
+            self.btn_generate.setEnabled(True)
+
+        return layout_result.invalid_entities
+
     def clear_resources(self):
         self.config_model.custom_resources = []
+        invalid_entities = self.validate_current_layout()
         self.preview_widget.set_entities(
             (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y),
             (self.config_model.custom_nf_base_x, self.config_model.custom_nf_base_y),
             [],
+            invalid_entities=invalid_entities
         )
         self.preview_timer.start(500)
 
@@ -826,10 +849,12 @@ class TerrainGeneratorGUI(QMainWindow):
         else:
             self.config_model.custom_nf_base_x = x
             self.config_model.custom_nf_base_y = y
+        invalid_entities = self.validate_current_layout()
         self.preview_widget.set_entities(
             (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y),
             (self.config_model.custom_nf_base_x, self.config_model.custom_nf_base_y),
             self.config_model.custom_resources,
+            invalid_entities=invalid_entities
         )
         self.preview_timer.start(500)
 
@@ -838,10 +863,12 @@ class TerrainGeneratorGUI(QMainWindow):
             self.config_model.custom_resources
         ):
             self.config_model.custom_resources[index] = (x, y)
+        invalid_entities = self.validate_current_layout()
         self.preview_widget.set_entities(
             (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y),
             (self.config_model.custom_nf_base_x, self.config_model.custom_nf_base_y),
             self.config_model.custom_resources,
+            invalid_entities=invalid_entities
         )
         # Resource positions do not affect the terrain heightmap itself,
         # so we don't necessarily need to re-run the pipeline on move,
@@ -852,10 +879,12 @@ class TerrainGeneratorGUI(QMainWindow):
         if self.config_model.custom_resources is None:
             self.config_model.custom_resources = []
         self.config_model.custom_resources.append((x, y))
+        invalid_entities = self.validate_current_layout()
         self.preview_widget.set_entities(
             (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y),
             (self.config_model.custom_nf_base_x, self.config_model.custom_nf_base_y),
             self.config_model.custom_resources,
+            invalid_entities=invalid_entities
         )
         self.preview_timer.start(500)
 
@@ -916,7 +945,8 @@ class TerrainGeneratorGUI(QMainWindow):
                 if self.config_model.custom_resources
                 else []
             )
-            self.preview_widget.set_entities((imp_x, imp_y), (nf_x, nf_y), res)
+            invalid_entities = self.validate_current_layout()
+            self.preview_widget.set_entities((imp_x, imp_y), (nf_x, nf_y), res, invalid_entities=invalid_entities)
 
     def apply_dark_theme(self):
         style = """

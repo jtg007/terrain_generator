@@ -1020,25 +1020,27 @@ class DisplacementVMF:
         nf_offset = min(nf_offset, max_offset)
         imp_offset = min(imp_offset, max_offset)
 
+        imp_default_x, imp_default_y = self.spec.default_imp_base()
         imp_base_x = (
             int(self.spec.custom_imp_base_x)
             if self.spec.custom_imp_base_x is not None
-            else int(origin_x + (map_width * 0.25))
+            else int(imp_default_x)
         )
         imp_base_y = (
             int(self.spec.custom_imp_base_y)
             if self.spec.custom_imp_base_y is not None
-            else int(origin_y + (map_height * 0.25))
+            else int(imp_default_y)
         )
+        nf_default_x, nf_default_y = self.spec.default_nf_base()
         nf_base_x = (
             int(self.spec.custom_nf_base_x)
             if self.spec.custom_nf_base_x is not None
-            else int(origin_x + (map_width * 0.75))
+            else int(nf_default_x)
         )
         nf_base_y = (
             int(self.spec.custom_nf_base_y)
             if self.spec.custom_nf_base_y is not None
-            else int(origin_y + (map_height * 0.75))
+            else int(nf_default_y)
         )
 
         base_building_size = 256
