@@ -13,6 +13,7 @@ With an interactive graphical interface, map creators can generate, preview, cus
 ## Main Features
 
 *   **Interactive Live Map Preview:** Visualize the generated heightmap instantly as you tweak parameters. Changes to the noise seed, size, or ruggedness reflect in real-time.
+*   **Custom Heightmaps:** You can also choose to import your own custom `png` image heightmaps to manually author the fundamental terrain shapes, skipping the procedural noise entirely.
 *   **Procedural Landscape Engine:** Combines rolling hills, sharp mountain ridges, and hydraulic erosion to create natural-looking, continuous terrain grids.
 *   **Drag-and-Drop Entity Placement:** Directly click and drag on the live preview to custom place the Imperial Commander Base, Northern Faction Base, and Resource Nodes exactly where you want them.
 *   **Intelligent Auto-Balancing:** Built-in algorithms flatten the terrain gently at base locations to ensure builders have a level playing field, while avoiding unnatural sudden drops.
@@ -28,6 +29,7 @@ With an interactive graphical interface, map creators can generate, preview, cus
 
 2. **Configure Your Map**
    * Pick a **Preset** on the left to set up a baseline style.
+   * *Optional*: In the "Custom Image" setting, browse to load a black & white `.png` heightmap to bypass procedural generation.
    * Adjust **Tiles X** and **Tiles Y** for the map size (each tile is 512 units).
    * Slide **Roughness**, **Erosion**, and **Height Scale** to shape the terrain.
    * Choose a safe **Skybox** and **Terrain Texture**.
