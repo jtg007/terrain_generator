@@ -117,11 +117,12 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     veh2_x = imp_x + lane_dx * lane_len * 0.7
     veh2_y = imp_y + lane_dy * lane_len * 0.7
 
-    # Radii for strategic features
-    lane_width = spec.size_x * 0.10
-    veh_radius = spec.size_x * 0.20
-    choke_width = spec.size_x * 0.05
-    choke_length = spec.size_x * 0.15
+    # Radii for strategic features (derived from map geometry)
+    map_min_dim = min(spec.size_x, spec.size_y)
+    lane_width = map_min_dim * 0.10
+    veh_radius = map_min_dim * 0.20
+    choke_width = map_min_dim * 0.05
+    choke_length = map_min_dim * 0.15
 
     # 2. Prepare grid constants
     floor_height = max_height * 0.15
@@ -206,7 +207,9 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
                 if dist_outward_choke > choke_width:
                     # Outside the narrow path: create a blockade/wall.
                     # Limit the maximum block mask so we get a slope, not a cliff.
-                    choke_block_mask = min(1.0, (dist_outward_choke - choke_width) / (choke_width * 2))
+                    choke_block_mask = min(
+                        1.0, (dist_outward_choke - choke_width) / (choke_width * 2)
+                    )
 
             # Combine playable area masks
             # Areas with high playable mask will be flattened towards floor_height
@@ -390,107 +393,6 @@ def flatten_base_areas(
 
                 current = grid.heights[r][c]
                 grid.heights[r][c] = current * (1.0 - t) + avg_height * t
-
-    return grid
-
-
-def flatten_center(
-    grid: HeightGrid,
-    spec: "TerrainSpec",
-) -> HeightGrid:
-    """
-    Flatten the center of the map to reduce or eliminate center hills.
-
-    Args:
-        center_flatten: 0.0 = no effect, 1.0 = completely flat center
-        center_flatten_radius: Fraction of map size to flatten (0.0-1.0)
-    """
-    if spec.center_flatten <= 0:
-        return grid
-
-    rows = grid.rows
-    cols = grid.cols
-
-    vertex_spacing = spec.size_x / (cols - 1)
-
-    center_x = spec.origin_x + spec.size_x / 2
-    center_y = spec.origin_y + spec.size_y / 2
-    center_radius = spec.size_x * spec.center_flatten_radius
-
-    avg_height = grid.average_height()
-    flatten_amount = spec.center_flatten
-
-    for r in range(rows):
-        world_y = spec.origin_y + r * vertex_spacing
-        for c in range(cols):
-            world_x = spec.origin_x + c * vertex_spacing
-
-            dist = math.sqrt((world_x - center_x) ** 2 + (world_y - center_y) ** 2)
-
-            if dist < center_radius:
-                t = 1.0 - (dist / center_radius)
-                t = t * t * (3 - 2 * t)
-                t = t * flatten_amount
-
-                current = grid.heights[r][c]
-                grid.heights[r][c] = current * (1.0 - t) + avg_height * t
-
-    return grid
-
-    rows = grid.rows
-    cols = grid.cols
-
-    vertex_spacing = spec.size_x / (cols - 1)
-
-    center_x = spec.origin_x + spec.size_x / 2
-    center_y = spec.origin_y + spec.size_y / 2
-    center_radius = spec.size_x * spec.center_flatten_radius
-
-    avg_height = grid.average_height()
-    flatten_amount = spec.center_flatten
-
-    for r in range(rows):
-        world_y = spec.origin_y + r * vertex_spacing
-        for c in range(cols):
-            world_x = spec.origin_x + c * vertex_spacing
-
-            dist = math.sqrt((world_x - center_x) ** 2 + (world_y - center_y) ** 2)
-
-            if dist < center_radius:
-                t = 1.0 - (dist / center_radius)
-                t = t * t * (3 - 2 * t)
-                effect = t * flatten_amount
-
-                current = grid.heights[r][c]
-                grid.heights[r][c] = current * (1.0 - effect) + avg_height * effect
-
-    return grid
-
-    rows = grid.rows
-    cols = grid.cols
-    cell_size = spec.cell_size
-
-    center_x = spec.origin_x + spec.size_x / 2
-    center_y = spec.origin_y + spec.size_y / 2
-    center_radius = spec.size_x * spec.center_flatten_radius
-
-    avg_height = grid.average_height()
-    flatten_amount = spec.center_flatten
-
-    for r in range(rows):
-        world_y = spec.origin_y + r * cell_size
-        for c in range(cols):
-            world_x = spec.origin_x + c * cell_size
-
-            dist = math.sqrt((world_x - center_x) ** 2 + (world_y - center_y) ** 2)
-
-            if dist < center_radius:
-                t = 1.0 - (dist / center_radius)
-                t = t * t * (3 - 2 * t)
-                effect = t * flatten_amount
-
-                current = grid.heights[r][c]
-                grid.heights[r][c] = current * (1.0 - effect) + avg_height * effect
 
     return grid
 
@@ -1096,15 +998,6 @@ def run_pipeline(spec: TerrainSpec) -> dict:
         grid = flatten_base_areas(grid, spec)
         print(
             f"    Height range after base flatten: {grid.min_height():.1f} to {grid.max_height():.1f}"
-        )
-
-    if spec.center_flatten > 0:
-        print(
-            f"  Step 5c: Flatten center (amount={spec.center_flatten}, radius={spec.center_flatten_radius * spec.size_x:.0f})"
-        )
-        grid = flatten_center(grid, spec)
-        print(
-            f"    Height range after center flatten: {grid.min_height():.1f} to {grid.max_height():.1f}"
         )
 
     print(f"  Step 6: Clamp slope (max_step={spec.max_slope_step})")
