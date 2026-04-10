@@ -63,7 +63,3 @@ To launch the GUI from source:
 ```bash
 python tools/terrain_generator.py
 ```
-
-## Contributing & Rules
-
-Check out `AGENTS.md` for specific architectural guidelines and Source Engine limits (such as Hammer size limits, Float precision on vertex normals, and airtight Skybox dimensions) before making pull requests.
