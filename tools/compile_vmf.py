@@ -81,7 +81,7 @@ def compile_vmf(
     # Run VBSP with OS-appropriate command
     if is_windows():
         # Windows: Run VBSP directly
-        cmd = ["vbsp.exe", "-game", "..\\empires"]
+        cmd = [vbsp_exe, "-game", "..\\empires"]
     else:
         # Linux: Run via Wine
         cmd = ["wine", "vbsp.exe", "-game", "../empires"]
