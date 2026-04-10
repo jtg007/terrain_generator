@@ -20,6 +20,7 @@ All coordinate calculations use integer grid positions to prevent T-junctions.
 import math
 import random
 import sys
+from dataclasses import dataclass
 from typing import List, Tuple
 
 if getattr(sys, "frozen", False):
@@ -30,6 +31,22 @@ else:
     from src.noise import NoiseGenerator
 
 from PIL import Image, ImageOps
+
+
+@dataclass
+class LayoutNode:
+    x: float
+    y: float
+    radius: float
+    type: str  # 'base', 'vehicle_area', 'chokepoint'
+
+
+@dataclass
+class LayoutConnection:
+    start_node: LayoutNode
+    end_node: LayoutNode
+    width: float
+    type: str  # 'main_lane', 'side_lane', 'chokepoint_lane'
 
 
 def generate_vertex_grid(spec: TerrainSpec) -> HeightGrid:
@@ -52,24 +69,13 @@ def generate_vertex_grid(spec: TerrainSpec) -> HeightGrid:
     )
 
 
-def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
-    """
-    Step 2: Generate heights using a Strategic Macro Layout approach.
+def generate_strategic_layout(
+    spec: TerrainSpec,
+) -> Tuple[List[LayoutNode], List[LayoutConnection]]:
+    """Generates an explicit layout of nodes and connections based on the terrain spec."""
+    nodes = []
+    connections = []
 
-    Replaces the generic central hill noise with a structured terrain model:
-    1. Strategic Layout: Defines base positions, main lane, side routes, chokepoints, open vehicle areas.
-    2. Field Generation: Calculates layout masks and distance fields.
-    3. Macro Shaping: Flattens bases, carves lanes/vehicle areas, creates ridges and chokepoints.
-    4. Micro Variation: Adds noise only for natural variation, keeping structural integrity.
-    """
-    rows = grid.rows
-    cols = grid.cols
-    noise = NoiseGenerator(spec.seed)
-
-    roughness = getattr(spec, "roughness", 0.5)
-    max_height = spec.terrain_max_height
-
-    # 1. Explicit Strategic Layout
     # Use specified custom base locations or defaults based on map size
     imp_x = (
         spec.custom_imp_base_x
@@ -95,7 +101,13 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     base_radius = (
         spec.base_clear_radius if spec.base_clear_radius > 0 else spec.size_x * 0.12
     )
+    map_min_dim = min(spec.size_x, spec.size_y)
 
+    imp_base = LayoutNode(imp_x, imp_y, base_radius, "base")
+    nf_base = LayoutNode(nf_x, nf_y, base_radius, "base")
+    nodes.extend([imp_base, nf_base])
+
+    # Determine main lane vector
     lane_dx = nf_x - imp_x
     lane_dy = nf_y - imp_y
     lane_len = math.sqrt(lane_dx * lane_dx + lane_dy * lane_dy)
@@ -105,24 +117,74 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     else:
         lane_dx, lane_dy = 1.0, 0.0
 
-    # Define layout points:
-    # - chokepoint exactly in the middle of the main lane
-    # - vehicle open areas roughly 1/3 and 2/3 along the main lane
-    choke_x = imp_x + lane_dx * lane_len * 0.5
-    choke_y = imp_y + lane_dy * lane_len * 0.5
-
-    veh1_x = imp_x + lane_dx * lane_len * 0.3
-    veh1_y = imp_y + lane_dy * lane_len * 0.3
-
-    veh2_x = imp_x + lane_dx * lane_len * 0.7
-    veh2_y = imp_y + lane_dy * lane_len * 0.7
-
-    # Radii for strategic features (derived from map geometry)
-    map_min_dim = min(spec.size_x, spec.size_y)
     lane_width = map_min_dim * 0.10
     veh_radius = map_min_dim * 0.20
-    choke_width = map_min_dim * 0.05
+
     choke_length = map_min_dim * 0.15
+
+    # Center chokepoint
+    choke_x = imp_x + lane_dx * lane_len * 0.5
+    choke_y = imp_y + lane_dy * lane_len * 0.5
+    center_choke = LayoutNode(choke_x, choke_y, choke_length / 2, "chokepoint")
+    nodes.append(center_choke)
+
+    # Vehicle open areas
+    veh1_x = imp_x + lane_dx * lane_len * 0.25
+    veh1_y = imp_y + lane_dy * lane_len * 0.25
+    veh1 = LayoutNode(veh1_x, veh1_y, veh_radius, "vehicle_area")
+
+    veh2_x = imp_x + lane_dx * lane_len * 0.75
+    veh2_y = imp_y + lane_dy * lane_len * 0.75
+    veh2 = LayoutNode(veh2_x, veh2_y, veh_radius, "vehicle_area")
+
+    nodes.extend([veh1, veh2])
+
+    # Connections
+    # imp_base -> veh1 -> center_choke -> veh2 -> nf_base
+    connections.append(LayoutConnection(imp_base, veh1, lane_width, "main_lane"))
+    connections.append(
+        LayoutConnection(veh1, center_choke, lane_width, "chokepoint_lane")
+    )
+    connections.append(
+        LayoutConnection(center_choke, veh2, lane_width, "chokepoint_lane")
+    )
+    connections.append(LayoutConnection(veh2, nf_base, lane_width, "main_lane"))
+
+    # Optional side lanes (simple curve or offset point)
+    perp_dx = -lane_dy
+    perp_dy = lane_dx
+    side_offset = map_min_dim * 0.3
+
+    side_x = choke_x + perp_dx * side_offset
+    side_y = choke_y + perp_dy * side_offset
+    side_veh = LayoutNode(side_x, side_y, veh_radius * 0.7, "vehicle_area")
+    nodes.append(side_veh)
+
+    connections.append(LayoutConnection(veh1, side_veh, lane_width * 0.7, "side_lane"))
+    connections.append(LayoutConnection(side_veh, veh2, lane_width * 0.7, "side_lane"))
+
+    return nodes, connections
+
+
+def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
+    """
+    Step 2: Generate heights using a Strategic Macro Layout approach.
+
+    Replaces the generic central hill noise with a structured terrain model:
+    1. Strategic Layout: Defines base positions, main lane, side routes, chokepoints, open vehicle areas.
+    2. Field Generation: Calculates layout masks and distance fields.
+    3. Macro Shaping: Flattens bases, carves lanes/vehicle areas, creates ridges and chokepoints.
+    4. Micro Variation: Adds noise only for natural variation, keeping structural integrity.
+    """
+    rows = grid.rows
+    cols = grid.cols
+    noise = NoiseGenerator(spec.seed)
+
+    roughness = getattr(spec, "roughness", 0.5)
+    max_height = spec.terrain_max_height
+
+    # 1. Generate Explicit Layout objects
+    nodes, connections = generate_strategic_layout(spec)
 
     # 2. Prepare grid constants
     floor_height = max_height * 0.15
@@ -152,64 +214,68 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
                 * warp_strength
             )
 
-            # 3. Macro Shaping (Distance Fields)
+            # 3. Mask Generation from Explicit Layout Objects
 
-            # Base influence (0.0 to 1.0, 1.0 = exact center)
-            dist_imp = math.sqrt((wx - imp_x) ** 2 + (wy - imp_y) ** 2)
-            dist_nf = math.sqrt((wx - nf_x) ** 2 + (wy - nf_y) ** 2)
+            base_mask = 0.0
+            veh_mask = 0.0
 
-            base_imp_mask = max(0.0, 1.0 - (dist_imp / base_radius))
-            base_nf_mask = max(0.0, 1.0 - (dist_nf / base_radius))
-            base_imp_mask = base_imp_mask**2 * (3 - 2 * base_imp_mask)  # Smoothstep
-            base_nf_mask = base_nf_mask**2 * (3 - 2 * base_nf_mask)
-            base_mask = max(base_imp_mask, base_nf_mask)
+            # Evaluate Nodes
+            for node in nodes:
+                dist = math.sqrt((wx - node.x) ** 2 + (wy - node.y) ** 2)
+                mask = max(0.0, 1.0 - (dist / max(1e-5, node.radius)))
+                mask = mask**2 * (3 - 2 * mask)  # Smoothstep
 
-            # Main lane influence
-            # The cross product of the lane vector and the vector to the point gives the distance to the line.
-            # Since lane_dx and lane_dy are already normalized (a unit vector), the cross product directly gives the distance.
-            dist_to_lane = abs(lane_dy * (wx - imp_x) - lane_dx * (wy - imp_y))
+                if node.type == "base":
+                    base_mask = max(base_mask, mask)
+                elif node.type == "vehicle_area":
+                    veh_mask = max(veh_mask, mask)
 
-            # Bound lane mask to the segment between bases
-            dot_product = (wx - imp_x) * lane_dx + (wy - imp_y) * lane_dy
-            if dot_product < 0 or dot_product > lane_len:
-                lane_mask = 0.0
-            else:
-                lane_mask = max(0.0, 1.0 - (dist_to_lane / lane_width))
-                lane_mask = lane_mask**2 * (3 - 2 * lane_mask)
-
-            # Open vehicle areas (spherical masks)
-            dist_veh1 = math.sqrt((wx - veh1_x) ** 2 + (wy - veh1_y) ** 2)
-            dist_veh2 = math.sqrt((wx - veh2_x) ** 2 + (wy - veh2_y) ** 2)
-
-            veh1_mask = max(0.0, 1.0 - (dist_veh1 / veh_radius))
-            veh2_mask = max(0.0, 1.0 - (dist_veh2 / veh_radius))
-            veh1_mask = veh1_mask**2 * (3 - 2 * veh1_mask)
-            veh2_mask = veh2_mask**2 * (3 - 2 * veh2_mask)
-            veh_mask = max(veh1_mask, veh2_mask)
-
-            # Chokepoint logic
-            # Chokepoint is a narrow pass in the middle.
-            # We want to force high terrain perpendicular to the choke.
-            choke_perp_dx = -lane_dy
-            choke_perp_dy = lane_dx
-
-            # Distance along lane from choke center
-            dist_along_choke = abs((wx - choke_x) * lane_dx + (wy - choke_y) * lane_dy)
-            # Distance outward from lane at choke
-            dist_outward_choke = abs(
-                (wx - choke_x) * choke_perp_dx + (wy - choke_y) * choke_perp_dy
-            )
-
-            # The chokepoint restricts the lane width dramatically and creates walls
+            # Evaluate Connections (Lanes and Chokepoints)
+            lane_mask = 0.0
             choke_block_mask = 0.0
-            if dist_along_choke < choke_length:
-                # Inside the chokepoint segment along the lane
-                if dist_outward_choke > choke_width:
-                    # Outside the narrow path: create a blockade/wall.
-                    # Limit the maximum block mask so we get a slope, not a cliff.
-                    choke_block_mask = min(
-                        1.0, (dist_outward_choke - choke_width) / (choke_width * 2)
-                    )
+
+            for conn in connections:
+                # Connection vector
+                dx = conn.end_node.x - conn.start_node.x
+                dy = conn.end_node.y - conn.start_node.y
+                length = math.sqrt(dx * dx + dy * dy)
+
+                if length > 0:
+                    dx /= length
+                    dy /= length
+                else:
+                    dx, dy = 1.0, 0.0
+
+                # Distance along and orthogonal to connection segment
+                dot_product = (wx - conn.start_node.x) * dx + (
+                    wy - conn.start_node.y
+                ) * dy
+                dist_to_lane = abs(
+                    dy * (wx - conn.start_node.x) - dx * (wy - conn.start_node.y)
+                )
+
+                if 0 <= dot_product <= length:
+                    if conn.type in ("main_lane", "side_lane"):
+                        mask = max(0.0, 1.0 - (dist_to_lane / max(1e-5, conn.width)))
+                        mask = mask**2 * (3 - 2 * mask)
+                        lane_mask = max(lane_mask, mask)
+                    elif conn.type == "chokepoint_lane":
+                        # Chokepoints have a narrow playable lane and force high terrain next to them
+                        choke_playable_width = conn.width * 0.5
+                        mask = max(
+                            0.0, 1.0 - (dist_to_lane / max(1e-5, choke_playable_width))
+                        )
+                        mask = mask**2 * (3 - 2 * mask)
+                        lane_mask = max(lane_mask, mask)
+
+                        # Apply blockade if outside the narrow lane
+                        if dist_to_lane > choke_playable_width:
+                            block_val = min(
+                                1.0,
+                                (dist_to_lane - choke_playable_width)
+                                / max(1e-5, choke_playable_width * 2),
+                            )
+                            choke_block_mask = max(choke_block_mask, block_val)
 
             # Combine playable area masks
             # Areas with high playable mask will be flattened towards floor_height
