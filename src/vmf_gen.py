@@ -342,7 +342,6 @@ def spawn_base_entities_enhanced(
 
     entity_orientations = rules.get("entity_orientations", {})
     faction_key = "nf" if faction == "nf" else "imp"
-    model_prefix = "NF" if faction == "nf" else "Imperial"
     commander_yaw = entity_orientations.get(f"{faction_key}_commander", {}).get(
         "circular_mean"
     )
@@ -564,15 +563,27 @@ def spawn_resource_nodes_enhanced(
 
     yaw_to_center = calculate_yaw_to_center(base_x, base_y, map_center_x, map_center_y)
 
-    angles = [yaw_to_center + i * (360 / node_count) for i in range(node_count)]
+    if rules.get("custom_resources") is not None:
+        custom_points = rules.get("custom_resources")
+        # Ensure we only iterate over what's provided, so we simulate angles logic just for loops
+        node_count = len(custom_points)
+        for i, (node_x, node_y) in enumerate(custom_points):
+            pass  # node_x and node_y already assigned
+    else:
+        angles = [yaw_to_center + i * (360 / node_count) for i in range(node_count)]
+        custom_points = None
 
-    for i, angle in enumerate(angles):
-        offset_dist = random.uniform(dist_to_base_avg * 0.8, dist_to_base_avg * 1.2)
-        offset_dist = min(offset_dist, 2000)
+    for i in range(node_count):
+        if custom_points is None:
+            angle = angles[i]
+            offset_dist = random.uniform(dist_to_base_avg * 0.8, dist_to_base_avg * 1.2)
+            offset_dist = min(offset_dist, 2000)
 
-        angle_rad = math.radians(angle)
-        node_x = base_x + (math.cos(angle_rad) * offset_dist)
-        node_y = base_y + (math.sin(angle_rad) * offset_dist)
+            angle_rad = math.radians(angle)
+            node_x = base_x + (math.cos(angle_rad) * offset_dist)
+            node_y = base_y + (math.sin(angle_rad) * offset_dist)
+        else:
+            node_x, node_y = custom_points[i]
 
         map_min_x = origin_x + 64
         map_max_x = origin_x + map_width - 64
@@ -876,6 +887,12 @@ class PipelineSpec:
     minimal_map: bool = False
     terrain_only: bool = False
 
+    custom_imp_base_x: Optional[float] = None
+    custom_imp_base_y: Optional[float] = None
+    custom_nf_base_x: Optional[float] = None
+    custom_nf_base_y: Optional[float] = None
+    custom_resources: Optional[List[Tuple[float, float]]] = None
+
     def get_required_heightmap_size(self) -> Tuple[int, int]:
         """Calculate required heightmap dimensions for displacement tiles."""
         grid_size = (2**self.terrain_power) + 1
@@ -1003,10 +1020,26 @@ class DisplacementVMF:
         nf_offset = min(nf_offset, max_offset)
         imp_offset = min(imp_offset, max_offset)
 
-        imp_base_x = int(origin_x + (map_width * 0.25))
-        imp_base_y = int(origin_y + (map_height * 0.25))
-        nf_base_x = int(origin_x + (map_width * 0.75))
-        nf_base_y = int(origin_y + (map_height * 0.75))
+        imp_base_x = (
+            int(self.spec.custom_imp_base_x)
+            if self.spec.custom_imp_base_x is not None
+            else int(origin_x + (map_width * 0.25))
+        )
+        imp_base_y = (
+            int(self.spec.custom_imp_base_y)
+            if self.spec.custom_imp_base_y is not None
+            else int(origin_y + (map_height * 0.25))
+        )
+        nf_base_x = (
+            int(self.spec.custom_nf_base_x)
+            if self.spec.custom_nf_base_x is not None
+            else int(origin_x + (map_width * 0.75))
+        )
+        nf_base_y = (
+            int(self.spec.custom_nf_base_y)
+            if self.spec.custom_nf_base_y is not None
+            else int(origin_y + (map_height * 0.75))
+        )
 
         base_building_size = 256
         flatten_radius = int(base_building_size * scale_factor)
@@ -1182,6 +1215,9 @@ class DisplacementVMF:
                     skip_buildings=skip_buildings,
                 )
 
+            if self.spec.custom_resources is not None:
+                rules["custom_resources"] = self.spec.custom_resources
+
             if not skip_resources:
                 spawn_resource_nodes_enhanced(
                     valve_map,
@@ -1289,6 +1325,9 @@ class DisplacementVMF:
                     tiles_y=tiles_y,
                     power=power,
                 )
+            if self.spec.custom_resources is not None:
+                rules["custom_resources"] = self.spec.custom_resources
+
             if not skip_resources:
                 spawn_resource_nodes_enhanced(
                     valve_map,

@@ -51,6 +51,12 @@ class GUIConfigModel:
     minimal_map: bool = False
     terrain_only: bool = False
 
+    custom_imp_base_x: Optional[float] = None
+    custom_imp_base_y: Optional[float] = None
+    custom_nf_base_x: Optional[float] = None
+    custom_nf_base_y: Optional[float] = None
+    custom_resources: Optional[list] = None
+
     @property
     def map_size_x(self) -> int:
         return self.tiles_x * self.cell_size
@@ -152,4 +158,9 @@ class GUIConfigModel:
             disable_resource_nodes=self.disable_resource_nodes,
             minimal_map=self.minimal_map,
             terrain_only=self.terrain_only,
+            custom_imp_base_x=self.custom_imp_base_x,
+            custom_imp_base_y=self.custom_imp_base_y,
+            custom_nf_base_x=self.custom_nf_base_x,
+            custom_nf_base_y=self.custom_nf_base_y,
+            custom_resources=self.custom_resources,
         )
