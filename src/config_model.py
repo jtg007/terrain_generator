@@ -148,6 +148,7 @@ class GUIConfigModel:
             noise_octaves=octaves,
             erosion_iterations=iterations,
             terrain_max_height=self.height_scale,
+            roughness=self.roughness,
             custom_image_path=self.custom_image_path,
             base_clear_radius=self.base_clear_radius,
             base_flatness=self.base_flatness,

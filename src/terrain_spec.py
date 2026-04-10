@@ -30,6 +30,7 @@ class TerrainSpec:
     erosion_iterations: int = 50000
     erosion_droplet_lifetime: int = 30
     terrain_max_height: int = 2048
+    roughness: float = 0.5
     material: str = "nature/terrain/blend_dirt_grass_dmz_sscale"
     underlay_material: str = "TOOLS/TOOLSSKIP"
     underlay_height: int = 128
