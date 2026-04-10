@@ -19,6 +19,8 @@ if not getattr(sys, "frozen", False):
 
 from PySide6.QtWidgets import (
     QApplication,
+    QRadioButton,
+    QButtonGroup,
     QMainWindow,
     QWidget,
     QVBoxLayout,
@@ -35,8 +37,9 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QLineEdit,
 )
-from PySide6.QtCore import Qt, QThread, Signal
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt, QThread, Signal, QTimer
+from PySide6.QtGui import QFont, QImage
+from tools.preview_widget import MapPreviewWidget
 
 from PIL import Image
 import numpy as np
@@ -107,6 +110,29 @@ def choose_compile_safe_material(
     return requested_material
 
 
+class PreviewWorker(QThread):
+    finished = Signal(object, object)  # grid, spec
+
+    def __init__(self, config_model):
+        super().__init__()
+        self.config_model = config_model
+
+    def run(self):
+        try:
+            # We must not modify the original model's spec, but we can make a custom spec
+            spec = self.config_model.make_spec()
+            spec.displacement_power = 2  # Force low power for speed
+            spec.erosion_iterations = 0  # Disable erosion for instant preview
+            spec.disable_commander = True
+            spec.disable_buildings = True
+            spec.disable_resource_nodes = True
+
+            result = run_pipeline(spec)
+            self.finished.emit(result["grid"], result["spec"])
+        except Exception:
+            self.finished.emit(None, None)
+
+
 class GenerationWorker(QThread):
     finished = Signal(bool, str)
 
@@ -169,6 +195,11 @@ class GenerationWorker(QThread):
                 disable_resource_nodes=self.config_model.disable_resource_nodes,
                 minimal_map=self.config_model.minimal_map,
                 terrain_only=self.config_model.terrain_only,
+                custom_imp_base_x=self.config_model.custom_imp_base_x,
+                custom_imp_base_y=self.config_model.custom_imp_base_y,
+                custom_nf_base_x=self.config_model.custom_nf_base_x,
+                custom_nf_base_y=self.config_model.custom_nf_base_y,
+                custom_resources=self.config_model.custom_resources,
             )
 
             vmf_gen = DisplacementVMF(vmf_spec)
@@ -370,9 +401,9 @@ class TerrainGeneratorGUI(QMainWindow):
         grid = QGridLayout(settings_group)
         grid.setSpacing(10)
         grid.setColumnMinimumWidth(0, 100)
-        grid.setColumnStretch(1, 1)
-
-        grid.setColumnStretch(3, 1)
+        grid.setColumnStretch(1, 2)
+        grid.setColumnMinimumWidth(2, 100)
+        grid.setColumnStretch(3, 2)
 
         row = 0
         col = 0
@@ -711,10 +742,181 @@ class TerrainGeneratorGUI(QMainWindow):
         scroll.setWidgetResizable(True)
         scroll.setWidget(scroll_content)
         scroll.setFrameShape(QScrollArea.NoFrame)
-        main_area_layout.addWidget(scroll)
+
+        # Ensure scroll area doesn't force a horizontal scrollbar unnecessarily
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        # Split main area into settings and preview
+        split_layout = QHBoxLayout()
+        split_layout.addWidget(scroll, 1)
+
+        # Preview Area
+        preview_group = QGroupBox("Map Preview")
+        preview_layout = QVBoxLayout(preview_group)
+
+        self.preview_widget = MapPreviewWidget()
+        preview_layout.addWidget(self.preview_widget)
+
+        # Tools layout
+        tools_layout = QHBoxLayout()
+        tools_layout.setSpacing(10)
+        self.tool_group = QButtonGroup(self)
+
+        self.rbtn_none = QRadioButton("Move/Drag")
+        self.rbtn_none.setChecked(True)
+        self.tool_group.addButton(self.rbtn_none, 0)
+        tools_layout.addWidget(self.rbtn_none)
+
+        self.rbtn_imp = QRadioButton("Set Imp Base (Blue)")
+        self.rbtn_imp.setStyleSheet("color: #3498db; font-weight: bold;")
+        self.tool_group.addButton(self.rbtn_imp, 1)
+        tools_layout.addWidget(self.rbtn_imp)
+
+        self.rbtn_nf = QRadioButton("Set NF Base (Red)")
+        self.rbtn_nf.setStyleSheet("color: #e74c3c; font-weight: bold;")
+        self.tool_group.addButton(self.rbtn_nf, 2)
+        tools_layout.addWidget(self.rbtn_nf)
+
+        self.rbtn_res = QRadioButton("Add Resource (Green)")
+        self.rbtn_res.setStyleSheet("color: #2ecc71; font-weight: bold;")
+        self.tool_group.addButton(self.rbtn_res, 3)
+        tools_layout.addWidget(self.rbtn_res)
+
+        self.btn_clear_res = QPushButton("Clear Resources")
+        self.btn_clear_res.clicked.connect(self.clear_resources)
+        tools_layout.addWidget(self.btn_clear_res)
+
+        tools_layout.addStretch()
+        preview_layout.addLayout(tools_layout)
+
+        split_layout.addWidget(preview_group, 1)
+
+        main_area_layout.addLayout(split_layout)
+
+        self.preview_timer = QTimer(self)
+        self.preview_timer.setSingleShot(True)
+        self.preview_timer.timeout.connect(self.run_preview)
+
+        # Connect preview widget signals
+        self.preview_widget.base_moved.connect(self.on_base_moved)
+        self.preview_widget.resource_moved.connect(self.on_resource_moved)
+        self.preview_widget.resource_added.connect(self.on_resource_added)
+        self.tool_group.idClicked.connect(self.on_tool_changed)
 
         main_layout.addWidget(sidebar)
         main_layout.addWidget(main_area)
+
+    def clear_resources(self):
+        self.config_model.custom_resources = []
+        self.preview_widget.set_entities(
+            (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y),
+            (self.config_model.custom_nf_base_x, self.config_model.custom_nf_base_y),
+            [],
+        )
+        self.preview_timer.start(500)
+
+    def on_tool_changed(self, id):
+        tools = {0: "none", 1: "imp_base", 2: "nf_base", 3: "add_res"}
+        self.preview_widget.current_tool = tools.get(id, "none")
+
+    def on_base_moved(self, faction, x, y):
+        if faction == "imp":
+            self.config_model.custom_imp_base_x = x
+            self.config_model.custom_imp_base_y = y
+        else:
+            self.config_model.custom_nf_base_x = x
+            self.config_model.custom_nf_base_y = y
+        self.preview_widget.set_entities(
+            (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y),
+            (self.config_model.custom_nf_base_x, self.config_model.custom_nf_base_y),
+            self.config_model.custom_resources,
+        )
+        self.preview_timer.start(500)
+
+    def on_resource_moved(self, index, x, y):
+        if self.config_model.custom_resources and 0 <= index < len(
+            self.config_model.custom_resources
+        ):
+            self.config_model.custom_resources[index] = (x, y)
+        self.preview_widget.set_entities(
+            (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y),
+            (self.config_model.custom_nf_base_x, self.config_model.custom_nf_base_y),
+            self.config_model.custom_resources,
+        )
+        # Resource positions do not affect the terrain heightmap itself,
+        # so we don't necessarily need to re-run the pipeline on move,
+        # but we can do it if desired.
+        self.preview_timer.start(500)
+
+    def on_resource_added(self, x, y):
+        if self.config_model.custom_resources is None:
+            self.config_model.custom_resources = []
+        self.config_model.custom_resources.append((x, y))
+        self.preview_widget.set_entities(
+            (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y),
+            (self.config_model.custom_nf_base_x, self.config_model.custom_nf_base_y),
+            self.config_model.custom_resources,
+        )
+        self.preview_timer.start(500)
+
+    def run_preview(self):
+        if not hasattr(self, "preview_worker") or not self.preview_worker.isRunning():
+            self.preview_worker = PreviewWorker(self.config_model)
+            self.preview_worker.finished.connect(self.on_preview_finished)
+            self.preview_worker.start()
+
+    def on_preview_finished(self, grid, spec):
+        if grid and spec:
+            import numpy as np
+
+            heights = np.array(grid.heights)
+            min_h = heights.min()
+            max_h = heights.max()
+            if max_h > min_h:
+                normalized = (heights - min_h) / (max_h - min_h)
+            else:
+                normalized = np.zeros_like(heights)
+
+            img_data = (normalized * 255).astype(np.uint8)
+            h, w = img_data.shape
+
+            # Create QImage from numpy array
+            bytes_per_line = w
+            # Must keep a reference to img_data so it isn't garbage collected
+            self._current_preview_data = img_data
+            qimg = QImage(
+                self._current_preview_data.data,
+                w,
+                h,
+                bytes_per_line,
+                QImage.Format_Grayscale8,
+            )
+
+            self.preview_widget.set_map_image(
+                qimg, spec.origin_x, spec.origin_y, spec.size_x, spec.size_y
+            )
+
+            # Setup initial bases if not set
+            if self.config_model.custom_imp_base_x is None:
+                imp_x = spec.origin_x + spec.size_x * 0.25
+                imp_y = spec.origin_y + spec.size_y * 0.25
+            else:
+                imp_x = self.config_model.custom_imp_base_x
+                imp_y = self.config_model.custom_imp_base_y
+
+            if self.config_model.custom_nf_base_x is None:
+                nf_x = spec.origin_x + spec.size_x * 0.75
+                nf_y = spec.origin_y + spec.size_y * 0.75
+            else:
+                nf_x = self.config_model.custom_nf_base_x
+                nf_y = self.config_model.custom_nf_base_y
+
+            res = (
+                self.config_model.custom_resources
+                if self.config_model.custom_resources
+                else []
+            )
+            self.preview_widget.set_entities((imp_x, imp_y), (nf_x, nf_y), res)
 
     def apply_dark_theme(self):
         style = """
@@ -1102,6 +1304,8 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.terrain_only = self.chk_terrain_only.isChecked()
 
         self.update_validation_status()
+        if hasattr(self, "preview_timer"):
+            self.preview_timer.start(500)
 
     def update_validation_status(self):
         is_valid, msg = self.config_model.validate()

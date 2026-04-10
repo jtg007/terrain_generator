@@ -220,11 +220,27 @@ def flatten_base_areas(
     base_radius = spec.base_clear_radius
     flatness = spec.base_flatness
 
-    imp_base_x = spec.origin_x + spec.size_x * 0.25
-    imp_base_y = spec.origin_y + spec.size_y * 0.25
+    imp_base_x = (
+        spec.custom_imp_base_x
+        if spec.custom_imp_base_x is not None
+        else spec.origin_x + spec.size_x * 0.25
+    )
+    imp_base_y = (
+        spec.custom_imp_base_y
+        if spec.custom_imp_base_y is not None
+        else spec.origin_y + spec.size_y * 0.25
+    )
 
-    nf_base_x = spec.origin_x + spec.size_x * 0.75
-    nf_base_y = spec.origin_y + spec.size_y * 0.75
+    nf_base_x = (
+        spec.custom_nf_base_x
+        if spec.custom_nf_base_x is not None
+        else spec.origin_x + spec.size_x * 0.75
+    )
+    nf_base_y = (
+        spec.custom_nf_base_y
+        if spec.custom_nf_base_y is not None
+        else spec.origin_y + spec.size_y * 0.75
+    )
 
     avg_height = grid.average_height()
 

@@ -35,6 +35,12 @@ class TerrainSpec:
     underlay_height: int = 128
     custom_image_path: Optional[str] = None
 
+    custom_imp_base_x: Optional[float] = None
+    custom_imp_base_y: Optional[float] = None
+    custom_nf_base_x: Optional[float] = None
+    custom_nf_base_y: Optional[float] = None
+    custom_resources: Optional[List[Tuple[float, float]]] = None
+
     base_clear_radius: int = 512
     base_flatness: float = 0.8
     center_flatten: float = 0.0
