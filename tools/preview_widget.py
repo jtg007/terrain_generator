@@ -1,3 +1,4 @@
+import math
 from PySide6.QtWidgets import QLabel
 from PySide6.QtCore import Qt, Signal, QPoint, QRectF
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QImage, QPixmap
@@ -30,6 +31,7 @@ class MapPreviewWidget(QLabel):
         self.imp_base = None  # (x, y)
         self.nf_base = None  # (x, y)
         self.resources = []  # [(x, y), ...]
+        self.invalid_entities = set()
 
         # Tool modes: 'move_imp', 'move_nf', 'add_res', 'move_res'
         self.current_tool = "none"
@@ -45,10 +47,11 @@ class MapPreviewWidget(QLabel):
         self.map_size_y = size_y
         self.update_pixmap()
 
-    def set_entities(self, imp_base, nf_base, resources):
+    def set_entities(self, imp_base, nf_base, resources, invalid_entities=None):
         self.imp_base = imp_base
         self.nf_base = nf_base
         self.resources = resources if resources else []
+        self.invalid_entities = invalid_entities if invalid_entities else set()
         self.update()
 
     def update_pixmap(self):
@@ -109,7 +112,7 @@ class MapPreviewWidget(QLabel):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
-        from PySide6.QtGui import QPolygon, QPainterPath
+        from PySide6.QtGui import QPolygon
         from PySide6.QtCore import QPoint
 
         # Setup fonts for text
@@ -117,12 +120,16 @@ class MapPreviewWidget(QLabel):
         font.setBold(True)
         painter.setFont(font)
 
+        error_pen = QPen(QColor(255, 50, 50), 3)
+
         # Draw resources (Green Diamonds)
         painter.setBrush(QBrush(QColor(46, 204, 113, 200))) # Emerald
-        painter.setPen(QPen(QColor(39, 174, 96), 2))
         for i, res in enumerate(self.resources):
             sp = self.world_to_screen(res[0], res[1])
             if sp:
+                is_invalid = str(i) in self.invalid_entities
+                painter.setPen(error_pen if is_invalid else QPen(QColor(39, 174, 96), 2))
+
                 # Draw diamond
                 poly = QPolygon([
                     QPoint(sp.x(), sp.y() - 10),
@@ -144,16 +151,19 @@ class MapPreviewWidget(QLabel):
 
                 painter.setPen(QColor(255, 255, 255))
                 painter.drawText(sp.x() - 10, sp.y() - 14, "Res")
+                if is_invalid:
+                    painter.setPen(QColor(255, 50, 50))
+                    painter.drawText(sp.x() - 5, sp.y() - 25, "⚠")
                 painter.setBrush(QBrush(QColor(46, 204, 113, 200)))
-                painter.setPen(QPen(QColor(39, 174, 96), 2))
 
         # Draw Imp Base (Blue Shield/Cross)
         if self.imp_base and self.imp_base[0] is not None and self.imp_base[1] is not None:
             sp = self.world_to_screen(self.imp_base[0], self.imp_base[1])
             if sp:
+                is_invalid = "imp" in self.invalid_entities
                 # Draw Blue rounded rect background
                 painter.setBrush(QBrush(QColor(41, 128, 185, 220))) # Darker blue
-                painter.setPen(QPen(QColor(52, 152, 219), 2))
+                painter.setPen(error_pen if is_invalid else QPen(QColor(52, 152, 219), 2))
                 painter.drawRoundedRect(sp.x()-12, sp.y()-12, 24, 24, 4, 4)
 
                 # Draw cross (white)
@@ -164,16 +174,19 @@ class MapPreviewWidget(QLabel):
 
                 painter.setPen(QColor(255, 255, 255))
                 painter.drawText(sp.x() - 12, sp.y() - 16, "Imp")
+                if is_invalid:
+                    painter.setPen(QColor(255, 50, 50))
+                    painter.drawText(sp.x() - 5, sp.y() - 28, "⚠")
 
         # Draw NF Base (Red Star/Triangle)
         if self.nf_base and self.nf_base[0] is not None and self.nf_base[1] is not None:
             sp = self.world_to_screen(self.nf_base[0], self.nf_base[1])
             if sp:
+                is_invalid = "nf" in self.invalid_entities
                 # Draw Red Hexagon background
                 painter.setBrush(QBrush(QColor(192, 57, 43, 220))) # Dark red
-                painter.setPen(QPen(QColor(231, 76, 60), 2))
+                painter.setPen(error_pen if is_invalid else QPen(QColor(231, 76, 60), 2))
 
-                import math
                 poly = QPolygon()
                 for i in range(6):
                     angle_deg = 60 * i - 30
@@ -193,6 +206,9 @@ class MapPreviewWidget(QLabel):
 
                 painter.setPen(QColor(255, 255, 255))
                 painter.drawText(sp.x() - 10, sp.y() - 16, "NF")
+                if is_invalid:
+                    painter.setPen(QColor(255, 50, 50))
+                    painter.drawText(sp.x() - 5, sp.y() - 28, "⚠")
 
     def mousePressEvent(self, event):
         if not self.map_image:

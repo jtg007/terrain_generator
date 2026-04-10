@@ -86,25 +86,15 @@ def generate_strategic_layout(
     connections = []
 
     # Use specified custom base locations or defaults based on map size
-    imp_x = (
-        spec.custom_imp_base_x
-        if spec.custom_imp_base_x is not None
-        else spec.origin_x + spec.size_x * 0.15
+    imp_x, imp_y = (
+        (spec.custom_imp_base_x, spec.custom_imp_base_y)
+        if spec.custom_imp_base_x is not None and spec.custom_imp_base_y is not None
+        else spec.default_imp_base()
     )
-    imp_y = (
-        spec.custom_imp_base_y
-        if spec.custom_imp_base_y is not None
-        else spec.origin_y + spec.size_y * 0.15
-    )
-    nf_x = (
-        spec.custom_nf_base_x
-        if spec.custom_nf_base_x is not None
-        else spec.origin_x + spec.size_x * 0.85
-    )
-    nf_y = (
-        spec.custom_nf_base_y
-        if spec.custom_nf_base_y is not None
-        else spec.origin_y + spec.size_y * 0.85
+    nf_x, nf_y = (
+        (spec.custom_nf_base_x, spec.custom_nf_base_y)
+        if spec.custom_nf_base_x is not None and spec.custom_nf_base_y is not None
+        else spec.default_nf_base()
     )
 
     base_radius = (
@@ -469,30 +459,21 @@ def flatten_base_areas(
     base_radius = spec.base_clear_radius
     flatness = spec.base_flatness
 
-    imp_base_x = (
-        spec.custom_imp_base_x
-        if spec.custom_imp_base_x is not None
-        else spec.origin_x + spec.size_x * 0.15
-    )
-    imp_base_y = (
-        spec.custom_imp_base_y
-        if spec.custom_imp_base_y is not None
-        else spec.origin_y + spec.size_y * 0.15
+    imp_base_x, imp_base_y = (
+        (spec.custom_imp_base_x, spec.custom_imp_base_y)
+        if spec.custom_imp_base_x is not None and spec.custom_imp_base_y is not None
+        else spec.default_imp_base()
     )
 
-    nf_base_x = (
-        spec.custom_nf_base_x
-        if spec.custom_nf_base_x is not None
-        else spec.origin_x + spec.size_x * 0.85
-    )
-    nf_base_y = (
-        spec.custom_nf_base_y
-        if spec.custom_nf_base_y is not None
-        else spec.origin_y + spec.size_y * 0.85
+    nf_base_x, nf_base_y = (
+        (spec.custom_nf_base_x, spec.custom_nf_base_y)
+        if spec.custom_nf_base_x is not None and spec.custom_nf_base_y is not None
+        else spec.default_nf_base()
     )
 
     avg_height = spec.terrain_max_height * 0.15  # Use the layout floor height
 
+    # Flatten bases
     for r in range(rows):
         world_y = spec.origin_y + r * vertex_spacing
         for c in range(cols):
@@ -514,6 +495,37 @@ def flatten_base_areas(
 
                 current = grid.heights[r][c]
                 grid.heights[r][c] = current * (1.0 - t) + avg_height * t
+
+    # Flatten resource nodes
+    if spec.base_clear_radius > 0 and spec.custom_resources:
+        res_radius = spec.base_clear_radius * 0.5
+        res_flatness = spec.base_flatness * 0.6
+        for res_x, res_y in spec.custom_resources:
+            # First, calculate local average height for this resource
+            local_heights = []
+            for r in range(rows):
+                world_y = spec.origin_y + r * vertex_spacing
+                for c in range(cols):
+                    world_x = spec.origin_x + c * vertex_spacing
+                    dist_to_res = math.sqrt((world_x - res_x) ** 2 + (world_y - res_y) ** 2)
+                    if dist_to_res <= res_radius:
+                        local_heights.append(grid.heights[r][c])
+
+            local_avg_height = sum(local_heights) / len(local_heights) if local_heights else avg_height
+
+            # Now apply flattening using the local average height
+            for r in range(rows):
+                world_y = spec.origin_y + r * vertex_spacing
+                for c in range(cols):
+                    world_x = spec.origin_x + c * vertex_spacing
+                    dist_to_res = math.sqrt((world_x - res_x) ** 2 + (world_y - res_y) ** 2)
+                    if dist_to_res < res_radius:
+                        t = 1.0 - (dist_to_res / res_radius)
+                        t = t * t * (3 - 2 * t)
+                        t = t * res_flatness
+
+                        current = grid.heights[r][c]
+                        grid.heights[r][c] = current * (1.0 - t) + local_avg_height * t
 
     return grid
 
@@ -1079,6 +1091,11 @@ def run_pipeline(spec: TerrainSpec) -> dict:
     - underlay: the underlay brush
     - errors: validation errors (empty if successful)
     """
+    # Validate layout before starting
+    layout_result = spec.validate_layout()
+    if not layout_result.valid:
+        raise ValueError("Invalid layout configuration:\n" + "\n".join(layout_result.errors))
+
     print("Running terrain pipeline...")
     print(
         f"  Spec: {spec.size_x}x{spec.size_y}, cell_size={spec.cell_size}, power={spec.displacement_power}"

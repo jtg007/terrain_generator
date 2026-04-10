@@ -19,8 +19,8 @@ class TerrainSpec:
 
     origin_x: int = 0
     origin_y: int = 0
-    size_x: int = 2048
-    size_y: int = 2048
+    size_x: int = 8192
+    size_y: int = 8192
     cell_size: int = 512
     displacement_power: int = 3
     seed: int = 12345
@@ -53,6 +53,43 @@ class TerrainSpec:
     disable_resource_nodes: bool = False
     minimal_map: bool = False
     terrain_only: bool = False
+
+    def default_imp_base(self) -> Tuple[float, float]:
+        """
+        Get the default imperial base spawn position (25% of map size).
+        Note: The flatten area applied later is large enough to cover this spawn.
+        """
+        return (
+            self.origin_x + self.size_x * 0.25,
+            self.origin_y + self.size_y * 0.25,
+        )
+
+    def default_nf_base(self) -> Tuple[float, float]:
+        """
+        Get the default northern faction base spawn position (75% of map size).
+        Note: The flatten area applied later is large enough to cover this spawn.
+        """
+        return (
+            self.origin_x + self.size_x * 0.75,
+            self.origin_y + self.size_y * 0.75,
+        )
+
+    def validate_layout(self) -> Any:
+        """Validate the placement of bases and resources."""
+        from src.layout_validator import LayoutValidator
+
+        imp_base = (
+            (self.custom_imp_base_x, self.custom_imp_base_y)
+            if self.custom_imp_base_x is not None and self.custom_imp_base_y is not None
+            else self.default_imp_base()
+        )
+        nf_base = (
+            (self.custom_nf_base_x, self.custom_nf_base_y)
+            if self.custom_nf_base_x is not None and self.custom_nf_base_y is not None
+            else self.default_nf_base()
+        )
+        resources = self.custom_resources if self.custom_resources is not None else []
+        return LayoutValidator().validate(self, imp_base, nf_base, resources)
 
     def __post_init__(self):
         if self.displacement_power not in (2, 3):
@@ -301,8 +338,8 @@ def create_default_spec() -> TerrainSpec:
     return TerrainSpec(
         origin_x=0,
         origin_y=0,
-        size_x=2048,
-        size_y=2048,
+        size_x=8192,
+        size_y=8192,
         cell_size=512,
         displacement_power=3,
         seed=12345,
