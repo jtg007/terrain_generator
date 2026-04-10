@@ -109,29 +109,90 @@ class MapPreviewWidget(QLabel):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
-        # Draw resources
-        painter.setBrush(QBrush(QColor(0, 255, 0, 180)))  # Green
-        painter.setPen(QPen(QColor(0, 200, 0), 2))
-        for res in self.resources:
+        from PySide6.QtGui import QPolygon, QPainterPath
+        from PySide6.QtCore import QPoint
+
+        # Setup fonts for text
+        font = painter.font()
+        font.setBold(True)
+        painter.setFont(font)
+
+        # Draw resources (Green Diamonds)
+        painter.setBrush(QBrush(QColor(46, 204, 113, 200))) # Emerald
+        painter.setPen(QPen(QColor(39, 174, 96), 2))
+        for i, res in enumerate(self.resources):
             sp = self.world_to_screen(res[0], res[1])
             if sp:
-                painter.drawEllipse(sp, 6, 6)
+                # Draw diamond
+                poly = QPolygon([
+                    QPoint(sp.x(), sp.y() - 10),
+                    QPoint(sp.x() + 10, sp.y()),
+                    QPoint(sp.x(), sp.y() + 10),
+                    QPoint(sp.x() - 10, sp.y())
+                ])
+                painter.drawPolygon(poly)
+                # Small inner diamond
+                painter.setBrush(QBrush(QColor(110, 235, 150, 200)))
+                painter.setPen(Qt.NoPen)
+                inner = QPolygon([
+                    QPoint(sp.x(), sp.y() - 5),
+                    QPoint(sp.x() + 5, sp.y()),
+                    QPoint(sp.x(), sp.y() + 5),
+                    QPoint(sp.x() - 5, sp.y())
+                ])
+                painter.drawPolygon(inner)
 
-        # Draw Imp Base
-        if self.imp_base:
+                painter.setPen(QColor(255, 255, 255))
+                painter.drawText(sp.x() - 10, sp.y() - 14, "Res")
+                painter.setBrush(QBrush(QColor(46, 204, 113, 200)))
+                painter.setPen(QPen(QColor(39, 174, 96), 2))
+
+        # Draw Imp Base (Blue Shield/Cross)
+        if self.imp_base and self.imp_base[0] is not None and self.imp_base[1] is not None:
             sp = self.world_to_screen(self.imp_base[0], self.imp_base[1])
             if sp:
-                painter.setBrush(QBrush(QColor(255, 50, 50, 200)))  # Red
-                painter.setPen(QPen(QColor(200, 0, 0), 2))
-                painter.drawRect(sp.x() - 8, sp.y() - 8, 16, 16)
+                # Draw Blue rounded rect background
+                painter.setBrush(QBrush(QColor(41, 128, 185, 220))) # Darker blue
+                painter.setPen(QPen(QColor(52, 152, 219), 2))
+                painter.drawRoundedRect(sp.x()-12, sp.y()-12, 24, 24, 4, 4)
 
-        # Draw NF Base
-        if self.nf_base:
+                # Draw cross (white)
+                painter.setBrush(QBrush(QColor(255, 255, 255)))
+                painter.setPen(Qt.NoPen)
+                painter.drawRect(sp.x()-3, sp.y()-9, 6, 18)
+                painter.drawRect(sp.x()-9, sp.y()-3, 18, 6)
+
+                painter.setPen(QColor(255, 255, 255))
+                painter.drawText(sp.x() - 12, sp.y() - 16, "Imp")
+
+        # Draw NF Base (Red Star/Triangle)
+        if self.nf_base and self.nf_base[0] is not None and self.nf_base[1] is not None:
             sp = self.world_to_screen(self.nf_base[0], self.nf_base[1])
             if sp:
-                painter.setBrush(QBrush(QColor(50, 50, 255, 200)))  # Blue
-                painter.setPen(QPen(QColor(0, 0, 200), 2))
-                painter.drawRect(sp.x() - 8, sp.y() - 8, 16, 16)
+                # Draw Red Hexagon background
+                painter.setBrush(QBrush(QColor(192, 57, 43, 220))) # Dark red
+                painter.setPen(QPen(QColor(231, 76, 60), 2))
+
+                import math
+                poly = QPolygon()
+                for i in range(6):
+                    angle_deg = 60 * i - 30
+                    angle_rad = math.pi / 180 * angle_deg
+                    poly.append(QPoint(int(sp.x() + 14 * math.cos(angle_rad)), int(sp.y() + 14 * math.sin(angle_rad))))
+                painter.drawPolygon(poly)
+
+                # Draw inner white triangle
+                painter.setBrush(QBrush(QColor(255, 255, 255)))
+                painter.setPen(Qt.NoPen)
+                tri = QPolygon([
+                    QPoint(sp.x(), sp.y() - 7),
+                    QPoint(sp.x() + 7, sp.y() + 5),
+                    QPoint(sp.x() - 7, sp.y() + 5)
+                ])
+                painter.drawPolygon(tri)
+
+                painter.setPen(QColor(255, 255, 255))
+                painter.drawText(sp.x() - 10, sp.y() - 16, "NF")
 
     def mousePressEvent(self, event):
         if not self.map_image:

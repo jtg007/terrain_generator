@@ -767,15 +767,18 @@ class TerrainGeneratorGUI(QMainWindow):
         self.tool_group.addButton(self.rbtn_none, 0)
         tools_layout.addWidget(self.rbtn_none)
 
-        self.rbtn_imp = QRadioButton("Set Imp Base")
+        self.rbtn_imp = QRadioButton("Set Imp Base (Blue)")
+        self.rbtn_imp.setStyleSheet("color: #3498db; font-weight: bold;")
         self.tool_group.addButton(self.rbtn_imp, 1)
         tools_layout.addWidget(self.rbtn_imp)
 
-        self.rbtn_nf = QRadioButton("Set NF Base")
+        self.rbtn_nf = QRadioButton("Set NF Base (Red)")
+        self.rbtn_nf.setStyleSheet("color: #e74c3c; font-weight: bold;")
         self.tool_group.addButton(self.rbtn_nf, 2)
         tools_layout.addWidget(self.rbtn_nf)
 
-        self.rbtn_res = QRadioButton("Add Resource")
+        self.rbtn_res = QRadioButton("Add Resource (Green)")
+        self.rbtn_res.setStyleSheet("color: #2ecc71; font-weight: bold;")
         self.tool_group.addButton(self.rbtn_res, 3)
         tools_layout.addWidget(self.rbtn_res)
 
