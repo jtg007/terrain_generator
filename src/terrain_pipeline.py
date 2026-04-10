@@ -473,6 +473,7 @@ def flatten_base_areas(
 
     avg_height = spec.terrain_max_height * 0.15  # Use the layout floor height
 
+    # Flatten bases
     for r in range(rows):
         world_y = spec.origin_y + r * vertex_spacing
         for c in range(cols):
@@ -495,11 +496,28 @@ def flatten_base_areas(
                 current = grid.heights[r][c]
                 grid.heights[r][c] = current * (1.0 - t) + avg_height * t
 
-            # Also flatten around resources if applicable
-            if spec.custom_resources:
-                res_radius = spec.base_clear_radius * 0.5
-                res_flatness = spec.base_flatness * 0.6
-                for res_x, res_y in spec.custom_resources:
+    # Flatten resource nodes
+    if spec.base_clear_radius > 0 and spec.custom_resources:
+        res_radius = spec.base_clear_radius * 0.5
+        res_flatness = spec.base_flatness * 0.6
+        for res_x, res_y in spec.custom_resources:
+            # First, calculate local average height for this resource
+            local_heights = []
+            for r in range(rows):
+                world_y = spec.origin_y + r * vertex_spacing
+                for c in range(cols):
+                    world_x = spec.origin_x + c * vertex_spacing
+                    dist_to_res = math.sqrt((world_x - res_x) ** 2 + (world_y - res_y) ** 2)
+                    if dist_to_res <= res_radius:
+                        local_heights.append(grid.heights[r][c])
+
+            local_avg_height = sum(local_heights) / len(local_heights) if local_heights else avg_height
+
+            # Now apply flattening using the local average height
+            for r in range(rows):
+                world_y = spec.origin_y + r * vertex_spacing
+                for c in range(cols):
+                    world_x = spec.origin_x + c * vertex_spacing
                     dist_to_res = math.sqrt((world_x - res_x) ** 2 + (world_y - res_y) ** 2)
                     if dist_to_res < res_radius:
                         t = 1.0 - (dist_to_res / res_radius)
@@ -507,7 +525,7 @@ def flatten_base_areas(
                         t = t * res_flatness
 
                         current = grid.heights[r][c]
-                        grid.heights[r][c] = current * (1.0 - t) + avg_height * t
+                        grid.heights[r][c] = current * (1.0 - t) + local_avg_height * t
 
     return grid
 

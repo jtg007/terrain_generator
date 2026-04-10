@@ -1,3 +1,4 @@
+import math
 from PySide6.QtWidgets import QLabel
 from PySide6.QtCore import Qt, Signal, QPoint, QRectF
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QImage, QPixmap
@@ -30,6 +31,7 @@ class MapPreviewWidget(QLabel):
         self.imp_base = None  # (x, y)
         self.nf_base = None  # (x, y)
         self.resources = []  # [(x, y), ...]
+        self.invalid_entities = set()
 
         # Tool modes: 'move_imp', 'move_nf', 'add_res', 'move_res'
         self.current_tool = "none"
@@ -125,7 +127,7 @@ class MapPreviewWidget(QLabel):
         for i, res in enumerate(self.resources):
             sp = self.world_to_screen(res[0], res[1])
             if sp:
-                is_invalid = str(i) in getattr(self, "invalid_entities", set())
+                is_invalid = str(i) in self.invalid_entities
                 painter.setPen(error_pen if is_invalid else QPen(QColor(39, 174, 96), 2))
 
                 # Draw diamond
@@ -158,7 +160,7 @@ class MapPreviewWidget(QLabel):
         if self.imp_base and self.imp_base[0] is not None and self.imp_base[1] is not None:
             sp = self.world_to_screen(self.imp_base[0], self.imp_base[1])
             if sp:
-                is_invalid = "imp" in getattr(self, "invalid_entities", set())
+                is_invalid = "imp" in self.invalid_entities
                 # Draw Blue rounded rect background
                 painter.setBrush(QBrush(QColor(41, 128, 185, 220))) # Darker blue
                 painter.setPen(error_pen if is_invalid else QPen(QColor(52, 152, 219), 2))
@@ -180,12 +182,11 @@ class MapPreviewWidget(QLabel):
         if self.nf_base and self.nf_base[0] is not None and self.nf_base[1] is not None:
             sp = self.world_to_screen(self.nf_base[0], self.nf_base[1])
             if sp:
-                is_invalid = "nf" in getattr(self, "invalid_entities", set())
+                is_invalid = "nf" in self.invalid_entities
                 # Draw Red Hexagon background
                 painter.setBrush(QBrush(QColor(192, 57, 43, 220))) # Dark red
                 painter.setPen(error_pen if is_invalid else QPen(QColor(231, 76, 60), 2))
 
-                import math
                 poly = QPolygon()
                 for i in range(6):
                     angle_deg = 60 * i - 30

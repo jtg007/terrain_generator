@@ -813,7 +813,7 @@ class TerrainGeneratorGUI(QMainWindow):
         main_layout.addWidget(main_area)
 
     def validate_current_layout(self):
-        spec = self.config_model.to_terrain_spec()
+        spec = self.config_model.make_spec()
         layout_result = spec.validate_layout()
 
         if not layout_result.valid:

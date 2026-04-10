@@ -19,8 +19,8 @@ class TerrainSpec:
 
     origin_x: int = 0
     origin_y: int = 0
-    size_x: int = 2048
-    size_y: int = 2048
+    size_x: int = 8192
+    size_y: int = 8192
     cell_size: int = 512
     displacement_power: int = 3
     seed: int = 12345

@@ -34,7 +34,7 @@ class LayoutValidator:
 
         # Check Bases within bounds
         def check_bounds(
-            entity_pos: Tuple[float, float], margin: float, entity_name: str
+            entity_pos: Tuple[float, float], margin: float
         ):
             x, y = entity_pos
             if (
@@ -46,17 +46,17 @@ class LayoutValidator:
                 return False
             return True
 
-        if not check_bounds(imp_base, base_margin, "Imp Base"):
+        if not check_bounds(imp_base, base_margin):
             errors.append(f"Imp Base is out of bounds (margin={base_margin}).")
             invalid_entities.add("imp")
 
-        if not check_bounds(nf_base, base_margin, "NF Base"):
+        if not check_bounds(nf_base, base_margin):
             errors.append(f"NF Base is out of bounds (margin={base_margin}).")
             invalid_entities.add("nf")
 
         # Check Resources within bounds
         for i, res in enumerate(resources):
-            if not check_bounds(res, res_margin, f"Resource {i}"):
+            if not check_bounds(res, res_margin):
                 errors.append(f"Resource {i} is out of bounds (margin={res_margin}).")
                 invalid_entities.add(str(i))
 

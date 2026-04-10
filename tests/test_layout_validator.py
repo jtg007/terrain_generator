@@ -16,9 +16,18 @@ def test_valid_layout():
     # 4x4 tiles (2048x2048)
     spec = create_minimal_spec(2048)
     # Use valid positions, far apart
+    # Base margin = 512, bounds: (512, 512) to (1536, 1536)
     imp_base = (512, 512)
     nf_base = (1536, 1536)
-    # resource in corner
+
+    # Distance between bases = sqrt((1536-512)^2 + (1536-512)^2) = sqrt(1024^2 + 1024^2) = 1448.15
+    # Min base dist = 0.40 * 2048 = 819.2 (Valid)
+
+    # Resource margin = 256
+    # Res-to-base min dist = 0.15 * 2048 + 512 = 307.2 + 512 = 819.2
+    # Resource at (1536, 512)
+    # Dist to imp_base (512, 512) = sqrt(1024^2 + 0) = 1024 (Valid, > 819.2)
+    # Dist to nf_base (1536, 1536) = sqrt(0 + 1024^2) = 1024 (Valid, > 819.2)
     resources = [(1536, 512)]
 
     validator = LayoutValidator()
@@ -80,6 +89,27 @@ def test_resource_inside_base_flatten_radius():
     # Min dist = 0.15 * 2048 + 512 = 307.2 + 512 = 819.2
     # Place at distance 600 from imp_base (too close)
     resources = [(512, 1112)] # dist = 600
+
+    validator = LayoutValidator()
+    result = validator.validate(spec, imp_base, nf_base, resources)
+
+    assert result.valid is False
+    assert any("Resource 0 is too close to Imp Base" in e for e in result.errors)
+    assert "0" in result.invalid_entities
+    assert "imp" in result.invalid_entities
+
+def test_resource_flatten_overlaps_base_flatten():
+    # Test a resource placed far enough to technically clear the 15% rule on its own
+    # but the flatten areas still overlap due to the base_clear_radius parameter padding.
+    spec = create_minimal_spec(2048)
+    imp_base = (512, 512)
+    nf_base = (1536, 1536)
+
+    # 0.15 * 2048 = 307.2
+    # Min required distance = 307.2 + spec.base_clear_radius (512) = 819.2
+    # Let's place the resource at distance 400.
+    # 400 is > 307.2 (the 15% rule) but < 819.2 (the combined requirement).
+    resources = [(512, 912)] # dist = 400
 
     validator = LayoutValidator()
     result = validator.validate(spec, imp_base, nf_base, resources)
