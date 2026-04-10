@@ -12,6 +12,9 @@ class MapPreviewWidget(QLabel):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumSize(400, 400)
+        from PySide6.QtWidgets import QSizePolicy
+
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setAlignment(Qt.AlignCenter)
         self.setStyleSheet("background-color: #0f0f10; border: 1px solid #333338;")
 

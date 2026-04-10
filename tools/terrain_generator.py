@@ -195,6 +195,11 @@ class GenerationWorker(QThread):
                 disable_resource_nodes=self.config_model.disable_resource_nodes,
                 minimal_map=self.config_model.minimal_map,
                 terrain_only=self.config_model.terrain_only,
+                custom_imp_base_x=self.config_model.custom_imp_base_x,
+                custom_imp_base_y=self.config_model.custom_imp_base_y,
+                custom_nf_base_x=self.config_model.custom_nf_base_x,
+                custom_nf_base_y=self.config_model.custom_nf_base_y,
+                custom_resources=self.config_model.custom_resources,
             )
 
             vmf_gen = DisplacementVMF(vmf_spec)
@@ -738,6 +743,9 @@ class TerrainGeneratorGUI(QMainWindow):
         scroll.setWidget(scroll_content)
         scroll.setFrameShape(QScrollArea.NoFrame)
 
+        # Ensure scroll area doesn't force a horizontal scrollbar unnecessarily
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
         # Split main area into settings and preview
         split_layout = QHBoxLayout()
         split_layout.addWidget(scroll, 1)
@@ -751,6 +759,7 @@ class TerrainGeneratorGUI(QMainWindow):
 
         # Tools layout
         tools_layout = QHBoxLayout()
+        tools_layout.setSpacing(10)
         self.tool_group = QButtonGroup(self)
 
         self.rbtn_none = QRadioButton("Move/Drag")
@@ -796,7 +805,12 @@ class TerrainGeneratorGUI(QMainWindow):
 
     def clear_resources(self):
         self.config_model.custom_resources = []
-        self.sync_to_model()
+        self.preview_widget.set_entities(
+            (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y),
+            (self.config_model.custom_nf_base_x, self.config_model.custom_nf_base_y),
+            [],
+        )
+        self.preview_timer.start(500)
 
     def on_tool_changed(self, id):
         tools = {0: "none", 1: "imp_base", 2: "nf_base", 3: "add_res"}
@@ -809,20 +823,38 @@ class TerrainGeneratorGUI(QMainWindow):
         else:
             self.config_model.custom_nf_base_x = x
             self.config_model.custom_nf_base_y = y
-        self.sync_to_model()
+        self.preview_widget.set_entities(
+            (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y),
+            (self.config_model.custom_nf_base_x, self.config_model.custom_nf_base_y),
+            self.config_model.custom_resources,
+        )
+        self.preview_timer.start(500)
 
     def on_resource_moved(self, index, x, y):
         if self.config_model.custom_resources and 0 <= index < len(
             self.config_model.custom_resources
         ):
             self.config_model.custom_resources[index] = (x, y)
-        self.sync_to_model()
+        self.preview_widget.set_entities(
+            (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y),
+            (self.config_model.custom_nf_base_x, self.config_model.custom_nf_base_y),
+            self.config_model.custom_resources,
+        )
+        # Resource positions do not affect the terrain heightmap itself,
+        # so we don't necessarily need to re-run the pipeline on move,
+        # but we can do it if desired.
+        self.preview_timer.start(500)
 
     def on_resource_added(self, x, y):
         if self.config_model.custom_resources is None:
             self.config_model.custom_resources = []
         self.config_model.custom_resources.append((x, y))
-        self.sync_to_model()
+        self.preview_widget.set_entities(
+            (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y),
+            (self.config_model.custom_nf_base_x, self.config_model.custom_nf_base_y),
+            self.config_model.custom_resources,
+        )
+        self.preview_timer.start(500)
 
     def run_preview(self):
         if not hasattr(self, "preview_worker") or not self.preview_worker.isRunning():
