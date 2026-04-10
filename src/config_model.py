@@ -44,6 +44,13 @@ class GUIConfigModel:
     center_flatten: float = 0.0
     center_flatten_radius: float = 0.5
 
+    # Spawn settings
+    disable_commander: bool = False
+    disable_buildings: bool = False
+    disable_resource_nodes: bool = False
+    minimal_map: bool = False
+    terrain_only: bool = False
+
     @property
     def map_size_x(self) -> int:
         return self.tiles_x * self.cell_size
@@ -140,4 +147,9 @@ class GUIConfigModel:
             base_flatness=self.base_flatness,
             center_flatten=self.center_flatten,
             center_flatten_radius=self.center_flatten_radius,
+            disable_commander=self.disable_commander,
+            disable_buildings=self.disable_buildings,
+            disable_resource_nodes=self.disable_resource_nodes,
+            minimal_map=self.minimal_map,
+            terrain_only=self.terrain_only,
         )

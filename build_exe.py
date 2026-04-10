@@ -41,6 +41,7 @@ def install_pyinstaller():
 
 import os
 
+
 def build(mode="onefile"):
     """Build the executable."""
     print(f"\nBuilding Terrain Generator ({mode} mode)...")

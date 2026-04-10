@@ -61,6 +61,7 @@ else:
 # Make sure it exists
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
+
 def heightgrid_to_heightmap(
     grid, target_rows: int = 0, target_cols: int = 0
 ) -> np.ndarray:
@@ -163,7 +164,11 @@ class GenerationWorker(QThread):
                 terrain_tiles_y=tiles_y,
                 output_dir=str(OUTPUT_DIR),
                 use_enhanced_spawning=True,
-                include_restriction_zones=False,
+                disable_commander=self.config_model.disable_commander,
+                disable_buildings=self.config_model.disable_buildings,
+                disable_resource_nodes=self.config_model.disable_resource_nodes,
+                minimal_map=self.config_model.minimal_map,
+                terrain_only=self.config_model.terrain_only,
             )
 
             vmf_gen = DisplacementVMF(vmf_spec)
@@ -655,6 +660,59 @@ class TerrainGeneratorGUI(QMainWindow):
         self.combo_skybox.currentIndexChanged.connect(self.sync_to_model)
         row += 1
 
+        # Spawn Settings
+        grid.addWidget(QLabel("Spawn Settings:"), row, 0)
+        spawn_container = QVBoxLayout()
+        spawn_desc = QLabel("Control what entities are generated on the map")
+        spawn_desc.setStyleSheet("color: #888; font-size: 10px;")
+        spawn_container.addWidget(spawn_desc)
+
+        self.chk_disable_commander = QCheckBox("Disable Commander")
+        self.chk_disable_buildings = QCheckBox("Disable Base Buildings")
+        self.chk_disable_resources = QCheckBox("Disable Resource Nodes")
+        self.chk_minimal_map = QCheckBox("Minimal Map (Playable, No Props)")
+        self.chk_terrain_only = QCheckBox("Terrain Only (No Spawns)")
+
+        self.chk_disable_commander.toggled.connect(self.sync_to_model)
+        self.chk_disable_buildings.toggled.connect(self.sync_to_model)
+        self.chk_disable_resources.toggled.connect(self.sync_to_model)
+        self.chk_minimal_map.toggled.connect(self.sync_to_model)
+        self.chk_terrain_only.toggled.connect(self.sync_to_model)
+
+        # Disable individual options when minimal or terrain only is selected
+        def update_spawn_checks():
+            minimal = self.chk_minimal_map.isChecked()
+            terrain_only = self.chk_terrain_only.isChecked()
+
+            if terrain_only:
+                self.chk_minimal_map.setChecked(False)
+                minimal = False
+
+            disable_individual = minimal or terrain_only
+
+            self.chk_disable_commander.setEnabled(not disable_individual)
+            self.chk_disable_buildings.setEnabled(not disable_individual)
+            self.chk_disable_resources.setEnabled(not disable_individual)
+
+            if disable_individual:
+                self.chk_disable_commander.setChecked(False)
+                self.chk_disable_buildings.setChecked(False)
+                self.chk_disable_resources.setChecked(False)
+
+        self.chk_minimal_map.toggled.connect(update_spawn_checks)
+        self.chk_terrain_only.toggled.connect(update_spawn_checks)
+
+        spawn_container.addWidget(self.chk_disable_commander)
+        spawn_container.addWidget(self.chk_disable_buildings)
+        spawn_container.addWidget(self.chk_disable_resources)
+        spawn_container.addWidget(self.chk_minimal_map)
+        spawn_container.addWidget(self.chk_terrain_only)
+
+        spawn_widget = QWidget()
+        spawn_widget.setLayout(spawn_container)
+        grid.addWidget(spawn_widget, row, 1)
+        row += 1
+
         main_area_layout.addWidget(settings_group)
 
         # Validation Feedack Panel
@@ -749,6 +807,11 @@ class TerrainGeneratorGUI(QMainWindow):
         self.combo_power.blockSignals(True)
         self.combo_material.blockSignals(True)
         self.combo_skybox.blockSignals(True)
+        self.chk_disable_commander.blockSignals(True)
+        self.chk_disable_buildings.blockSignals(True)
+        self.chk_disable_resources.blockSignals(True)
+        self.chk_minimal_map.blockSignals(True)
+        self.chk_terrain_only.blockSignals(True)
 
         self.spin_seed.setValue(preset.get("seed", random.randint(0, 999999999)))
         if "tiles_x" in preset:
@@ -786,6 +849,11 @@ class TerrainGeneratorGUI(QMainWindow):
         self.combo_power.blockSignals(False)
         self.combo_material.blockSignals(False)
         self.combo_skybox.blockSignals(False)
+        self.chk_disable_commander.blockSignals(False)
+        self.chk_disable_buildings.blockSignals(False)
+        self.chk_disable_resources.blockSignals(False)
+        self.chk_minimal_map.blockSignals(False)
+        self.chk_terrain_only.blockSignals(False)
 
         # Apply preset texture/skybox if specified
         if "terrain_material" in preset:
@@ -875,6 +943,11 @@ class TerrainGeneratorGUI(QMainWindow):
         self.combo_power.blockSignals(True)
         self.combo_material.blockSignals(True)
         self.combo_skybox.blockSignals(True)
+        self.chk_disable_commander.blockSignals(True)
+        self.chk_disable_buildings.blockSignals(True)
+        self.chk_disable_resources.blockSignals(True)
+        self.chk_minimal_map.blockSignals(True)
+        self.chk_terrain_only.blockSignals(True)
 
         self.spin_seed.setValue(self.config_model.seed)
         self.spin_tiles_x.setValue(self.config_model.tiles_x)
@@ -898,6 +971,12 @@ class TerrainGeneratorGUI(QMainWindow):
         self.combo_material.setCurrentText(self.config_model.terrain_material)
         self.combo_skybox.setCurrentText(self.config_model.skybox)
 
+        self.chk_disable_commander.setChecked(self.config_model.disable_commander)
+        self.chk_disable_buildings.setChecked(self.config_model.disable_buildings)
+        self.chk_disable_resources.setChecked(self.config_model.disable_resource_nodes)
+        self.chk_minimal_map.setChecked(self.config_model.minimal_map)
+        self.chk_terrain_only.setChecked(self.config_model.terrain_only)
+
         self.spin_seed.blockSignals(False)
         self.spin_tiles_x.blockSignals(False)
         self.spin_tiles_y.blockSignals(False)
@@ -911,6 +990,11 @@ class TerrainGeneratorGUI(QMainWindow):
         self.combo_power.blockSignals(False)
         self.combo_material.blockSignals(False)
         self.combo_skybox.blockSignals(False)
+        self.chk_disable_commander.blockSignals(False)
+        self.chk_disable_buildings.blockSignals(False)
+        self.chk_disable_resources.blockSignals(False)
+        self.chk_minimal_map.blockSignals(False)
+        self.chk_terrain_only.blockSignals(False)
 
         if self.config_model.custom_image_path:
             self.chk_custom_image.setChecked(True)
@@ -944,6 +1028,14 @@ class TerrainGeneratorGUI(QMainWindow):
 
         self.config_model.terrain_material = self.combo_material.currentText()
         self.config_model.skybox = self.combo_skybox.currentText()
+
+        self.config_model.disable_commander = self.chk_disable_commander.isChecked()
+        self.config_model.disable_buildings = self.chk_disable_buildings.isChecked()
+        self.config_model.disable_resource_nodes = (
+            self.chk_disable_resources.isChecked()
+        )
+        self.config_model.minimal_map = self.chk_minimal_map.isChecked()
+        self.config_model.terrain_only = self.chk_terrain_only.isChecked()
 
         self.update_validation_status()
 
@@ -1056,7 +1148,11 @@ class CompileWorker(QThread):
                     text=True,
                 )
                 if result.returncode != 0:
-                    err = result.stderr.strip() if result.stderr else result.stdout.strip()
+                    err = (
+                        result.stderr.strip()
+                        if result.stderr
+                        else result.stdout.strip()
+                    )
                     raise RuntimeError(err or "Compile failed")
 
             self.finished.emit(

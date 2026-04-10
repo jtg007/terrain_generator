@@ -312,6 +312,8 @@ def spawn_base_entities_enhanced(
     tiles_x: int = 8,
     tiles_y: int = 8,
     power: int = 3,
+    skip_commander: bool = False,
+    skip_buildings: bool = False,
 ) -> None:
     """Spawn base entities for IMP or NF faction using data-driven placement."""
     if rules is None:
@@ -399,20 +401,24 @@ def spawn_base_entities_enhanced(
     else:
         raise ValueError(f"Unknown faction: {faction}")
 
-    commander_entity = vmf_lib.Entity(commander_class)
-    commander_entity.origin = (
-        f"{quantize_coord(commander_x)} {quantize_coord(commander_y)} {commander_z}"
-    )
-    commander_entity.properties["team"] = str(team_num)
-    commander_entity.properties["angles"] = f"0 {(commander_yaw + 90) % 360} 0"
+    if not skip_commander:
+        commander_entity = vmf_lib.Entity(commander_class)
+        commander_entity.origin = (
+            f"{quantize_coord(commander_x)} {quantize_coord(commander_y)} {commander_z}"
+        )
+        commander_entity.properties["team"] = str(team_num)
+        commander_entity.properties["angles"] = f"0 {(commander_yaw + 90) % 360} 0"
 
-    barracks_entity = vmf_lib.Entity(barracks_class)
-    barracks_entity.origin = f"{quantize_coord(origin_x):.1f} {quantize_coord(origin_y):.1f} {barracks_z:.1f}"
-    barracks_entity.properties["angles"] = f"0 {barracks_yaw:.1f} 0"
-    barracks_entity.properties["team"] = str(team_num)
-    barracks_entity.properties["startBuilt"] = "1"
+    if not skip_buildings:
+        barracks_entity = vmf_lib.Entity(barracks_class)
+        barracks_entity.origin = f"{quantize_coord(origin_x):.1f} {quantize_coord(origin_y):.1f} {barracks_z:.1f}"
+        barracks_entity.properties["angles"] = f"0 {barracks_yaw:.1f} 0"
+        barracks_entity.properties["team"] = str(team_num)
+        barracks_entity.properties["startBuilt"] = "1"
 
-    spawn_base_buildings(valve_map, faction, origin_x, origin_y, terrain_height, rules)
+        spawn_base_buildings(
+            valve_map, faction, origin_x, origin_y, terrain_height, rules
+        )
 
 
 def spawn_base_buildings(
@@ -636,37 +642,6 @@ def spawn_resource_nodes_enhanced(
         resource_prop.properties["model"] = "models/props_wasteland/rockcliff01b.mdl"
         resource_prop.properties["Enabled"] = "1"
         resource_prop.properties["angles"] = f"0 {random.uniform(0, 360):.1f} 0"
-
-
-def spawn_restriction_zones(
-    valve_map: vmf.ValveMap,
-    imp_base_x: float,
-    imp_base_y: float,
-    nf_base_x: float,
-    nf_base_y: float,
-    terrain_height: int,
-    rules: Dict[str, Any],
-) -> None:
-    """Spawn restriction zones based on learned placement patterns."""
-    _ = rules.get("restriction_zones", {}).get("placement_rules", {})
-
-    team_num_imp = 2
-    team_num_nf = 3
-
-    eng_restrict_radius = 512
-    comm_restrict_radius = 256
-
-    for base_x, base_y, team_num in [
-        (imp_base_x, imp_base_y, team_num_imp),
-        (nf_base_x, nf_base_y, team_num_nf),
-    ]:
-        eng_restrict = vmf_lib.Entity("emp_eng_restrict")
-        eng_restrict.origin = f"{quantize_coord(base_x)} {quantize_coord(base_y)} {quantize_coord(terrain_height + 16)}"
-        eng_restrict.properties["radius"] = str(eng_restrict_radius)
-
-        comm_restrict = vmf_lib.Entity("emp_comm_restrict")
-        comm_restrict.origin = f"{quantize_coord(base_x)} {quantize_coord(base_y)} {quantize_coord(terrain_height + 48)}"
-        comm_restrict.properties["radius"] = str(comm_restrict_radius)
 
 
 def spawn_info_nodes(
@@ -894,8 +869,12 @@ class PipelineSpec:
     output_dir: str = "."
     rules_file: str = "map_rules.json"
     use_enhanced_spawning: bool = True
-    include_restriction_zones: bool = False
     include_detail_props: bool = False
+    disable_commander: bool = False
+    disable_buildings: bool = False
+    disable_resource_nodes: bool = False
+    minimal_map: bool = False
+    terrain_only: bool = False
 
     def get_required_heightmap_size(self) -> Tuple[int, int]:
         """Calculate required heightmap dimensions for displacement tiles."""
@@ -1138,88 +1117,114 @@ class DisplacementVMF:
 
         spawn_lighting(valve_map, rules)
 
+        skip_commander = (
+            self.spec.disable_commander
+            or self.spec.minimal_map
+            or self.spec.terrain_only
+        )
+        skip_buildings = (
+            self.spec.disable_buildings
+            or self.spec.minimal_map
+            or self.spec.terrain_only
+        )
+        skip_resources = (
+            self.spec.disable_resource_nodes
+            or self.spec.minimal_map
+            or self.spec.terrain_only
+        )
+        skip_misc = self.spec.minimal_map or self.spec.terrain_only
+        skip_player_spawns = self.spec.terrain_only
+
         if self.spec.use_enhanced_spawning:
-            spawn_base_entities_enhanced(
-                valve_map,
-                "imp",
-                imp_base_x,
-                imp_base_y,
-                0,
-                map_center_x,
-                map_center_y,
-                rules,
-                heightmap=height_array,
-                origin_x_world=origin_x,
-                origin_y_world=origin_y,
-                map_width=map_width,
-                map_height=map_height,
-                max_height=height_scale,
-                tiles_x=tiles_x,
-                tiles_y=tiles_y,
-                power=power,
-            )
+            if not skip_commander or not skip_buildings:
+                spawn_base_entities_enhanced(
+                    valve_map,
+                    "imp",
+                    imp_base_x,
+                    imp_base_y,
+                    0,
+                    map_center_x,
+                    map_center_y,
+                    rules,
+                    heightmap=height_array,
+                    origin_x_world=origin_x,
+                    origin_y_world=origin_y,
+                    map_width=map_width,
+                    map_height=map_height,
+                    max_height=height_scale,
+                    tiles_x=tiles_x,
+                    tiles_y=tiles_y,
+                    power=power,
+                    skip_commander=skip_commander,
+                    skip_buildings=skip_buildings,
+                )
 
-            spawn_base_entities_enhanced(
-                valve_map,
-                "nf",
-                nf_base_x,
-                nf_base_y,
-                0,
-                map_center_x,
-                map_center_y,
-                rules,
-                heightmap=height_array,
-                origin_x_world=origin_x,
-                origin_y_world=origin_y,
-                map_width=map_width,
-                map_height=map_height,
-                max_height=height_scale,
-                tiles_x=tiles_x,
-                tiles_y=tiles_y,
-                power=power,
-            )
+            if not skip_commander or not skip_buildings:
+                spawn_base_entities_enhanced(
+                    valve_map,
+                    "nf",
+                    nf_base_x,
+                    nf_base_y,
+                    0,
+                    map_center_x,
+                    map_center_y,
+                    rules,
+                    heightmap=height_array,
+                    origin_x_world=origin_x,
+                    origin_y_world=origin_y,
+                    map_width=map_width,
+                    map_height=map_height,
+                    max_height=height_scale,
+                    tiles_x=tiles_x,
+                    tiles_y=tiles_y,
+                    power=power,
+                    skip_commander=skip_commander,
+                    skip_buildings=skip_buildings,
+                )
 
-            spawn_resource_nodes_enhanced(
-                valve_map,
-                "imp",
-                imp_base_x,
-                imp_base_y,
-                max_terrain_height,
-                map_center_x,
-                map_center_y,
-                rules,
-                heightmap=height_array,
-                origin_x=origin_x,
-                origin_y=origin_y,
-                map_width=map_width,
-                map_height=map_height,
-                max_height=height_scale,
-                tiles_x=tiles_x,
-                tiles_y=tiles_y,
-                power=power,
-            )
-            spawn_resource_nodes_enhanced(
-                valve_map,
-                "nf",
-                nf_base_x,
-                nf_base_y,
-                max_terrain_height,
-                map_center_x,
-                map_center_y,
-                rules,
-                heightmap=height_array,
-                origin_x=origin_x,
-                origin_y=origin_y,
-                map_width=map_width,
-                map_height=map_height,
-                max_height=height_scale,
-                tiles_x=tiles_x,
-                tiles_y=tiles_y,
-                power=power,
-            )
+            if not skip_resources:
+                spawn_resource_nodes_enhanced(
+                    valve_map,
+                    "imp",
+                    imp_base_x,
+                    imp_base_y,
+                    max_terrain_height,
+                    map_center_x,
+                    map_center_y,
+                    rules,
+                    heightmap=height_array,
+                    origin_x=origin_x,
+                    origin_y=origin_y,
+                    map_width=map_width,
+                    map_height=map_height,
+                    max_height=height_scale,
+                    tiles_x=tiles_x,
+                    tiles_y=tiles_y,
+                    power=power,
+                )
+            if not skip_resources:
+                spawn_resource_nodes_enhanced(
+                    valve_map,
+                    "nf",
+                    nf_base_x,
+                    nf_base_y,
+                    max_terrain_height,
+                    map_center_x,
+                    map_center_y,
+                    rules,
+                    heightmap=height_array,
+                    origin_x=origin_x,
+                    origin_y=origin_y,
+                    map_width=map_width,
+                    map_height=map_height,
+                    max_height=height_scale,
+                    tiles_x=tiles_x,
+                    tiles_y=tiles_y,
+                    power=power,
+                )
 
-            if self.spec.include_restriction_zones:
-                spawn_restriction_zones(
+            if not skip_player_spawns:
+                spawn_player_spawn_points(
                     valve_map,
                     imp_base_x,
                     imp_base_y,
@@ -1229,118 +1234,118 @@ class DisplacementVMF:
                     rules,
                 )
 
-            spawn_player_spawn_points(
-                valve_map,
-                imp_base_x,
-                imp_base_y,
-                nf_base_x,
-                nf_base_y,
-                max_terrain_height,
-                rules,
-            )
-
-            spawn_capture_points(
-                valve_map,
-                imp_base_x,
-                imp_base_y,
-                nf_base_x,
-                nf_base_y,
-                map_center_x,
-                map_center_y,
-                max_terrain_height,
-                rules,
-            )
+            if not skip_misc:
+                spawn_capture_points(
+                    valve_map,
+                    imp_base_x,
+                    imp_base_y,
+                    nf_base_x,
+                    nf_base_y,
+                    map_center_x,
+                    map_center_y,
+                    max_terrain_height,
+                    rules,
+                )
         else:
-            spawn_base_entities_enhanced(
-                valve_map,
-                "imp",
-                imp_base_x,
-                imp_base_y,
-                0,
-                map_center_x,
-                map_center_y,
-                rules,
-                heightmap=height_array,
-                origin_x_world=origin_x,
-                origin_y_world=origin_y,
-                map_width=map_width,
-                map_height=map_height,
-                max_height=height_scale,
-                tiles_x=tiles_x,
-                tiles_y=tiles_y,
-                power=power,
-            )
-            spawn_base_entities_enhanced(
-                valve_map,
-                "nf",
-                nf_base_x,
-                nf_base_y,
-                0,
-                map_center_x,
-                map_center_y,
-                rules,
-                heightmap=height_array,
-                origin_x_world=origin_x,
-                origin_y_world=origin_y,
-                map_width=map_width,
-                map_height=map_height,
-                max_height=height_scale,
-                tiles_x=tiles_x,
-                tiles_y=tiles_y,
-                power=power,
-            )
-            spawn_resource_nodes_enhanced(
-                valve_map,
-                "imp",
-                imp_base_x,
-                imp_base_y,
-                max_terrain_height,
-                map_center_x,
-                map_center_y,
-                rules,
-                heightmap=height_array,
-                origin_x=origin_x,
-                origin_y=origin_y,
-                map_width=map_width,
-                map_height=map_height,
-                max_height=height_scale,
-                tiles_x=tiles_x,
-                tiles_y=tiles_y,
-                power=power,
-            )
-            spawn_resource_nodes_enhanced(
-                valve_map,
-                "nf",
-                nf_base_x,
-                nf_base_y,
-                max_terrain_height,
-                map_center_x,
-                map_center_y,
-                rules,
-                heightmap=height_array,
-                origin_x=origin_x,
-                origin_y=origin_y,
-                map_width=map_width,
-                map_height=map_height,
-                max_height=height_scale,
-                tiles_x=tiles_x,
-                tiles_y=tiles_y,
-                power=power,
-            )
+            if not skip_commander or not skip_buildings:
+                spawn_base_entities_enhanced(
+                    valve_map,
+                    "imp",
+                    imp_base_x,
+                    imp_base_y,
+                    0,
+                    map_center_x,
+                    map_center_y,
+                    rules,
+                    heightmap=height_array,
+                    origin_x_world=origin_x,
+                    origin_y_world=origin_y,
+                    map_width=map_width,
+                    map_height=map_height,
+                    max_height=height_scale,
+                    tiles_x=tiles_x,
+                    tiles_y=tiles_y,
+                    power=power,
+                    skip_commander=skip_commander,
+                    skip_buildings=skip_buildings,
+                )
+            if not skip_commander or not skip_buildings:
+                spawn_base_entities_enhanced(
+                    valve_map,
+                    "nf",
+                    nf_base_x,
+                    nf_base_y,
+                    0,
+                    map_center_x,
+                    map_center_y,
+                    rules,
+                    heightmap=height_array,
+                    origin_x_world=origin_x,
+                    origin_y_world=origin_y,
+                    map_width=map_width,
+                    map_height=map_height,
+                    max_height=height_scale,
+                    tiles_x=tiles_x,
+                    tiles_y=tiles_y,
+                    power=power,
+                )
+            if not skip_resources:
+                spawn_resource_nodes_enhanced(
+                    valve_map,
+                    "imp",
+                    imp_base_x,
+                    imp_base_y,
+                    max_terrain_height,
+                    map_center_x,
+                    map_center_y,
+                    rules,
+                    heightmap=height_array,
+                    origin_x=origin_x,
+                    origin_y=origin_y,
+                    map_width=map_width,
+                    map_height=map_height,
+                    max_height=height_scale,
+                    tiles_x=tiles_x,
+                    tiles_y=tiles_y,
+                    power=power,
+                )
+            if not skip_resources:
+                spawn_resource_nodes_enhanced(
+                    valve_map,
+                    "nf",
+                    nf_base_x,
+                    nf_base_y,
+                    max_terrain_height,
+                    map_center_x,
+                    map_center_y,
+                    rules,
+                    heightmap=height_array,
+                    origin_x=origin_x,
+                    origin_y=origin_y,
+                    map_width=map_width,
+                    map_height=map_height,
+                    max_height=height_scale,
+                    tiles_x=tiles_x,
+                    tiles_y=tiles_y,
+                    power=power,
+                    skip_commander=skip_commander,
+                    skip_buildings=skip_buildings,
+                )
 
-        spawn_info_nodes(
-            valve_map,
-            imp_base_x,
-            imp_base_y,
-            nf_base_x,
-            nf_base_y,
-            map_width,
-            map_height,
-            max_terrain_height,
-            rules,
-            origin_x=origin_x,
-            origin_y=origin_y,
-        )
+        if not skip_misc:
+            spawn_info_nodes(
+                valve_map,
+                imp_base_x,
+                imp_base_y,
+                nf_base_x,
+                nf_base_y,
+                map_width,
+                map_height,
+                max_terrain_height,
+                rules,
+                origin_x=origin_x,
+                origin_y=origin_y,
+            )
 
         spawn_required_entities_enhanced(
             valve_map,
