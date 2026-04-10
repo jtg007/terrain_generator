@@ -33,12 +33,21 @@ else:
 from PIL import Image, ImageOps
 
 
+class ZoneType:
+    BASE = "base_zone"
+    MAIN_LANE = "main_lane_zone"
+    SIDE_ROUTE = "side_route_zone"
+    VEHICLE_OPEN = "vehicle_open_zone"
+    CHOKEPOINT = "chokepoint_zone"
+    WILDERNESS = "wilderness_zone"
+
+
 @dataclass
 class LayoutNode:
     x: float
     y: float
     radius: float
-    type: str  # 'base', 'vehicle_area', 'chokepoint'
+    type: str  # ZoneType
 
 
 @dataclass
@@ -103,8 +112,8 @@ def generate_strategic_layout(
     )
     map_min_dim = min(spec.size_x, spec.size_y)
 
-    imp_base = LayoutNode(imp_x, imp_y, base_radius, "base")
-    nf_base = LayoutNode(nf_x, nf_y, base_radius, "base")
+    imp_base = LayoutNode(imp_x, imp_y, base_radius, ZoneType.BASE)
+    nf_base = LayoutNode(nf_x, nf_y, base_radius, ZoneType.BASE)
     nodes.extend([imp_base, nf_base])
 
     # Determine main lane vector
@@ -125,30 +134,30 @@ def generate_strategic_layout(
     # Center chokepoint
     choke_x = imp_x + lane_dx * lane_len * 0.5
     choke_y = imp_y + lane_dy * lane_len * 0.5
-    center_choke = LayoutNode(choke_x, choke_y, choke_length / 2, "chokepoint")
+    center_choke = LayoutNode(choke_x, choke_y, choke_length / 2, ZoneType.CHOKEPOINT)
     nodes.append(center_choke)
 
     # Vehicle open areas
     veh1_x = imp_x + lane_dx * lane_len * 0.25
     veh1_y = imp_y + lane_dy * lane_len * 0.25
-    veh1 = LayoutNode(veh1_x, veh1_y, veh_radius, "vehicle_area")
+    veh1 = LayoutNode(veh1_x, veh1_y, veh_radius, ZoneType.VEHICLE_OPEN)
 
     veh2_x = imp_x + lane_dx * lane_len * 0.75
     veh2_y = imp_y + lane_dy * lane_len * 0.75
-    veh2 = LayoutNode(veh2_x, veh2_y, veh_radius, "vehicle_area")
+    veh2 = LayoutNode(veh2_x, veh2_y, veh_radius, ZoneType.VEHICLE_OPEN)
 
     nodes.extend([veh1, veh2])
 
     # Connections
     # imp_base -> veh1 -> center_choke -> veh2 -> nf_base
-    connections.append(LayoutConnection(imp_base, veh1, lane_width, "main_lane"))
+    connections.append(LayoutConnection(imp_base, veh1, lane_width, ZoneType.MAIN_LANE))
     connections.append(
-        LayoutConnection(veh1, center_choke, lane_width, "chokepoint_lane")
+        LayoutConnection(veh1, center_choke, lane_width, ZoneType.CHOKEPOINT)
     )
     connections.append(
-        LayoutConnection(center_choke, veh2, lane_width, "chokepoint_lane")
+        LayoutConnection(center_choke, veh2, lane_width, ZoneType.CHOKEPOINT)
     )
-    connections.append(LayoutConnection(veh2, nf_base, lane_width, "main_lane"))
+    connections.append(LayoutConnection(veh2, nf_base, lane_width, ZoneType.MAIN_LANE))
 
     # Optional side lanes (simple curve or offset point)
     perp_dx = -lane_dy
@@ -157,11 +166,11 @@ def generate_strategic_layout(
 
     side_x = choke_x + perp_dx * side_offset
     side_y = choke_y + perp_dy * side_offset
-    side_veh = LayoutNode(side_x, side_y, veh_radius * 0.7, "vehicle_area")
+    side_veh = LayoutNode(side_x, side_y, veh_radius * 0.7, ZoneType.VEHICLE_OPEN)
     nodes.append(side_veh)
 
-    connections.append(LayoutConnection(veh1, side_veh, lane_width * 0.7, "side_lane"))
-    connections.append(LayoutConnection(side_veh, veh2, lane_width * 0.7, "side_lane"))
+    connections.append(LayoutConnection(veh1, side_veh, lane_width * 0.7, ZoneType.SIDE_ROUTE))
+    connections.append(LayoutConnection(side_veh, veh2, lane_width * 0.7, ZoneType.SIDE_ROUTE))
 
     return nodes, connections
 
@@ -214,10 +223,16 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
                 * warp_strength
             )
 
-            # 3. Mask Generation from Explicit Layout Objects
+            # 3. Zone Evaluation (Build Zone Map for current position)
+            # Find the dominant zone affecting this coordinate
 
-            base_mask = 0.0
-            veh_mask = 0.0
+            zone_weights = {
+                ZoneType.BASE: 0.0,
+                ZoneType.VEHICLE_OPEN: 0.0,
+                ZoneType.MAIN_LANE: 0.0,
+                ZoneType.SIDE_ROUTE: 0.0,
+                ZoneType.CHOKEPOINT: 0.0,
+            }
 
             # Evaluate Nodes
             for node in nodes:
@@ -225,13 +240,10 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
                 mask = max(0.0, 1.0 - (dist / max(1e-5, node.radius)))
                 mask = mask**2 * (3 - 2 * mask)  # Smoothstep
 
-                if node.type == "base":
-                    base_mask = max(base_mask, mask)
-                elif node.type == "vehicle_area":
-                    veh_mask = max(veh_mask, mask)
+                if mask > zone_weights[node.type]:
+                    zone_weights[node.type] = mask
 
             # Evaluate Connections (Lanes and Chokepoints)
-            lane_mask = 0.0
             choke_block_mask = 0.0
 
             for conn in connections:
@@ -255,18 +267,21 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
                 )
 
                 if 0 <= dot_product <= length:
-                    if conn.type in ("main_lane", "side_lane"):
+                    if conn.type in (ZoneType.MAIN_LANE, ZoneType.SIDE_ROUTE):
                         mask = max(0.0, 1.0 - (dist_to_lane / max(1e-5, conn.width)))
                         mask = mask**2 * (3 - 2 * mask)
-                        lane_mask = max(lane_mask, mask)
-                    elif conn.type == "chokepoint_lane":
+                        if mask > zone_weights[conn.type]:
+                            zone_weights[conn.type] = mask
+
+                    elif conn.type == ZoneType.CHOKEPOINT:
                         # Chokepoints have a narrow playable lane and force high terrain next to them
                         choke_playable_width = conn.width * 0.5
                         mask = max(
                             0.0, 1.0 - (dist_to_lane / max(1e-5, choke_playable_width))
                         )
                         mask = mask**2 * (3 - 2 * mask)
-                        lane_mask = max(lane_mask, mask)
+                        if mask > zone_weights[ZoneType.CHOKEPOINT]:
+                            zone_weights[ZoneType.CHOKEPOINT] = mask
 
                         # Apply blockade if outside the narrow lane
                         if dist_to_lane > choke_playable_width:
@@ -276,6 +291,15 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
                                 / max(1e-5, choke_playable_width * 2),
                             )
                             choke_block_mask = max(choke_block_mask, block_val)
+
+            # Determine dominant zone (max weight) and overall playability
+            base_mask = zone_weights[ZoneType.BASE]
+            veh_mask = zone_weights[ZoneType.VEHICLE_OPEN]
+            lane_mask = max(
+                zone_weights[ZoneType.MAIN_LANE],
+                zone_weights[ZoneType.SIDE_ROUTE],
+                zone_weights[ZoneType.CHOKEPOINT],
+            )
 
             # Combine playable area masks
             # Areas with high playable mask will be flattened towards floor_height
@@ -306,23 +330,54 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
                 + 0.05 * detail_val
             )
 
-            # Determine final height
-            # Non-playable areas use noise_combined as height percentage
-            wilderness_height = (
+            # 5. Zone Target Heights & Blending
+
+            # Base Zone: Perfectly flat
+            base_target = floor_height
+
+            # Lane Zone: Mostly flat, slight noise
+            lane_target = floor_height + (max_height * 0.01 * base_noise)
+
+            # Vehicle Zone: Smooth rolling ground
+            veh_target = floor_height + (max_height * 0.03 * base_noise)
+
+            # Wilderness Zone: Full mountains
+            wilderness_target = (
                 floor_height + (mountain_height - floor_height) * noise_combined
             )
 
-            # Playable areas get smoothed flat, but keep slight variation
-            playable_height = floor_height + (max_height * 0.02 * base_noise)
+            # Chokepoint Wall: High cliffs flanking the choke
+            choke_wall_target = mountain_height * (0.8 + 0.2 * ridge_val)
 
-            # For chokepoint walls (choke_block_mask > 0), force the height up
+            # Start with wilderness
+            final_height = wilderness_target
+
+            # Blend in Playable Zones
+            # We determine the dominant playable zone by checking which mask is strongest
+            playable_sum = base_mask + veh_mask + lane_mask
+
+            if playable_sum > 0:
+                # Normalize the playable weights
+                b_w = base_mask / playable_sum
+                v_w = veh_mask / playable_sum
+                l_w = lane_mask / playable_sum
+
+                # Composite the playable height
+                playable_height = (
+                    (base_target * b_w) + (veh_target * v_w) + (lane_target * l_w)
+                )
+
+                # Blend playable height onto the wilderness background
+                final_height = playable_height * playable_mask + wilderness_target * (
+                    1.0 - playable_mask
+                )
+
+            # Force chokepoint cliffs
+            # If we are in the wall portion of a chokepoint, override the terrain upwards
             if choke_block_mask > 0.0:
-                wilderness_height = mountain_height * (0.8 + 0.2 * ridge_val)
-
-            # Blend between playable flat layout and wilderness mountains
-            final_height = playable_height * playable_mask + wilderness_height * (
-                1.0 - playable_mask
-            )
+                final_height = choke_wall_target * choke_block_mask + final_height * (
+                    1.0 - choke_block_mask
+                )
 
             row_heights.append(final_height)
         heightmap.append(row_heights)
