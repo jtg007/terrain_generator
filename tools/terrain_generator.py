@@ -401,9 +401,9 @@ class TerrainGeneratorGUI(QMainWindow):
         grid = QGridLayout(settings_group)
         grid.setSpacing(10)
         grid.setColumnMinimumWidth(0, 100)
-        grid.setColumnStretch(1, 1)
-
-        grid.setColumnStretch(3, 1)
+        grid.setColumnStretch(1, 2)
+        grid.setColumnMinimumWidth(2, 100)
+        grid.setColumnStretch(3, 2)
 
         row = 0
         col = 0
