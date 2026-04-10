@@ -54,76 +54,208 @@ def generate_vertex_grid(spec: TerrainSpec) -> HeightGrid:
 
 def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     """
-    Step 2: Generate heights using multi-layered Fractal Brownian Motion.
+    Step 2: Generate heights using a Strategic Macro Layout approach.
 
-    Creates organic terrain with rolling hills and distinct ridges by combining:
-    - Base fBm layer: large-scale rolling hills (low frequency, high amplitude)
-    - Ridge noise layer: sharp mountain ridges (1 - |noise|)
-    - Detail fBm layer: fine surface detail (high frequency, low amplitude)
-    - Distance falloff: terrain fades to edges for natural map boundaries
-
-    Height values are in absolute world units.
+    Replaces the generic central hill noise with a structured terrain model:
+    1. Strategic Layout: Defines base positions, main lane, side routes, chokepoints, open vehicle areas.
+    2. Field Generation: Calculates layout masks and distance fields.
+    3. Macro Shaping: Flattens bases, carves lanes/vehicle areas, creates ridges and chokepoints.
+    4. Micro Variation: Adds noise only for natural variation, keeping structural integrity.
     """
     rows = grid.rows
     cols = grid.cols
     noise = NoiseGenerator(spec.seed)
 
-    base_scale = 0.002
-    ridge_scale = 0.003
-    detail_scale = 0.01
+    roughness = getattr(spec, "roughness", 0.5)
     max_height = spec.terrain_max_height
 
-    base_amplitude = 0.6
-    ridge_amplitude = 0.35
-    detail_amplitude = 0.05
+    # 1. Explicit Strategic Layout
+    # Use specified custom base locations or defaults based on map size
+    imp_x = (
+        spec.custom_imp_base_x
+        if spec.custom_imp_base_x is not None
+        else spec.origin_x + spec.size_x * 0.15
+    )
+    imp_y = (
+        spec.custom_imp_base_y
+        if spec.custom_imp_base_y is not None
+        else spec.origin_y + spec.size_y * 0.15
+    )
+    nf_x = (
+        spec.custom_nf_base_x
+        if spec.custom_nf_base_x is not None
+        else spec.origin_x + spec.size_x * 0.85
+    )
+    nf_y = (
+        spec.custom_nf_base_y
+        if spec.custom_nf_base_y is not None
+        else spec.origin_y + spec.size_y * 0.85
+    )
+
+    base_radius = (
+        spec.base_clear_radius if spec.base_clear_radius > 0 else spec.size_x * 0.12
+    )
+
+    lane_dx = nf_x - imp_x
+    lane_dy = nf_y - imp_y
+    lane_len = math.sqrt(lane_dx * lane_dx + lane_dy * lane_dy)
+    if lane_len > 0:
+        lane_dx /= lane_len
+        lane_dy /= lane_len
+    else:
+        lane_dx, lane_dy = 1.0, 0.0
+
+    # Define layout points:
+    # - chokepoint exactly in the middle of the main lane
+    # - vehicle open areas roughly 1/3 and 2/3 along the main lane
+    choke_x = imp_x + lane_dx * lane_len * 0.5
+    choke_y = imp_y + lane_dy * lane_len * 0.5
+
+    veh1_x = imp_x + lane_dx * lane_len * 0.3
+    veh1_y = imp_y + lane_dy * lane_len * 0.3
+
+    veh2_x = imp_x + lane_dx * lane_len * 0.7
+    veh2_y = imp_y + lane_dy * lane_len * 0.7
+
+    # Radii for strategic features
+    lane_width = spec.size_x * 0.10
+    veh_radius = spec.size_x * 0.20
+    choke_width = spec.size_x * 0.05
+    choke_length = spec.size_x * 0.15
+
+    # 2. Prepare grid constants
+    floor_height = max_height * 0.15
+    mountain_height = max_height * 0.85
+
+    warp_scale = 0.005
+    warp_strength = 150.0 * roughness
+    macro_scale = 0.0015
+    ridge_scale = 0.0025
 
     heightmap = []
+
     for r in range(rows):
         row_heights = []
+        wy = spec.origin_y + r * spec.size_y / max(1, rows - 1)
         for c in range(cols):
-            nx = c * base_scale
-            ny = r * base_scale
+            wx = spec.origin_x + c * spec.size_x / max(1, cols - 1)
 
-            base_val = noise.fbm(
-                nx, ny, octaves=spec.noise_octaves, persistence=0.5, lacunarity=2.0
+            # Domain warping for noise lookups (keeps structural masks unwarped for layout integrity)
+            wx_warp = (
+                wx
+                + noise.fbm(wx * warp_scale, wy * warp_scale, octaves=2) * warp_strength
+            )
+            wy_warp = (
+                wy
+                + noise.fbm(wx * warp_scale + 100, wy * warp_scale + 100, octaves=2)
+                * warp_strength
             )
 
-            ridge_nx = c * ridge_scale
-            ridge_ny = r * ridge_scale
+            # 3. Macro Shaping (Distance Fields)
+
+            # Base influence (0.0 to 1.0, 1.0 = exact center)
+            dist_imp = math.sqrt((wx - imp_x) ** 2 + (wy - imp_y) ** 2)
+            dist_nf = math.sqrt((wx - nf_x) ** 2 + (wy - nf_y) ** 2)
+
+            base_imp_mask = max(0.0, 1.0 - (dist_imp / base_radius))
+            base_nf_mask = max(0.0, 1.0 - (dist_nf / base_radius))
+            base_imp_mask = base_imp_mask**2 * (3 - 2 * base_imp_mask)  # Smoothstep
+            base_nf_mask = base_nf_mask**2 * (3 - 2 * base_nf_mask)
+            base_mask = max(base_imp_mask, base_nf_mask)
+
+            # Main lane influence
+            # The cross product of the lane vector and the vector to the point gives the distance to the line.
+            # Since lane_dx and lane_dy are already normalized (a unit vector), the cross product directly gives the distance.
+            dist_to_lane = abs(lane_dy * (wx - imp_x) - lane_dx * (wy - imp_y))
+
+            # Bound lane mask to the segment between bases
+            dot_product = (wx - imp_x) * lane_dx + (wy - imp_y) * lane_dy
+            if dot_product < 0 or dot_product > lane_len:
+                lane_mask = 0.0
+            else:
+                lane_mask = max(0.0, 1.0 - (dist_to_lane / lane_width))
+                lane_mask = lane_mask**2 * (3 - 2 * lane_mask)
+
+            # Open vehicle areas (spherical masks)
+            dist_veh1 = math.sqrt((wx - veh1_x) ** 2 + (wy - veh1_y) ** 2)
+            dist_veh2 = math.sqrt((wx - veh2_x) ** 2 + (wy - veh2_y) ** 2)
+
+            veh1_mask = max(0.0, 1.0 - (dist_veh1 / veh_radius))
+            veh2_mask = max(0.0, 1.0 - (dist_veh2 / veh_radius))
+            veh1_mask = veh1_mask**2 * (3 - 2 * veh1_mask)
+            veh2_mask = veh2_mask**2 * (3 - 2 * veh2_mask)
+            veh_mask = max(veh1_mask, veh2_mask)
+
+            # Chokepoint logic
+            # Chokepoint is a narrow pass in the middle.
+            # We want to force high terrain perpendicular to the choke.
+            choke_perp_dx = -lane_dy
+            choke_perp_dy = lane_dx
+
+            # Distance along lane from choke center
+            dist_along_choke = abs((wx - choke_x) * lane_dx + (wy - choke_y) * lane_dy)
+            # Distance outward from lane at choke
+            dist_outward_choke = abs(
+                (wx - choke_x) * choke_perp_dx + (wy - choke_y) * choke_perp_dy
+            )
+
+            # The chokepoint restricts the lane width dramatically and creates walls
+            choke_block_mask = 0.0
+            if dist_along_choke < choke_length:
+                # Inside the chokepoint segment along the lane
+                if dist_outward_choke > choke_width:
+                    # Outside the narrow path: create a blockade/wall.
+                    # Limit the maximum block mask so we get a slope, not a cliff.
+                    choke_block_mask = min(1.0, (dist_outward_choke - choke_width) / (choke_width * 2))
+
+            # Combine playable area masks
+            # Areas with high playable mask will be flattened towards floor_height
+            playable_mask = max(base_mask, max(lane_mask, veh_mask))
+
+            # Subtract choke block mask so mountains can form right next to the chokepoint lane
+            playable_mask = max(0.0, playable_mask - choke_block_mask)
+
+            # 4. Micro Variation (Noise)
+            # Add noise only to non-flat areas, or very subtle noise to flat areas
+            base_noise = noise.fbm(
+                wx_warp * macro_scale, wy_warp * macro_scale, octaves=spec.noise_octaves
+            )
+
             ridge_val = noise.fbm(
-                ridge_nx + 100.0,
-                ridge_ny + 100.0,
+                wx_warp * ridge_scale + 50,
+                wy_warp * ridge_scale + 50,
                 octaves=spec.noise_octaves,
-                persistence=0.45,
-                lacunarity=2.2,
             )
             ridge_val = 1.0 - abs(ridge_val)
             ridge_val = ridge_val * ridge_val
 
-            detail_nx = c * detail_scale
-            detail_ny = r * detail_scale
-            detail_val = noise.fbm(
-                detail_nx + 200.0,
-                detail_ny + 200.0,
-                octaves=3,
-                persistence=0.4,
-                lacunarity=2.5,
+            detail_val = noise.fbm(wx_warp * 0.008, wy_warp * 0.008, octaves=3)
+
+            noise_combined = (
+                (0.5 - 0.2 * roughness) * base_noise
+                + (0.3 + 0.4 * roughness) * ridge_val
+                + 0.05 * detail_val
             )
 
-            combined = (
-                base_amplitude * base_val
-                + ridge_amplitude * ridge_val
-                + detail_amplitude * detail_val
+            # Determine final height
+            # Non-playable areas use noise_combined as height percentage
+            wilderness_height = (
+                floor_height + (mountain_height - floor_height) * noise_combined
             )
 
-            cx = (c / max(cols - 1, 1)) - 0.5
-            cy = (r / max(rows - 1, 1)) - 0.5
-            dist_sq = cx * cx + cy * cy
-            falloff = 1.0 - min(dist_sq * 1.2, 1.0)
-            falloff = falloff * falloff
+            # Playable areas get smoothed flat, but keep slight variation
+            playable_height = floor_height + (max_height * 0.02 * base_noise)
 
-            height = combined * falloff * max_height
-            row_heights.append(height)
+            # For chokepoint walls (choke_block_mask > 0), force the height up
+            if choke_block_mask > 0.0:
+                wilderness_height = mountain_height * (0.8 + 0.2 * ridge_val)
+
+            # Blend between playable flat layout and wilderness mountains
+            final_height = playable_height * playable_mask + wilderness_height * (
+                1.0 - playable_mask
+            )
+
+            row_heights.append(final_height)
         heightmap.append(row_heights)
 
     grid.heights = heightmap
@@ -201,13 +333,6 @@ def flatten_base_areas(
 ) -> HeightGrid:
     """
     Flatten areas where bases will be placed for competitive gameplay.
-
-    Bases are placed in opposite quadrants:
-    - Imperial (IMP) base at SW quadrant
-    - Northern Faction (NF) base at NE quadrant
-
-    This creates a gentle clearing that's flat enough for buildings
-    but still has natural terrain variation.
     """
     if spec.base_clear_radius <= 0:
         return grid
@@ -223,26 +348,26 @@ def flatten_base_areas(
     imp_base_x = (
         spec.custom_imp_base_x
         if spec.custom_imp_base_x is not None
-        else spec.origin_x + spec.size_x * 0.25
+        else spec.origin_x + spec.size_x * 0.15
     )
     imp_base_y = (
         spec.custom_imp_base_y
         if spec.custom_imp_base_y is not None
-        else spec.origin_y + spec.size_y * 0.25
+        else spec.origin_y + spec.size_y * 0.15
     )
 
     nf_base_x = (
         spec.custom_nf_base_x
         if spec.custom_nf_base_x is not None
-        else spec.origin_x + spec.size_x * 0.75
+        else spec.origin_x + spec.size_x * 0.85
     )
     nf_base_y = (
         spec.custom_nf_base_y
         if spec.custom_nf_base_y is not None
-        else spec.origin_y + spec.size_y * 0.75
+        else spec.origin_y + spec.size_y * 0.85
     )
 
-    avg_height = grid.average_height()
+    avg_height = spec.terrain_max_height * 0.15  # Use the layout floor height
 
     for r in range(rows):
         world_y = spec.origin_y + r * vertex_spacing
