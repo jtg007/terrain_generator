@@ -195,7 +195,7 @@ def compile_vmfs(vmf_path: Path, args) -> None:
     shutil.copy2(str(vmf_path), temp_vmf)
 
     if is_windows():
-        cmd = ["vbsp.exe", "-game", "..\\empires", f"{map_name}.vmf"]
+        cmd = [vbsp, "-game", "..\\empires", f"{map_name}.vmf"]
     else:
         cmd = ["wine", "vbsp.exe", "-game", "../empires", f"{map_name}.vmf"]
 
