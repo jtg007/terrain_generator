@@ -31,6 +31,10 @@ class TerrainSpec:
     erosion_droplet_lifetime: int = 30
     terrain_max_height: int = 2048
     roughness: float = 0.5
+    topology: str = "random"
+    lane_width_scale: float = 1.0
+    chokepoint_size_scale: float = 1.0
+    mountain_height_scale: float = 1.0
     material: str = "nature/terrain/blend_dirt_grass_dmz_sscale"
     underlay_material: str = "TOOLS/TOOLSSKIP"
     underlay_height: int = 128
@@ -142,6 +146,10 @@ class TerrainSpec:
             "noise_octaves": self.noise_octaves,
             "erosion_iterations": self.erosion_iterations,
             "erosion_droplet_lifetime": self.erosion_droplet_lifetime,
+            "topology": self.topology,
+            "lane_width_scale": self.lane_width_scale,
+            "chokepoint_size_scale": self.chokepoint_size_scale,
+            "mountain_height_scale": self.mountain_height_scale,
             "material": self.material,
             "underlay_material": self.underlay_material,
             "underlay_height": self.underlay_height,
@@ -348,6 +356,10 @@ def create_default_spec() -> TerrainSpec:
         noise_octaves=4,
         erosion_iterations=50000,
         erosion_droplet_lifetime=30,
+        topology="random",
+        lane_width_scale=1.0,
+        chokepoint_size_scale=1.0,
+        mountain_height_scale=1.0,
         material="common/nature/blend_grass_mountainwall_000",
         underlay_material="TOOLS/TOOLSSKIP",
         underlay_height=128,

@@ -27,6 +27,11 @@ class GUIConfigModel:
     erosion_strength: float = 0.5  # Maps to erosion iterations
     height_scale: int = 2048  # Absolute max height
 
+    topology: str = "random"
+    lane_width_scale: float = 1.0
+    chokepoint_size_scale: float = 1.0
+    mountain_height_scale: float = 1.0
+
     # Selected preset for UI tracking
     preset_name: str = "mixed"
 
@@ -149,6 +154,10 @@ class GUIConfigModel:
             erosion_iterations=iterations,
             terrain_max_height=self.height_scale,
             roughness=self.roughness,
+            topology=self.topology,
+            lane_width_scale=self.lane_width_scale,
+            chokepoint_size_scale=self.chokepoint_size_scale,
+            mountain_height_scale=self.mountain_height_scale,
             custom_image_path=self.custom_image_path,
             base_clear_radius=self.base_clear_radius,
             base_flatness=self.base_flatness,
