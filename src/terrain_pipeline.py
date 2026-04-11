@@ -82,6 +82,7 @@ def generate_strategic_layout(
     spec: TerrainSpec,
 ) -> Tuple[List[LayoutNode], List[LayoutConnection]]:
     """Generates an explicit layout of nodes and connections based on the terrain spec."""
+    import random
     nodes = []
     connections = []
 
@@ -102,6 +103,18 @@ def generate_strategic_layout(
     )
     map_min_dim = min(spec.size_x, spec.size_y)
 
+    # Seeding random
+    rng = random.Random(spec.seed)
+
+    # Randomly select a topology archetype for variation
+    archetypes = ["central_gorge", "valley", "two_lane", "island", "classic_cross"]
+    topology = rng.choice(archetypes)
+
+    # Calculate map center and primary axis
+    center_x = spec.origin_x + spec.size_x / 2
+    center_y = spec.origin_y + spec.size_y / 2
+
+    # Bases
     imp_base = LayoutNode(imp_x, imp_y, base_radius, ZoneType.BASE)
     nf_base = LayoutNode(nf_x, nf_y, base_radius, ZoneType.BASE)
     nodes.extend([imp_base, nf_base])
@@ -116,51 +129,98 @@ def generate_strategic_layout(
     else:
         lane_dx, lane_dy = 1.0, 0.0
 
-    lane_width = map_min_dim * 0.10
-    veh_radius = map_min_dim * 0.20
-
-    choke_length = map_min_dim * 0.15
-
-    # Center chokepoint
-    choke_x = imp_x + lane_dx * lane_len * 0.5
-    choke_y = imp_y + lane_dy * lane_len * 0.5
-    center_choke = LayoutNode(choke_x, choke_y, choke_length / 2, ZoneType.CHOKEPOINT)
-    nodes.append(center_choke)
-
-    # Vehicle open areas
-    veh1_x = imp_x + lane_dx * lane_len * 0.25
-    veh1_y = imp_y + lane_dy * lane_len * 0.25
-    veh1 = LayoutNode(veh1_x, veh1_y, veh_radius, ZoneType.VEHICLE_OPEN)
-
-    veh2_x = imp_x + lane_dx * lane_len * 0.75
-    veh2_y = imp_y + lane_dy * lane_len * 0.75
-    veh2 = LayoutNode(veh2_x, veh2_y, veh_radius, ZoneType.VEHICLE_OPEN)
-
-    nodes.extend([veh1, veh2])
-
-    # Connections
-    # imp_base -> veh1 -> center_choke -> veh2 -> nf_base
-    connections.append(LayoutConnection(imp_base, veh1, lane_width, ZoneType.MAIN_LANE))
-    connections.append(
-        LayoutConnection(veh1, center_choke, lane_width, ZoneType.CHOKEPOINT)
-    )
-    connections.append(
-        LayoutConnection(center_choke, veh2, lane_width, ZoneType.CHOKEPOINT)
-    )
-    connections.append(LayoutConnection(veh2, nf_base, lane_width, ZoneType.MAIN_LANE))
-
-    # Optional side lanes (simple curve or offset point)
     perp_dx = -lane_dy
     perp_dy = lane_dx
-    side_offset = map_min_dim * 0.3
 
-    side_x = choke_x + perp_dx * side_offset
-    side_y = choke_y + perp_dy * side_offset
-    side_veh = LayoutNode(side_x, side_y, veh_radius * 0.7, ZoneType.VEHICLE_OPEN)
-    nodes.append(side_veh)
+    # Common dimensions with RNG
+    lane_width = map_min_dim * rng.uniform(0.08, 0.15)
+    veh_radius = map_min_dim * rng.uniform(0.15, 0.25)
+    choke_length = map_min_dim * rng.uniform(0.10, 0.20)
 
-    connections.append(LayoutConnection(veh1, side_veh, lane_width * 0.7, ZoneType.SIDE_ROUTE))
-    connections.append(LayoutConnection(side_veh, veh2, lane_width * 0.7, ZoneType.SIDE_ROUTE))
+    # Create the topology
+    if topology == "central_gorge":
+        # A main narrow lane through the center, large open areas on sides
+        center_node = LayoutNode(center_x, center_y, choke_length / 2, ZoneType.CHOKEPOINT)
+        nodes.append(center_node)
+        connections.append(LayoutConnection(imp_base, center_node, lane_width, ZoneType.MAIN_LANE))
+        connections.append(LayoutConnection(center_node, nf_base, lane_width, ZoneType.MAIN_LANE))
+
+        # Side open areas (symmetric)
+        offset = map_min_dim * rng.uniform(0.2, 0.4)
+        side1 = LayoutNode(center_x + perp_dx * offset, center_y + perp_dy * offset, veh_radius, ZoneType.VEHICLE_OPEN)
+        side2 = LayoutNode(center_x - perp_dx * offset, center_y - perp_dy * offset, veh_radius, ZoneType.VEHICLE_OPEN)
+        nodes.extend([side1, side2])
+
+        connections.append(LayoutConnection(imp_base, side1, lane_width * 0.8, ZoneType.SIDE_ROUTE))
+        connections.append(LayoutConnection(side1, nf_base, lane_width * 0.8, ZoneType.SIDE_ROUTE))
+        connections.append(LayoutConnection(imp_base, side2, lane_width * 0.8, ZoneType.SIDE_ROUTE))
+        connections.append(LayoutConnection(side2, nf_base, lane_width * 0.8, ZoneType.SIDE_ROUTE))
+
+    elif topology == "valley":
+        # One massive open valley connecting bases
+        valley_node = LayoutNode(center_x, center_y, map_min_dim * rng.uniform(0.3, 0.4), ZoneType.VEHICLE_OPEN)
+        nodes.append(valley_node)
+        connections.append(LayoutConnection(imp_base, valley_node, lane_width * 2, ZoneType.MAIN_LANE))
+        connections.append(LayoutConnection(valley_node, nf_base, lane_width * 2, ZoneType.MAIN_LANE))
+
+    elif topology == "two_lane":
+        # No central path, two distinct side lanes passing through mountains
+        offset = map_min_dim * rng.uniform(0.15, 0.3)
+        choke1 = LayoutNode(center_x + perp_dx * offset, center_y + perp_dy * offset, choke_length, ZoneType.CHOKEPOINT)
+        choke2 = LayoutNode(center_x - perp_dx * offset, center_y - perp_dy * offset, choke_length, ZoneType.CHOKEPOINT)
+        nodes.extend([choke1, choke2])
+
+        # Vehicle areas halfway to the chokes
+        v_imp1 = LayoutNode(imp_x + lane_dx * lane_len * 0.25 + perp_dx * offset * 0.5, imp_y + lane_dy * lane_len * 0.25 + perp_dy * offset * 0.5, veh_radius * 0.8, ZoneType.VEHICLE_OPEN)
+        v_nf1 = LayoutNode(nf_x - lane_dx * lane_len * 0.25 + perp_dx * offset * 0.5, nf_y - lane_dy * lane_len * 0.25 + perp_dy * offset * 0.5, veh_radius * 0.8, ZoneType.VEHICLE_OPEN)
+        v_imp2 = LayoutNode(imp_x + lane_dx * lane_len * 0.25 - perp_dx * offset * 0.5, imp_y + lane_dy * lane_len * 0.25 - perp_dy * offset * 0.5, veh_radius * 0.8, ZoneType.VEHICLE_OPEN)
+        v_nf2 = LayoutNode(nf_x - lane_dx * lane_len * 0.25 - perp_dx * offset * 0.5, nf_y - lane_dy * lane_len * 0.25 - perp_dy * offset * 0.5, veh_radius * 0.8, ZoneType.VEHICLE_OPEN)
+        nodes.extend([v_imp1, v_nf1, v_imp2, v_nf2])
+
+        connections.append(LayoutConnection(imp_base, v_imp1, lane_width, ZoneType.MAIN_LANE))
+        connections.append(LayoutConnection(v_imp1, choke1, lane_width, ZoneType.CHOKEPOINT))
+        connections.append(LayoutConnection(choke1, v_nf1, lane_width, ZoneType.CHOKEPOINT))
+        connections.append(LayoutConnection(v_nf1, nf_base, lane_width, ZoneType.MAIN_LANE))
+
+        connections.append(LayoutConnection(imp_base, v_imp2, lane_width, ZoneType.MAIN_LANE))
+        connections.append(LayoutConnection(v_imp2, choke2, lane_width, ZoneType.CHOKEPOINT))
+        connections.append(LayoutConnection(choke2, v_nf2, lane_width, ZoneType.CHOKEPOINT))
+        connections.append(LayoutConnection(v_nf2, nf_base, lane_width, ZoneType.MAIN_LANE))
+
+    elif topology == "island":
+        # Central vehicle open area, surrounded by high ground, with chokepoints leading into bases
+        center_island = LayoutNode(center_x, center_y, veh_radius * 1.5, ZoneType.VEHICLE_OPEN)
+        nodes.append(center_island)
+
+        choke_imp = LayoutNode(imp_x + lane_dx * lane_len * 0.3, imp_y + lane_dy * lane_len * 0.3, choke_length, ZoneType.CHOKEPOINT)
+        choke_nf = LayoutNode(nf_x - lane_dx * lane_len * 0.3, nf_y - lane_dy * lane_len * 0.3, choke_length, ZoneType.CHOKEPOINT)
+        nodes.extend([choke_imp, choke_nf])
+
+        connections.append(LayoutConnection(imp_base, choke_imp, lane_width, ZoneType.CHOKEPOINT))
+        connections.append(LayoutConnection(choke_imp, center_island, lane_width, ZoneType.MAIN_LANE))
+        connections.append(LayoutConnection(center_island, choke_nf, lane_width, ZoneType.MAIN_LANE))
+        connections.append(LayoutConnection(choke_nf, nf_base, lane_width, ZoneType.CHOKEPOINT))
+
+    else:
+        # "classic_cross" - Similar to the original layout but with slight randomization
+        center_choke = LayoutNode(center_x, center_y, choke_length / 2, ZoneType.CHOKEPOINT)
+        nodes.append(center_choke)
+
+        veh1 = LayoutNode(imp_x + lane_dx * lane_len * 0.25, imp_y + lane_dy * lane_len * 0.25, veh_radius, ZoneType.VEHICLE_OPEN)
+        veh2 = LayoutNode(imp_x + lane_dx * lane_len * 0.75, imp_y + lane_dy * lane_len * 0.75, veh_radius, ZoneType.VEHICLE_OPEN)
+        nodes.extend([veh1, veh2])
+
+        connections.append(LayoutConnection(imp_base, veh1, lane_width, ZoneType.MAIN_LANE))
+        connections.append(LayoutConnection(veh1, center_choke, lane_width, ZoneType.CHOKEPOINT))
+        connections.append(LayoutConnection(center_choke, veh2, lane_width, ZoneType.CHOKEPOINT))
+        connections.append(LayoutConnection(veh2, nf_base, lane_width, ZoneType.MAIN_LANE))
+
+        side_offset = map_min_dim * rng.uniform(0.25, 0.4)
+        side_veh = LayoutNode(center_x + perp_dx * side_offset, center_y + perp_dy * side_offset, veh_radius * 0.7, ZoneType.VEHICLE_OPEN)
+        nodes.append(side_veh)
+
+        connections.append(LayoutConnection(veh1, side_veh, lane_width * 0.7, ZoneType.SIDE_ROUTE))
+        connections.append(LayoutConnection(side_veh, veh2, lane_width * 0.7, ZoneType.SIDE_ROUTE))
 
     return nodes, connections
 
