@@ -86,7 +86,10 @@ def generate_strategic_layout(
 
     rng = random.Random(spec.seed)
     archetypes = ["central_gorge", "valley", "two_lane", "island", "classic_cross"]
-    topology = rng.choice(archetypes)
+    if spec.topology in archetypes:
+        topology = spec.topology
+    else:
+        topology = rng.choice(archetypes)
 
     center_x = spec.origin_x + spec.size_x / 2
     center_y = spec.origin_y + spec.size_y / 2
@@ -125,6 +128,10 @@ def generate_strategic_layout(
     lane_width = rng.uniform(0.08, 0.15) * map_min_dim
     veh_radius = rng.uniform(0.15, 0.25) * map_min_dim
     choke_length = rng.uniform(0.10, 0.20) * map_min_dim
+
+    lane_width *= spec.lane_width_scale
+    veh_radius *= spec.lane_width_scale
+    choke_length *= spec.chokepoint_size_scale
 
     nodes = [imp_base, nf_base]
     connections = []
@@ -231,7 +238,8 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
 
     # 2. Prepare grid constants
     floor_height = max_height * 0.15
-    mountain_height = max_height * 0.85
+    base_mountain_height = max_height * 0.85
+    mountain_height = floor_height + (base_mountain_height - floor_height) * spec.mountain_height_scale
 
     warp_scale = 0.005
     warp_strength = 150.0 * roughness
@@ -381,7 +389,8 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
             )
 
             # Chokepoint Wall: High cliffs flanking the choke
-            choke_wall_target = mountain_height * (0.8 + 0.2 * ridge_val)
+            base_choke_wall_target = base_mountain_height * (0.8 + 0.2 * ridge_val)
+            choke_wall_target = floor_height + (base_choke_wall_target - floor_height) * spec.mountain_height_scale
 
             # Start with wilderness
             final_height = wilderness_target
