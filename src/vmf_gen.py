@@ -893,6 +893,32 @@ class PipelineSpec:
     custom_nf_base_y: Optional[float] = None
     custom_resources: Optional[List[Tuple[float, float]]] = None
 
+    def default_imp_base(self) -> Tuple[float, float]:
+        """
+        Get the default imperial base spawn position (25% of map size).
+        """
+        size_x = self.terrain_tiles_x * self.terrain_tile_size
+        size_y = self.terrain_tiles_y * self.terrain_tile_size
+        origin_x = -size_x / 2.0
+        origin_y = -size_y / 2.0
+        return (
+            float(origin_x + size_x * 0.25),
+            float(origin_y + size_y * 0.25),
+        )
+
+    def default_nf_base(self) -> Tuple[float, float]:
+        """
+        Get the default northern faction base spawn position (75% of map size).
+        """
+        size_x = self.terrain_tiles_x * self.terrain_tile_size
+        size_y = self.terrain_tiles_y * self.terrain_tile_size
+        origin_x = -size_x / 2.0
+        origin_y = -size_y / 2.0
+        return (
+            float(origin_x + size_x * 0.75),
+            float(origin_y + size_y * 0.75),
+        )
+
     def get_required_heightmap_size(self) -> Tuple[int, int]:
         """Calculate required heightmap dimensions for displacement tiles."""
         grid_size = (2**self.terrain_power) + 1
