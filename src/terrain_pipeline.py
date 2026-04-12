@@ -23,12 +23,8 @@ import sys
 from dataclasses import dataclass
 from typing import List, Tuple
 
-if getattr(sys, "frozen", False):
-    from terrain_spec import TerrainSpec, HeightGrid, TerrainCell, UnderlayBrush
-    from noise import NoiseGenerator
-else:
-    from src.terrain_spec import TerrainSpec, HeightGrid, TerrainCell, UnderlayBrush
-    from src.noise import NoiseGenerator
+from src.terrain_spec import TerrainSpec, HeightGrid, TerrainCell, UnderlayBrush
+from src.noise import NoiseGenerator
 
 from PIL import Image, ImageOps
 

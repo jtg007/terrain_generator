@@ -15,8 +15,11 @@ from PIL import Image
 from pathlib import Path
 import sys
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-from vmf_gen import PipelineSpec, DisplacementVMF
+# Add project root to path to allow absolute imports from src. and tools.
+# REQUIRED for direct invocation since tools/ is a package.
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.vmf_gen import PipelineSpec, DisplacementVMF  # noqa: E402
 
 
 def create_test_heightmap():

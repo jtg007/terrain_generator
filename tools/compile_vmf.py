@@ -19,8 +19,11 @@ import shutil
 from pathlib import Path
 
 # Import shared path detection
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-from steam_paths import is_windows, find_empires_path, find_empires_bin
+# Add project root to path to allow absolute imports from src. and tools.
+# REQUIRED for direct invocation since tools/ is a package.
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.steam_paths import is_windows, find_empires_path, find_empires_bin  # noqa: E402
 
 
 def compile_vmf(

@@ -15,10 +15,13 @@ import numpy as np
 from pathlib import Path
 from PIL import Image
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-from terrain_spec import TerrainSpec, HeightGrid
-from terrain_pipeline import run_pipeline
-from vmf_gen import PipelineSpec, DisplacementVMF, DEFAULT_SAFE_SKYBOX
+# Add project root to path to allow absolute imports from src. and tools.
+# REQUIRED for direct invocation since tools/ is a package.
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.terrain_spec import TerrainSpec, HeightGrid  # noqa: E402
+from src.terrain_pipeline import run_pipeline  # noqa: E402
+from src.vmf_gen import PipelineSpec, DisplacementVMF, DEFAULT_SAFE_SKYBOX  # noqa: E402
 
 
 COMPILE_SAFE_NODETAIL_MATERIAL = "common/terrain/blend_grass01a_dirt01a_nodetail"
@@ -139,7 +142,42 @@ def main():
         help="Skybox name (defaults to a known-safe Empires skybox)",
     )
 
+    parser.add_argument(
+        "--preset",
+        type=str,
+        help="Load settings from config/presets.json (flat, hills, rugged, competitive, etc.)",
+    )
     args = parser.parse_args()
+
+    # Handle preset loading
+    if args.preset:
+        preset_name = args.preset.lower()
+        presets_path = Path(__file__).parent.parent / "config" / "presets.json"
+        
+        if not presets_path.exists():
+            print(f"Warning: Presets file not found at {presets_path}")
+        else:
+            try:
+                import json
+                with open(presets_path, "r") as f:
+                    presets_data = json.load(f)
+                
+                preset = presets_data.get("presets", {}).get(preset_name)
+                if not preset:
+                    print(f"Warning: Preset '{preset_name}' not found in {presets_path}")
+                    print(f"Available presets: {', '.join(presets_data.get('presets', {}).keys())}")
+                else:
+                    print(f"Loading settings from preset: {preset_name}")
+                    # Map preset values to args if not explicitly overridden on CLI
+                    # This is a simplified override; in a full impl, we'd check sys.argv
+                    for key, value in preset.items():
+                        if hasattr(args, key) and key in [
+                            "tiles_x", "tiles_y", "cell_size", 
+                            "height_scale", "roughness", "erosion_strength"
+                        ]:
+                            setattr(args, key, value)
+            except Exception as e:
+                print(f"Error loading presets: {e}")
 
     output_dir = Path(__file__).parent.parent / "output"
     output_dir.mkdir(parents=True, exist_ok=True)

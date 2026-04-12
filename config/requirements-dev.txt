@@ -1,0 +1,6 @@
+pytest
+pytest-mock
+ruff
+mypy
+types-Pillow
+numpy

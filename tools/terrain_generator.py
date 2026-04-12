@@ -8,9 +8,9 @@ if getattr(sys, "frozen", False):
 else:
     PROJECT_ROOT = Path(__file__).parent.parent
 
+# Add project root to path to allow absolute imports from src. and tools.
+# REQUIRED for direct invocation since tools/ is a package.
 sys.path.insert(0, str(PROJECT_ROOT))
-sys.path.insert(0, str(PROJECT_ROOT / "src"))
-sys.path.insert(0, str(PROJECT_ROOT / "config"))
 
 import os
 

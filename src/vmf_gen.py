@@ -13,14 +13,17 @@ import numpy as np
 from PIL import Image
 from pathlib import Path
 from dataclasses import dataclass
-from typing import Optional, List, Tuple, Dict, Any
+from typing import Optional, List, Tuple, Dict, Any, cast
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "tools" / "vmflib"))
-from vmflib import vmf
-from vmflib.types import Vertex
-from vmflib.brush import DispInfo
-from vmflib.tools import Block
-from vmflib import vmf as vmf_lib
+PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+# vmflib is installed in venv and patched
+from vmflib import vmf  # noqa: E402
+from vmflib.types import Vertex  # noqa: E402
+from vmflib.brush import DispInfo  # noqa: E402
+from vmflib.tools import Block  # noqa: E402
+from vmflib import vmf as vmf_lib  # noqa: E402
 
 SAFE_EMPIRES_SKYBOXES = [
     "empsky_day1",
@@ -563,8 +566,9 @@ def spawn_resource_nodes_enhanced(
 
     yaw_to_center = calculate_yaw_to_center(base_x, base_y, map_center_x, map_center_y)
 
-    if rules.get("custom_resources") is not None:
-        custom_points = rules.get("custom_resources")
+    custom_res = rules.get("custom_resources")
+    if custom_res is not None:
+        custom_points = cast(List[Tuple[float, float]], custom_res)
         # Ensure we only iterate over what's provided, so we simulate angles logic just for loops
         node_count = len(custom_points)
         for i, (node_x, node_y) in enumerate(custom_points):
@@ -956,8 +960,10 @@ class DisplacementVMF:
             else:
                 arr = np.array(img.convert("L"), dtype=np.float32) / 255.0
 
+            # Handle both old and new Pillow Resampling constants
+            resample_filter = getattr(Image, "Resampling", Image).LANCZOS
             arr_resized = np.array(
-                Image.fromarray(arr).resize((required_w, required_h), Image.LANCZOS)
+                Image.fromarray(arr).resize((required_w, required_h), resample_filter)
             )
 
             if img.mode == "I;16" or img.mode == "I":
