@@ -132,14 +132,20 @@ class GUIConfigModel:
             raise ValueError(f"Cannot generate TerrainSpec: {msg}")
 
         # Map generic 0.0-1.0 ranges to physical ranges
-        # Octaves: 1 to 8
-        octaves = int(1 + (self.roughness * 7))
-        # Iterations: 0 to 100,000
-        iterations = int(self.erosion_strength * 100000)
+        # Octaves: 1 to 8 (use exponential for better distribution)
+        octaves = int(1 + (self.roughness**0.5 * 7))
+        # Iterations: 0 to 100,000 (use exponential for fine control at low values)
+        iterations = int(
+            10 ** (self.erosion_strength * 5)
+        )  # 10^0 to 10^5 = 1 to 100,000
 
         # AGENTS.md Map Centering: Origin offsets
         origin_x = int(-self.map_size_x / 2)
         origin_y = int(-self.map_size_y / 2)
+
+        # Linear mapping: slider 0-100 maps to scale 0.0-1.0
+        # This gives full range from flat (0%) to full mountains (100%)
+        effective_mountain_height_scale = self.mountain_height_scale
 
         return TerrainSpec(
             origin_x=origin_x,
@@ -157,7 +163,7 @@ class GUIConfigModel:
             topology=self.topology,
             lane_width_scale=self.lane_width_scale,
             chokepoint_size_scale=self.chokepoint_size_scale,
-            mountain_height_scale=self.mountain_height_scale,
+            mountain_height_scale=effective_mountain_height_scale,
             custom_image_path=self.custom_image_path,
             base_clear_radius=self.base_clear_radius,
             base_flatness=self.base_flatness,

@@ -293,6 +293,7 @@ class TerrainGeneratorGUI(QMainWindow):
         import datetime
         import subprocess
         import shutil
+
         out_dir = PROJECT_ROOT / "docs" / "screenshots"
         out_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -312,13 +313,16 @@ class TerrainGeneratorGUI(QMainWindow):
         try:
             result = subprocess.run(
                 ["spectacle", "-b", "-a", "-n", "-o", path],
-                timeout=8, capture_output=True,
+                timeout=8,
+                capture_output=True,
             )
             if Path(path).exists() and Path(path).stat().st_size > 0:
                 shutil.copy(path, canonical)
                 QMessageBox.information(self, "Screenshot saved", f"Saved to:\n{path}")
             else:
-                QMessageBox.warning(self, "Screenshot failed", "Could not capture screen.")
+                QMessageBox.warning(
+                    self, "Screenshot failed", "Could not capture screen."
+                )
         except Exception as e:
             QMessageBox.warning(self, "Screenshot failed", str(e))
 
@@ -397,8 +401,13 @@ class TerrainGeneratorGUI(QMainWindow):
         self.btn_island = QPushButton("Island Hopping")
 
         buttons = (
-            self.btn_flat, self.btn_hills, self.btn_rugged, self.btn_comp,
-            self.btn_mountain, self.btn_valley, self.btn_island
+            self.btn_flat,
+            self.btn_hills,
+            self.btn_rugged,
+            self.btn_comp,
+            self.btn_mountain,
+            self.btn_valley,
+            self.btn_island,
         )
         for btn in buttons:
             btn.setObjectName("PresetButton")
@@ -567,7 +576,9 @@ class TerrainGeneratorGUI(QMainWindow):
 
         lbl_tx = QLabel("Tiles X")
         lbl_tx.setObjectName("FieldLabel")
-        lbl_tx.setToolTip("Number of displacement tiles horizontally (each is 512 world units)")
+        lbl_tx.setToolTip(
+            "Number of displacement tiles horizontally (each is 512 world units)"
+        )
         dim_grid.addWidget(lbl_tx, 0, 0)
         self.spin_tiles_x = QSpinBox()
         self.spin_tiles_x.setRange(1, 64)
@@ -575,7 +586,9 @@ class TerrainGeneratorGUI(QMainWindow):
 
         lbl_ty = QLabel("Tiles Y")
         lbl_ty.setObjectName("FieldLabel")
-        lbl_ty.setToolTip("Number of displacement tiles vertically (each is 512 world units)")
+        lbl_ty.setToolTip(
+            "Number of displacement tiles vertically (each is 512 world units)"
+        )
         dim_grid.addWidget(lbl_ty, 0, 2)
         self.spin_tiles_y = QSpinBox()
         self.spin_tiles_y.setRange(1, 64)
@@ -622,7 +635,9 @@ class TerrainGeneratorGUI(QMainWindow):
         lbl_topo.setToolTip("Select the fundamental layout structure")
         topo_row.addWidget(lbl_topo)
         self.combo_topology = QComboBox()
-        self.combo_topology.addItems(["Random", "Central Gorge", "Valley", "Two Lane", "Island", "Classic Cross"])
+        self.combo_topology.addItems(
+            ["Random", "Central Gorge", "Valley", "Two Lane", "Island", "Classic Cross"]
+        )
         self.combo_topology.setCurrentIndex(0)
         topo_row.addWidget(self.combo_topology, 1)
         config_layout.addLayout(topo_row)
@@ -632,13 +647,17 @@ class TerrainGeneratorGUI(QMainWindow):
         lw_row.setSpacing(8)
         lbl_lw = QLabel("Lane Width")
         lbl_lw.setObjectName("FieldLabel")
-        lbl_lw.setToolTip("Scale for the width of main routes and paths (100% = default)")
+        lbl_lw.setToolTip(
+            "Scale for the width of main routes and paths (100% = default)"
+        )
         lw_row.addWidget(lbl_lw)
         self.slider_lane_width = QSlider(Qt.Horizontal)
         self.slider_lane_width.setRange(0, 200)
         self.slider_lane_width.setValue(100)
         self.lbl_lane_width_val = QLabel("100%")
-        lw_row.addWidget(make_slider_row(self.slider_lane_width, self.lbl_lane_width_val, "%"), 1)
+        lw_row.addWidget(
+            make_slider_row(self.slider_lane_width, self.lbl_lane_width_val, "%"), 1
+        )
         config_layout.addLayout(lw_row)
 
         # Chokepoint Size
@@ -646,13 +665,17 @@ class TerrainGeneratorGUI(QMainWindow):
         cs_row.setSpacing(8)
         lbl_cs = QLabel("Chokepoint Size")
         lbl_cs.setObjectName("FieldLabel")
-        lbl_cs.setToolTip("Scale for the size of chokepoints and narrow passages (100% = default)")
+        lbl_cs.setToolTip(
+            "Scale for the size of chokepoints and narrow passages (100% = default)"
+        )
         cs_row.addWidget(lbl_cs)
         self.slider_choke_size = QSlider(Qt.Horizontal)
         self.slider_choke_size.setRange(0, 200)
         self.slider_choke_size.setValue(100)
         self.lbl_choke_size_val = QLabel("100%")
-        cs_row.addWidget(make_slider_row(self.slider_choke_size, self.lbl_choke_size_val, "%"), 1)
+        cs_row.addWidget(
+            make_slider_row(self.slider_choke_size, self.lbl_choke_size_val, "%"), 1
+        )
         config_layout.addLayout(cs_row)
 
         # Mountain Height
@@ -660,13 +683,20 @@ class TerrainGeneratorGUI(QMainWindow):
         mh_row.setSpacing(8)
         lbl_mh = QLabel("Mountain Height")
         lbl_mh.setObjectName("FieldLabel")
-        lbl_mh.setToolTip("Scale for how tall impassable areas are relative to the floor (100% = default)")
+        lbl_mh.setToolTip(
+            "Scale for how tall impassable areas are relative to the floor (100% = default)"
+        )
         mh_row.addWidget(lbl_mh)
         self.slider_mountain_height = QSlider(Qt.Horizontal)
-        self.slider_mountain_height.setRange(0, 200)
-        self.slider_mountain_height.setValue(100)
-        self.lbl_mountain_height_val = QLabel("100%")
-        mh_row.addWidget(make_slider_row(self.slider_mountain_height, self.lbl_mountain_height_val, "%"), 1)
+        self.slider_mountain_height.setRange(0, 100)
+        self.slider_mountain_height.setValue(50)
+        self.lbl_mountain_height_val = QLabel("50%")
+        mh_row.addWidget(
+            make_slider_row(
+                self.slider_mountain_height, self.lbl_mountain_height_val, "%"
+            ),
+            1,
+        )
         config_layout.addLayout(mh_row)
 
         # Roughness
@@ -679,7 +709,9 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_rough = QSlider(Qt.Horizontal)
         self.slider_rough.setRange(0, 100)
         self.lbl_rough_val = QLabel("50%")
-        rough_row.addWidget(make_slider_row(self.slider_rough, self.lbl_rough_val, "%"), 1)
+        rough_row.addWidget(
+            make_slider_row(self.slider_rough, self.lbl_rough_val, "%"), 1
+        )
         config_layout.addLayout(rough_row)
 
         # Erosion
@@ -692,7 +724,9 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_erosion = QSlider(Qt.Horizontal)
         self.slider_erosion.setRange(0, 100)
         self.lbl_erosion_val = QLabel("50%")
-        eros_row.addWidget(make_slider_row(self.slider_erosion, self.lbl_erosion_val, "%"), 1)
+        eros_row.addWidget(
+            make_slider_row(self.slider_erosion, self.lbl_erosion_val, "%"), 1
+        )
         config_layout.addLayout(eros_row)
 
         # Connect slider value displays
@@ -733,7 +767,9 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_base_radius = QSlider(Qt.Horizontal)
         self.slider_base_radius.setRange(0, 4096)
         self.lbl_base_radius_val = QLabel("0")
-        br_row.addWidget(make_slider_row(self.slider_base_radius, self.lbl_base_radius_val), 1)
+        br_row.addWidget(
+            make_slider_row(self.slider_base_radius, self.lbl_base_radius_val), 1
+        )
         config_layout.addLayout(br_row)
 
         # Base Flatness
@@ -741,12 +777,16 @@ class TerrainGeneratorGUI(QMainWindow):
         bf_row.setSpacing(8)
         lbl_bf = QLabel("Flatness")
         lbl_bf.setObjectName("FieldLabel")
-        lbl_bf.setToolTip("How flat the base area is (0 = natural, 100 = perfectly flat)")
+        lbl_bf.setToolTip(
+            "How flat the base area is (0 = natural, 100 = perfectly flat)"
+        )
         bf_row.addWidget(lbl_bf)
         self.slider_base_flatness = QSlider(Qt.Horizontal)
         self.slider_base_flatness.setRange(0, 100)
         self.lbl_base_flat_val = QLabel("0%")
-        bf_row.addWidget(make_slider_row(self.slider_base_flatness, self.lbl_base_flat_val, "%"), 1)
+        bf_row.addWidget(
+            make_slider_row(self.slider_base_flatness, self.lbl_base_flat_val, "%"), 1
+        )
         config_layout.addLayout(bf_row)
 
         # Center Flatten
@@ -759,7 +799,9 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_center_flatten = QSlider(Qt.Horizontal)
         self.slider_center_flatten.setRange(0, 100)
         self.lbl_cf_val = QLabel("0%")
-        cf_row.addWidget(make_slider_row(self.slider_center_flatten, self.lbl_cf_val, "%"), 1)
+        cf_row.addWidget(
+            make_slider_row(self.slider_center_flatten, self.lbl_cf_val, "%"), 1
+        )
         config_layout.addLayout(cf_row)
 
         # Center Radius
@@ -772,7 +814,9 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_center_radius = QSlider(Qt.Horizontal)
         self.slider_center_radius.setRange(10, 50)
         self.lbl_cr_val = QLabel("10%")
-        cr_row.addWidget(make_slider_row(self.slider_center_radius, self.lbl_cr_val, "%"), 1)
+        cr_row.addWidget(
+            make_slider_row(self.slider_center_radius, self.lbl_cr_val, "%"), 1
+        )
         config_layout.addLayout(cr_row)
 
         self.slider_base_radius.valueChanged.connect(
@@ -874,6 +918,13 @@ class TerrainGeneratorGUI(QMainWindow):
         self.lbl_validation.setWordWrap(True)
         config_layout.addWidget(self.lbl_validation)
 
+        self.lbl_layout_validation = QLabel()
+        self.lbl_layout_validation.setObjectName("ValidationLabel")
+        self.lbl_layout_validation.setStyleSheet("color: #ff6b6b;")
+        self.lbl_layout_validation.setWordWrap(True)
+        self.lbl_layout_validation.hide()
+        config_layout.addWidget(self.lbl_layout_validation)
+
         config_layout.addStretch()
 
         # Wrap in scroll area
@@ -907,10 +958,12 @@ class TerrainGeneratorGUI(QMainWindow):
         tools_row.setSpacing(6)
         self.tool_group = QButtonGroup(self)
 
-        tool_names = [("Move", "ToolButton", 0),
-                      ("Imp Base", "ToolButtonBlue", 1),
-                      ("NF Base", "ToolButtonRed", 2),
-                      ("Resource", "ToolButtonGreen", 3)]
+        tool_names = [
+            ("Move", "ToolButton", 0),
+            ("Imp Base", "ToolButtonBlue", 1),
+            ("NF Base", "ToolButtonRed", 2),
+            ("Resource", "ToolButtonGreen", 3),
+        ]
         self.rbtn_none = None
         self.rbtn_imp = None
         self.rbtn_nf = None
@@ -984,7 +1037,7 @@ class TerrainGeneratorGUI(QMainWindow):
             (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y),
             (self.config_model.custom_nf_base_x, self.config_model.custom_nf_base_y),
             [],
-            invalid_entities=invalid_entities
+            invalid_entities=invalid_entities,
         )
         self.preview_timer.start(500)
 
@@ -1004,7 +1057,7 @@ class TerrainGeneratorGUI(QMainWindow):
             (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y),
             (self.config_model.custom_nf_base_x, self.config_model.custom_nf_base_y),
             self.config_model.custom_resources,
-            invalid_entities=invalid_entities
+            invalid_entities=invalid_entities,
         )
         self.preview_timer.start(500)
 
@@ -1018,7 +1071,7 @@ class TerrainGeneratorGUI(QMainWindow):
             (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y),
             (self.config_model.custom_nf_base_x, self.config_model.custom_nf_base_y),
             self.config_model.custom_resources,
-            invalid_entities=invalid_entities
+            invalid_entities=invalid_entities,
         )
         # Resource positions do not affect the terrain heightmap itself,
         # so we don't necessarily need to re-run the pipeline on move,
@@ -1034,7 +1087,7 @@ class TerrainGeneratorGUI(QMainWindow):
             (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y),
             (self.config_model.custom_nf_base_x, self.config_model.custom_nf_base_y),
             self.config_model.custom_resources,
-            invalid_entities=invalid_entities
+            invalid_entities=invalid_entities,
         )
         self.preview_timer.start(500)
 
@@ -1096,12 +1149,14 @@ class TerrainGeneratorGUI(QMainWindow):
                 else []
             )
             invalid_entities = self.validate_current_layout()
-            self.preview_widget.set_entities((imp_x, imp_y), (nf_x, nf_y), res, invalid_entities=invalid_entities)
+            self.preview_widget.set_entities(
+                (imp_x, imp_y), (nf_x, nf_y), res, invalid_entities=invalid_entities
+            )
 
     def apply_dark_theme(self):
-        ACCENT = "#1d6feb"        # steel blue
+        ACCENT = "#1d6feb"  # steel blue
         ACCENT_HOVER = "#4d8ef5"  # lighter blue
-        ACCENT_ACTIVE = "#1553c7" # dark blue
+        ACCENT_ACTIVE = "#1553c7"  # dark blue
         BG_BASE = "#0f1117"
         BG_PANEL = "#14161d"
         BG_WIDGET = "#1c1e28"
@@ -1541,12 +1596,23 @@ class TerrainGeneratorGUI(QMainWindow):
         self.spin_height.setValue(preset.get("height_scale", 1024))
 
         topology_map = {
-            "random": 0, "central_gorge": 1, "valley": 2, "two_lane": 3, "island": 4, "classic_cross": 5
+            "random": 0,
+            "central_gorge": 1,
+            "valley": 2,
+            "two_lane": 3,
+            "island": 4,
+            "classic_cross": 5,
         }
-        self.combo_topology.setCurrentIndex(topology_map.get(preset.get("topology", "random"), 0))
+        self.combo_topology.setCurrentIndex(
+            topology_map.get(preset.get("topology", "random"), 0)
+        )
         self.slider_lane_width.setValue(int(preset.get("lane_width_scale", 1.0) * 100))
-        self.slider_choke_size.setValue(int(preset.get("chokepoint_size_scale", 1.0) * 100))
-        self.slider_mountain_height.setValue(int(preset.get("mountain_height_scale", 1.0) * 100))
+        self.slider_choke_size.setValue(
+            int(preset.get("chokepoint_size_scale", 1.0) * 100)
+        )
+        self.slider_mountain_height.setValue(
+            int(min(1.0, preset.get("mountain_height_scale", 0.5)) * 100)
+        )
 
         self.slider_rough.setValue(int(preset.get("roughness", 0.5) * 100))
         self.slider_erosion.setValue(int(preset.get("erosion_strength", 0.5) * 100))
@@ -1596,11 +1662,13 @@ class TerrainGeneratorGUI(QMainWindow):
 
         # Highlight active preset button
         preset_map = {
-            "flat": self.btn_flat, "hills": self.btn_hills,
-            "rugged": self.btn_rugged, "competitive": self.btn_comp,
+            "flat": self.btn_flat,
+            "hills": self.btn_hills,
+            "rugged": self.btn_rugged,
+            "competitive": self.btn_comp,
             "mountain_pass": self.btn_mountain,
             "open_valley": self.btn_valley,
-            "island_hopping": self.btn_island
+            "island_hopping": self.btn_island,
         }
         btn = preset_map.get(preset_name)
         if btn:
@@ -1714,12 +1782,23 @@ class TerrainGeneratorGUI(QMainWindow):
         self.spin_tiles_y.setValue(self.config_model.tiles_y)
         self.spin_height.setValue(self.config_model.height_scale)
         topology_map = {
-            "random": 0, "central_gorge": 1, "valley": 2, "two_lane": 3, "island": 4, "classic_cross": 5
+            "random": 0,
+            "central_gorge": 1,
+            "valley": 2,
+            "two_lane": 3,
+            "island": 4,
+            "classic_cross": 5,
         }
-        self.combo_topology.setCurrentIndex(topology_map.get(self.config_model.topology, 0))
+        self.combo_topology.setCurrentIndex(
+            topology_map.get(self.config_model.topology, 0)
+        )
         self.slider_lane_width.setValue(int(self.config_model.lane_width_scale * 100))
-        self.slider_choke_size.setValue(int(self.config_model.chokepoint_size_scale * 100))
-        self.slider_mountain_height.setValue(int(self.config_model.mountain_height_scale * 100))
+        self.slider_choke_size.setValue(
+            int(self.config_model.chokepoint_size_scale * 100)
+        )
+        self.slider_mountain_height.setValue(
+            int(min(1.0, self.config_model.mountain_height_scale) * 100)
+        )
         self.slider_rough.setValue(int(self.config_model.roughness * 100))
         self.slider_erosion.setValue(int(self.config_model.erosion_strength * 100))
         self.slider_base_radius.setValue(self.config_model.base_clear_radius)
@@ -1784,12 +1863,21 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.height_scale = self.spin_height.value()
 
         topology_reverse_map = {
-            0: "random", 1: "central_gorge", 2: "valley", 3: "two_lane", 4: "island", 5: "classic_cross"
+            0: "random",
+            1: "central_gorge",
+            2: "valley",
+            3: "two_lane",
+            4: "island",
+            5: "classic_cross",
         }
-        self.config_model.topology = topology_reverse_map.get(self.combo_topology.currentIndex(), "random")
+        self.config_model.topology = topology_reverse_map.get(
+            self.combo_topology.currentIndex(), "random"
+        )
         self.config_model.lane_width_scale = self.slider_lane_width.value() / 100.0
         self.config_model.chokepoint_size_scale = self.slider_choke_size.value() / 100.0
-        self.config_model.mountain_height_scale = self.slider_mountain_height.value() / 100.0
+        self.config_model.mountain_height_scale = (
+            self.slider_mountain_height.value() / 100.0
+        )
 
         self.config_model.roughness = self.slider_rough.value() / 100.0
         self.config_model.erosion_strength = self.slider_erosion.value() / 100.0
