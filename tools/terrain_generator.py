@@ -19,7 +19,6 @@ if not getattr(sys, "frozen", False):
 
 from PySide6.QtWidgets import (
     QApplication,
-    QRadioButton,
     QButtonGroup,
     QMainWindow,
     QWidget,
@@ -31,7 +30,6 @@ from PySide6.QtWidgets import (
     QSlider,
     QSpinBox,
     QComboBox,
-    QGroupBox,
     QMessageBox,
     QFileDialog,
     QCheckBox,
@@ -40,7 +38,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
 )
 from PySide6.QtCore import Qt, QThread, Signal, QTimer
-from PySide6.QtGui import QFont, QImage, QKeySequence, QShortcut
+from PySide6.QtGui import QImage, QKeySequence, QShortcut
 from tools.preview_widget import MapPreviewWidget
 
 from PIL import Image
@@ -311,7 +309,7 @@ class TerrainGeneratorGUI(QMainWindow):
 
         # Fallback: spectacle (KDE)
         try:
-            result = subprocess.run(
+            subprocess.run(
                 ["spectacle", "-b", "-a", "-n", "-o", path],
                 timeout=8,
                 capture_output=True,
@@ -960,7 +958,7 @@ class TerrainGeneratorGUI(QMainWindow):
 
         tool_names = [
             ("Move", "ToolButton", 0),
-            ("Imp Base", "ToolButtonBlue", 1),
+            ("BE Base", "ToolButtonBlue", 1),
             ("NF Base", "ToolButtonRed", 2),
             ("Resource", "ToolButtonGreen", 3),
         ]

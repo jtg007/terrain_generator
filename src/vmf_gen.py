@@ -453,7 +453,7 @@ def spawn_base_buildings(
         "repairstation": f"emp_building_{faction}_repairstation",
     }
 
-    faction_prefix = "NF" if faction == "nf" else "Imperial"
+    faction_prefix = "NF" if faction == "nf" else "BE"
     faction_lower = faction_prefix.lower()
 
     building_models = {
