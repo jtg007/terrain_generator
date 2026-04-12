@@ -17,7 +17,9 @@ class MapPreviewWidget(QLabel):
 
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setAlignment(Qt.AlignCenter)
-        self.setStyleSheet("background-color: #0d0d10; border: 1px solid #2e2e36; border-radius: 4px;")
+        self.setStyleSheet(
+            "background-color: #0d0d10; border: 1px solid #2e2e36; border-radius: 4px;"
+        )
 
         self.map_image = None
         self.pixmap_rect = QRectF()
@@ -123,30 +125,36 @@ class MapPreviewWidget(QLabel):
         error_pen = QPen(QColor(255, 50, 50), 3)
 
         # Draw resources (Green Diamonds)
-        painter.setBrush(QBrush(QColor(46, 204, 113, 200))) # Emerald
+        painter.setBrush(QBrush(QColor(46, 204, 113, 200)))  # Emerald
         for i, res in enumerate(self.resources):
             sp = self.world_to_screen(res[0], res[1])
             if sp:
                 is_invalid = str(i) in self.invalid_entities
-                painter.setPen(error_pen if is_invalid else QPen(QColor(39, 174, 96), 2))
+                painter.setPen(
+                    error_pen if is_invalid else QPen(QColor(39, 174, 96), 2)
+                )
 
                 # Draw diamond
-                poly = QPolygon([
-                    QPoint(sp.x(), sp.y() - 10),
-                    QPoint(sp.x() + 10, sp.y()),
-                    QPoint(sp.x(), sp.y() + 10),
-                    QPoint(sp.x() - 10, sp.y())
-                ])
+                poly = QPolygon(
+                    [
+                        QPoint(sp.x(), sp.y() - 10),
+                        QPoint(sp.x() + 10, sp.y()),
+                        QPoint(sp.x(), sp.y() + 10),
+                        QPoint(sp.x() - 10, sp.y()),
+                    ]
+                )
                 painter.drawPolygon(poly)
                 # Small inner diamond
                 painter.setBrush(QBrush(QColor(110, 235, 150, 200)))
                 painter.setPen(Qt.NoPen)
-                inner = QPolygon([
-                    QPoint(sp.x(), sp.y() - 5),
-                    QPoint(sp.x() + 5, sp.y()),
-                    QPoint(sp.x(), sp.y() + 5),
-                    QPoint(sp.x() - 5, sp.y())
-                ])
+                inner = QPolygon(
+                    [
+                        QPoint(sp.x(), sp.y() - 5),
+                        QPoint(sp.x() + 5, sp.y()),
+                        QPoint(sp.x(), sp.y() + 5),
+                        QPoint(sp.x() - 5, sp.y()),
+                    ]
+                )
                 painter.drawPolygon(inner)
 
                 painter.setPen(QColor(255, 255, 255))
@@ -157,23 +165,29 @@ class MapPreviewWidget(QLabel):
                 painter.setBrush(QBrush(QColor(46, 204, 113, 200)))
 
         # Draw Imp Base (Blue Shield/Cross)
-        if self.imp_base and self.imp_base[0] is not None and self.imp_base[1] is not None:
+        if (
+            self.imp_base
+            and self.imp_base[0] is not None
+            and self.imp_base[1] is not None
+        ):
             sp = self.world_to_screen(self.imp_base[0], self.imp_base[1])
             if sp:
                 is_invalid = "imp" in self.invalid_entities
                 # Draw Blue rounded rect background
-                painter.setBrush(QBrush(QColor(41, 128, 185, 220))) # Darker blue
-                painter.setPen(error_pen if is_invalid else QPen(QColor(52, 152, 219), 2))
-                painter.drawRoundedRect(sp.x()-12, sp.y()-12, 24, 24, 4, 4)
+                painter.setBrush(QBrush(QColor(41, 128, 185, 220)))  # Darker blue
+                painter.setPen(
+                    error_pen if is_invalid else QPen(QColor(52, 152, 219), 2)
+                )
+                painter.drawRoundedRect(sp.x() - 12, sp.y() - 12, 24, 24, 4, 4)
 
                 # Draw cross (white)
                 painter.setBrush(QBrush(QColor(255, 255, 255)))
                 painter.setPen(Qt.NoPen)
-                painter.drawRect(sp.x()-3, sp.y()-9, 6, 18)
-                painter.drawRect(sp.x()-9, sp.y()-3, 18, 6)
+                painter.drawRect(sp.x() - 3, sp.y() - 9, 6, 18)
+                painter.drawRect(sp.x() - 9, sp.y() - 3, 18, 6)
 
                 painter.setPen(QColor(255, 255, 255))
-                painter.drawText(sp.x() - 12, sp.y() - 16, "Imp")
+                painter.drawText(sp.x() - 12, sp.y() - 16, "BE")
                 if is_invalid:
                     painter.setPen(QColor(255, 50, 50))
                     painter.drawText(sp.x() - 5, sp.y() - 28, "⚠")
@@ -184,24 +198,33 @@ class MapPreviewWidget(QLabel):
             if sp:
                 is_invalid = "nf" in self.invalid_entities
                 # Draw Red Hexagon background
-                painter.setBrush(QBrush(QColor(192, 57, 43, 220))) # Dark red
-                painter.setPen(error_pen if is_invalid else QPen(QColor(231, 76, 60), 2))
+                painter.setBrush(QBrush(QColor(192, 57, 43, 220)))  # Dark red
+                painter.setPen(
+                    error_pen if is_invalid else QPen(QColor(231, 76, 60), 2)
+                )
 
                 poly = QPolygon()
                 for i in range(6):
                     angle_deg = 60 * i - 30
                     angle_rad = math.pi / 180 * angle_deg
-                    poly.append(QPoint(int(sp.x() + 14 * math.cos(angle_rad)), int(sp.y() + 14 * math.sin(angle_rad))))
+                    poly.append(
+                        QPoint(
+                            int(sp.x() + 14 * math.cos(angle_rad)),
+                            int(sp.y() + 14 * math.sin(angle_rad)),
+                        )
+                    )
                 painter.drawPolygon(poly)
 
                 # Draw inner white triangle
                 painter.setBrush(QBrush(QColor(255, 255, 255)))
                 painter.setPen(Qt.NoPen)
-                tri = QPolygon([
-                    QPoint(sp.x(), sp.y() - 7),
-                    QPoint(sp.x() + 7, sp.y() + 5),
-                    QPoint(sp.x() - 7, sp.y() + 5)
-                ])
+                tri = QPolygon(
+                    [
+                        QPoint(sp.x(), sp.y() - 7),
+                        QPoint(sp.x() + 7, sp.y() + 5),
+                        QPoint(sp.x() - 7, sp.y() + 5),
+                    ]
+                )
                 painter.drawPolygon(tri)
 
                 painter.setPen(QColor(255, 255, 255))

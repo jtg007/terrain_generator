@@ -2,6 +2,28 @@
 
 An advanced **procedural terrain generator and graphical interface** designed specifically for creating compile-ready displacement maps for the Source Engine modification, **Empires Mod**.
 
+## Quick Start (Linux/macOS)
+
+```bash
+# Download the repository
+cd terrain_generator
+
+# Run the launcher (creates venv automatically on first run)
+./terrain.sh
+
+# Or use directly from command line:
+./terrain.sh --gui                    # GUI mode
+./terrain.sh --cli hills --seed 123  # CLI with preset
+./terrain.sh --compile               # Compile last VMF
+./terrain.sh --help                  # Show all options
+```
+
+The launcher automatically:
+- Creates a local virtual environment (nothing installed system-wide)
+- Installs all dependencies
+- Detects Proton installations for compilation
+- Provides interactive menus for easy operation
+
 ![Terrain Generator UI Screenshot](docs/screenshots/gui_preview.png)
 
 ## Overview

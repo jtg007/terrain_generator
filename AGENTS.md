@@ -93,6 +93,30 @@ Features:
 - Generate VMF files saved to `output/` directory
 - Compile button to run VBSP and deploy to Empires directories
 
+### Linux/macOS Launcher (terrain.sh)
+For end users, use the smart launcher script instead of venv/bin/python directly:
+
+```bash
+./terrain.sh                    # Interactive menu (default)
+./terrain.sh --gui              # Launch GUI mode
+./terrain.sh --cli              # Interactive CLI preset selection
+./terrain.sh --cli hills        # CLI with preset
+./terrain.sh --cli custom --tiles-x 24  # Custom CLI options
+./terrain.sh --compile          # Compile VMF to BSP
+./terrain.sh --compile output/terrain.vmf  # Compile specific file
+./terrain.sh --setup            # Force reinstall dependencies
+./terrain.sh --help             # Show help
+```
+
+Features:
+- Auto-creates `venv/` if missing (never writes to system Python)
+- Auto-detects existing venv and reuses it
+- Probes system for Python3, display, and Proton installations
+- Interactive Proton selector for VBSP compilation
+- Styled terminal UI with box drawing characters
+
+**CLI Presets:** `flat`, `hills`, `rugged`, `competitive`, `mountain_pass`, `open_valley`, `island_hopping`
+
 **Default map sizes:**
 - Flat/Competitive: 16x16 tiles (8192x8192 units, 129x129 vertices with power=3)
 - Hills/Rugged: 20x20 tiles (10240x10240 units, 161x161 vertices with power=3)
