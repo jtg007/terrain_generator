@@ -13,6 +13,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "config"))
 
 import os
+from contextlib import contextmanager
 
 if not getattr(sys, "frozen", False):
     os.chdir(PROJECT_ROOT)
@@ -46,9 +47,8 @@ import numpy as np
 
 from src.config_model import GUIConfigModel
 from src.terrain_pipeline import run_pipeline
+from src.export_utils import export_vmf
 from src.vmf_gen import (
-    PipelineSpec,
-    DisplacementVMF,
     SAFE_EMPIRES_SKYBOXES,
     DEFAULT_SAFE_SKYBOX,
 )
@@ -63,51 +63,6 @@ else:
 
 # Make sure it exists
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def heightgrid_to_heightmap(
-    grid, target_rows: int = 0, target_cols: int = 0
-) -> np.ndarray:
-    min_h = grid.min_height()
-    max_h = grid.max_height()
-    h_range = max_h - min_h
-    if h_range < 1e-6:
-        return np.zeros((grid.rows, grid.cols), dtype=np.float32)
-
-    normalized = np.array(
-        [
-            [(grid.heights[r][c] - min_h) / h_range for c in range(grid.cols)]
-            for r in range(grid.rows)
-        ],
-        dtype=np.float32,
-    )
-    normalized = np.clip(normalized, 0.0, 1.0)
-
-    if target_rows > grid.rows or target_cols > grid.cols:
-        from scipy.ndimage import zoom
-
-        scale_y = target_rows / grid.rows
-        scale_x = target_cols / grid.cols
-        normalized = zoom(normalized, (scale_y, scale_x), order=1)
-
-    return normalized
-
-
-COMPILE_SAFE_NODETAIL_MATERIAL = "common/terrain/blend_grass01a_dirt01a_nodetail"
-
-
-def choose_compile_safe_material(
-    requested_material: str, map_width: int, map_height: int
-) -> str:
-    """Choose a safe terrain material for large maps to avoid detail prop overflow."""
-    if "nodetail" in requested_material.lower():
-        return requested_material
-
-    large_map_threshold = 8192 * 8192
-    if map_width * map_height >= large_map_threshold:
-        return COMPILE_SAFE_NODETAIL_MATERIAL
-
-    return requested_material
 
 
 class PreviewWorker(QThread):
@@ -153,104 +108,13 @@ class GenerationWorker(QThread):
 
             grid = result["grid"]
 
-            tile_size = self.config_model.cell_size
-            displacement_power = self.config_model.displacement_power
-
-            grid_size = (2**displacement_power) + 1
-            tiles_x = spec.size_x // tile_size
-            tiles_y = spec.size_y // tile_size
-            map_width = tiles_x * tile_size
-            map_height = tiles_y * tile_size
-            compile_safe_material = choose_compile_safe_material(
-                self.config_model.terrain_material,
-                map_width,
-                map_height,
+            message = export_vmf(
+                grid,
+                self.config_model,
+                OUTPUT_DIR,
+                self.output_filename,
             )
 
-            vertex_cols = tiles_x * (grid_size - 1) + 1
-            vertex_rows = tiles_y * (grid_size - 1) + 1
-
-            heightmap = heightgrid_to_heightmap(grid, vertex_rows, vertex_cols)
-
-            hm_array = (heightmap * 255).astype(np.uint8)
-            hm_img = Image.fromarray(hm_array, mode="L")
-            hm_path = OUTPUT_DIR / f"{self.output_filename}_temp.png"
-            hm_img.save(hm_path)
-
-            calculated_max_height = self.config_model.height_scale
-
-            vmf_spec = PipelineSpec(
-                map_name=self.output_filename,
-                heightmap_path=str(hm_path),
-                terrain_max_height=calculated_max_height,
-                terrain_actual_max=grid.max_height(),
-                terrain_tile_size=tile_size,
-                terrain_power=self.config_model.displacement_power,
-                terrain_material=compile_safe_material,
-                skybox=self.config_model.skybox,
-                terrain_tiles_x=tiles_x,
-                terrain_tiles_y=tiles_y,
-                output_dir=str(OUTPUT_DIR),
-                use_enhanced_spawning=True,
-                disable_commander=self.config_model.disable_commander,
-                disable_buildings=self.config_model.disable_buildings,
-                disable_resource_nodes=self.config_model.disable_resource_nodes,
-                minimal_map=self.config_model.minimal_map,
-                terrain_only=self.config_model.terrain_only,
-                custom_imp_base_x=self.config_model.custom_imp_base_x,
-                custom_imp_base_y=self.config_model.custom_imp_base_y,
-                custom_nf_base_x=self.config_model.custom_nf_base_x,
-                custom_nf_base_y=self.config_model.custom_nf_base_y,
-                custom_resources=self.config_model.custom_resources,
-            )
-
-            vmf_gen = DisplacementVMF(vmf_spec)
-            vmf_gen.load_heightmap(str(hm_path), auto_resize=False)
-
-            vmf_path = OUTPUT_DIR / f"{self.output_filename}.vmf"
-            vmf_gen.generate_vmf(str(vmf_path))
-
-            origin_x = -(map_width // 2)
-            origin_y = -(map_height // 2)
-            resource_content = f'''"{self.output_filename}"
-{{
-	"image"		"maps/{self.output_filename}"
-
-	"min_image_x"	"0"
-	"min_image_y"	"0"
-
-	"max_image_x"	"1024"
-	"max_image_y"	"1024"
-	
-	"min_bounds_x"	"{origin_x}"
-	"min_bounds_y"	"{origin_y}"
-
-	"max_bounds_x"	"{origin_x + map_width}"
-	"max_bounds_y"	"{origin_y + map_height}"
-
-	"sector_width"	"512"
-	"sector_height"	"512"
-
-	"min_zoom"	"1"
-	"max_zoom"	"0.25"
-
-	"nf_description" "GUI generated terrain."
-	"nf_objective" "Build refineries to gain resources and destroy the enemy command vehicle."
-	"imp_description" "GUI generated terrain."
-	"imp_objective" "Build refineries to gain resources and destroy the enemy command vehicle."
-}}
-'''
-            resource_file = OUTPUT_DIR / f"{self.output_filename}.txt"
-            resource_file.write_text(resource_content)
-
-            hm_path.unlink(missing_ok=True)
-
-            message = f"VMF saved: {vmf_path}"
-            if compile_safe_material != self.config_model.terrain_material:
-                message += (
-                    "\nLarge map safety: switched terrain material to "
-                    f"{compile_safe_material}"
-                )
             self.finished.emit(True, message)
         except Exception as e:
             import traceback
@@ -260,6 +124,17 @@ class GenerationWorker(QThread):
 
 
 class TerrainGeneratorGUI(QMainWindow):
+
+    @contextmanager
+    def _block_signals(self, *widgets):
+        for w in widgets:
+            w.blockSignals(True)
+        try:
+            yield
+        finally:
+            for w in widgets:
+                w.blockSignals(False)
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Terrain Generator — Source Engine VMF Builder")
@@ -1568,94 +1443,72 @@ class TerrainGeneratorGUI(QMainWindow):
         preset = self.presets[preset_name]
 
         # Block signals briefly to prevent firing multiple sync events
-        self.spin_seed.blockSignals(True)
-        self.spin_tiles_x.blockSignals(True)
-        self.spin_tiles_y.blockSignals(True)
-        self.spin_height.blockSignals(True)
-        self.combo_topology.blockSignals(True)
-        self.slider_lane_width.blockSignals(True)
-        self.slider_choke_size.blockSignals(True)
-        self.slider_mountain_height.blockSignals(True)
-        self.slider_rough.blockSignals(True)
-        self.slider_erosion.blockSignals(True)
-        self.slider_base_radius.blockSignals(True)
-        self.slider_base_flatness.blockSignals(True)
-        self.slider_center_flatten.blockSignals(True)
-        self.slider_center_radius.blockSignals(True)
-        self.combo_power.blockSignals(True)
-        self.combo_material.blockSignals(True)
-        self.combo_skybox.blockSignals(True)
-        self.chk_disable_commander.blockSignals(True)
-        self.chk_disable_buildings.blockSignals(True)
-        self.chk_disable_resources.blockSignals(True)
-        self.chk_minimal_map.blockSignals(True)
-        self.chk_terrain_only.blockSignals(True)
+        with self._block_signals(
+            self.spin_seed,
+            self.spin_tiles_x,
+            self.spin_tiles_y,
+            self.spin_height,
+            self.combo_topology,
+            self.slider_lane_width,
+            self.slider_choke_size,
+            self.slider_mountain_height,
+            self.slider_rough,
+            self.slider_erosion,
+            self.slider_base_radius,
+            self.slider_base_flatness,
+            self.slider_center_flatten,
+            self.slider_center_radius,
+            self.combo_power,
+            self.combo_material,
+            self.combo_skybox,
+            self.chk_disable_commander,
+            self.chk_disable_buildings,
+            self.chk_disable_resources,
+            self.chk_minimal_map,
+            self.chk_terrain_only,
+        ):
+            self.spin_seed.setValue(preset.get("seed", random.randint(0, 999999999)))
+            if "tiles_x" in preset:
+                self.spin_tiles_x.setValue(preset["tiles_x"])
+            if "tiles_y" in preset:
+                self.spin_tiles_y.setValue(preset["tiles_y"])
+            self.spin_height.setValue(preset.get("height_scale", 1024))
 
-        self.spin_seed.setValue(preset.get("seed", random.randint(0, 999999999)))
-        if "tiles_x" in preset:
-            self.spin_tiles_x.setValue(preset["tiles_x"])
-        if "tiles_y" in preset:
-            self.spin_tiles_y.setValue(preset["tiles_y"])
-        self.spin_height.setValue(preset.get("height_scale", 1024))
+            topology_map = {
+                "random": 0,
+                "central_gorge": 1,
+                "valley": 2,
+                "two_lane": 3,
+                "island": 4,
+                "classic_cross": 5,
+            }
+            self.combo_topology.setCurrentIndex(
+                topology_map.get(preset.get("topology", "random"), 0)
+            )
+            self.slider_lane_width.setValue(int(preset.get("lane_width_scale", 1.0) * 100))
+            self.slider_choke_size.setValue(
+                int(preset.get("chokepoint_size_scale", 1.0) * 100)
+            )
+            self.slider_mountain_height.setValue(
+                int(min(1.0, preset.get("mountain_height_scale", 0.5)) * 100)
+            )
 
-        topology_map = {
-            "random": 0,
-            "central_gorge": 1,
-            "valley": 2,
-            "two_lane": 3,
-            "island": 4,
-            "classic_cross": 5,
-        }
-        self.combo_topology.setCurrentIndex(
-            topology_map.get(preset.get("topology", "random"), 0)
-        )
-        self.slider_lane_width.setValue(int(preset.get("lane_width_scale", 1.0) * 100))
-        self.slider_choke_size.setValue(
-            int(preset.get("chokepoint_size_scale", 1.0) * 100)
-        )
-        self.slider_mountain_height.setValue(
-            int(min(1.0, preset.get("mountain_height_scale", 0.5)) * 100)
-        )
+            self.slider_rough.setValue(int(preset.get("roughness", 0.5) * 100))
+            self.slider_erosion.setValue(int(preset.get("erosion_strength", 0.5) * 100))
+            self.slider_base_radius.setValue(preset.get("base_clear_radius", 0))
+            self.slider_base_flatness.setValue(int(preset.get("base_flatness", 0.0) * 100))
+            self.slider_center_flatten.setValue(
+                int(preset.get("center_flatten", 0.0) * 100)
+            )
+            self.slider_center_radius.setValue(
+                int(preset.get("center_flatten_radius", 0.5) * 100)
+            )
 
-        self.slider_rough.setValue(int(preset.get("roughness", 0.5) * 100))
-        self.slider_erosion.setValue(int(preset.get("erosion_strength", 0.5) * 100))
-        self.slider_base_radius.setValue(preset.get("base_clear_radius", 0))
-        self.slider_base_flatness.setValue(int(preset.get("base_flatness", 0.0) * 100))
-        self.slider_center_flatten.setValue(
-            int(preset.get("center_flatten", 0.0) * 100)
-        )
-        self.slider_center_radius.setValue(
-            int(preset.get("center_flatten_radius", 0.5) * 100)
-        )
-
-        p = preset.get("displacement_power", 3)
-        if p == 2:
-            self.combo_power.setCurrentIndex(0)
-        elif p == 3:
-            self.combo_power.setCurrentIndex(1)
-
-        self.spin_seed.blockSignals(False)
-        self.spin_tiles_x.blockSignals(False)
-        self.spin_tiles_y.blockSignals(False)
-        self.spin_height.blockSignals(False)
-        self.combo_topology.blockSignals(False)
-        self.slider_lane_width.blockSignals(False)
-        self.slider_choke_size.blockSignals(False)
-        self.slider_mountain_height.blockSignals(False)
-        self.slider_rough.blockSignals(False)
-        self.slider_erosion.blockSignals(False)
-        self.slider_base_radius.blockSignals(False)
-        self.slider_base_flatness.blockSignals(False)
-        self.slider_center_flatten.blockSignals(False)
-        self.slider_center_radius.blockSignals(False)
-        self.combo_power.blockSignals(False)
-        self.combo_material.blockSignals(False)
-        self.combo_skybox.blockSignals(False)
-        self.chk_disable_commander.blockSignals(False)
-        self.chk_disable_buildings.blockSignals(False)
-        self.chk_disable_resources.blockSignals(False)
-        self.chk_minimal_map.blockSignals(False)
-        self.chk_terrain_only.blockSignals(False)
+            p = preset.get("displacement_power", 3)
+            if p == 2:
+                self.combo_power.setCurrentIndex(0)
+            elif p == 3:
+                self.combo_power.setCurrentIndex(1)
 
         # Apply preset texture/skybox if specified
         if "terrain_material" in preset:
@@ -1757,97 +1610,75 @@ class TerrainGeneratorGUI(QMainWindow):
 
     def sync_to_ui(self):
         """Updates UI components to match the config model."""
-        self.spin_seed.blockSignals(True)
-        self.spin_tiles_x.blockSignals(True)
-        self.spin_tiles_y.blockSignals(True)
-        self.spin_height.blockSignals(True)
-        self.combo_topology.blockSignals(True)
-        self.slider_lane_width.blockSignals(True)
-        self.slider_choke_size.blockSignals(True)
-        self.slider_mountain_height.blockSignals(True)
-        self.slider_rough.blockSignals(True)
-        self.slider_erosion.blockSignals(True)
-        self.slider_base_radius.blockSignals(True)
-        self.slider_base_flatness.blockSignals(True)
-        self.slider_center_flatten.blockSignals(True)
-        self.slider_center_radius.blockSignals(True)
-        self.combo_power.blockSignals(True)
-        self.combo_material.blockSignals(True)
-        self.combo_skybox.blockSignals(True)
-        self.chk_disable_commander.blockSignals(True)
-        self.chk_disable_buildings.blockSignals(True)
-        self.chk_disable_resources.blockSignals(True)
-        self.chk_minimal_map.blockSignals(True)
-        self.chk_terrain_only.blockSignals(True)
+        with self._block_signals(
+            self.spin_seed,
+            self.spin_tiles_x,
+            self.spin_tiles_y,
+            self.spin_height,
+            self.combo_topology,
+            self.slider_lane_width,
+            self.slider_choke_size,
+            self.slider_mountain_height,
+            self.slider_rough,
+            self.slider_erosion,
+            self.slider_base_radius,
+            self.slider_base_flatness,
+            self.slider_center_flatten,
+            self.slider_center_radius,
+            self.combo_power,
+            self.combo_material,
+            self.combo_skybox,
+            self.chk_disable_commander,
+            self.chk_disable_buildings,
+            self.chk_disable_resources,
+            self.chk_minimal_map,
+            self.chk_terrain_only,
+        ):
+            self.spin_seed.setValue(self.config_model.seed)
+            self.spin_tiles_x.setValue(self.config_model.tiles_x)
+            self.spin_tiles_y.setValue(self.config_model.tiles_y)
+            self.spin_height.setValue(self.config_model.height_scale)
+            topology_map = {
+                "random": 0,
+                "central_gorge": 1,
+                "valley": 2,
+                "two_lane": 3,
+                "island": 4,
+                "classic_cross": 5,
+            }
+            self.combo_topology.setCurrentIndex(
+                topology_map.get(self.config_model.topology, 0)
+            )
+            self.slider_lane_width.setValue(int(self.config_model.lane_width_scale * 100))
+            self.slider_choke_size.setValue(
+                int(self.config_model.chokepoint_size_scale * 100)
+            )
+            self.slider_mountain_height.setValue(
+                int(min(1.0, self.config_model.mountain_height_scale) * 100)
+            )
+            self.slider_rough.setValue(int(self.config_model.roughness * 100))
+            self.slider_erosion.setValue(int(self.config_model.erosion_strength * 100))
+            self.slider_base_radius.setValue(self.config_model.base_clear_radius)
+            self.slider_base_flatness.setValue(int(self.config_model.base_flatness * 100))
+            self.slider_center_flatten.setValue(int(self.config_model.center_flatten * 100))
+            self.slider_center_radius.setValue(
+                int(self.config_model.center_flatten_radius * 100)
+            )
 
-        self.spin_seed.setValue(self.config_model.seed)
-        self.spin_tiles_x.setValue(self.config_model.tiles_x)
-        self.spin_tiles_y.setValue(self.config_model.tiles_y)
-        self.spin_height.setValue(self.config_model.height_scale)
-        topology_map = {
-            "random": 0,
-            "central_gorge": 1,
-            "valley": 2,
-            "two_lane": 3,
-            "island": 4,
-            "classic_cross": 5,
-        }
-        self.combo_topology.setCurrentIndex(
-            topology_map.get(self.config_model.topology, 0)
-        )
-        self.slider_lane_width.setValue(int(self.config_model.lane_width_scale * 100))
-        self.slider_choke_size.setValue(
-            int(self.config_model.chokepoint_size_scale * 100)
-        )
-        self.slider_mountain_height.setValue(
-            int(min(1.0, self.config_model.mountain_height_scale) * 100)
-        )
-        self.slider_rough.setValue(int(self.config_model.roughness * 100))
-        self.slider_erosion.setValue(int(self.config_model.erosion_strength * 100))
-        self.slider_base_radius.setValue(self.config_model.base_clear_radius)
-        self.slider_base_flatness.setValue(int(self.config_model.base_flatness * 100))
-        self.slider_center_flatten.setValue(int(self.config_model.center_flatten * 100))
-        self.slider_center_radius.setValue(
-            int(self.config_model.center_flatten_radius * 100)
-        )
+            p = self.config_model.displacement_power
+            if p == 2:
+                self.combo_power.setCurrentIndex(0)
+            elif p == 3:
+                self.combo_power.setCurrentIndex(1)
 
-        p = self.config_model.displacement_power
-        if p == 2:
-            self.combo_power.setCurrentIndex(0)
-        elif p == 3:
-            self.combo_power.setCurrentIndex(1)
+            self.combo_material.setCurrentText(self.config_model.terrain_material)
+            self.combo_skybox.setCurrentText(self.config_model.skybox)
 
-        self.combo_material.setCurrentText(self.config_model.terrain_material)
-        self.combo_skybox.setCurrentText(self.config_model.skybox)
-
-        self.chk_disable_commander.setChecked(self.config_model.disable_commander)
-        self.chk_disable_buildings.setChecked(self.config_model.disable_buildings)
-        self.chk_disable_resources.setChecked(self.config_model.disable_resource_nodes)
-        self.chk_minimal_map.setChecked(self.config_model.minimal_map)
-        self.chk_terrain_only.setChecked(self.config_model.terrain_only)
-
-        self.spin_seed.blockSignals(False)
-        self.spin_tiles_x.blockSignals(False)
-        self.spin_tiles_y.blockSignals(False)
-        self.spin_height.blockSignals(False)
-        self.combo_topology.blockSignals(False)
-        self.slider_lane_width.blockSignals(False)
-        self.slider_choke_size.blockSignals(False)
-        self.slider_mountain_height.blockSignals(False)
-        self.slider_rough.blockSignals(False)
-        self.slider_erosion.blockSignals(False)
-        self.slider_base_radius.blockSignals(False)
-        self.slider_base_flatness.blockSignals(False)
-        self.slider_center_flatten.blockSignals(False)
-        self.slider_center_radius.blockSignals(False)
-        self.combo_power.blockSignals(False)
-        self.combo_material.blockSignals(False)
-        self.combo_skybox.blockSignals(False)
-        self.chk_disable_commander.blockSignals(False)
-        self.chk_disable_buildings.blockSignals(False)
-        self.chk_disable_resources.blockSignals(False)
-        self.chk_minimal_map.blockSignals(False)
-        self.chk_terrain_only.blockSignals(False)
+            self.chk_disable_commander.setChecked(self.config_model.disable_commander)
+            self.chk_disable_buildings.setChecked(self.config_model.disable_buildings)
+            self.chk_disable_resources.setChecked(self.config_model.disable_resource_nodes)
+            self.chk_minimal_map.setChecked(self.config_model.minimal_map)
+            self.chk_terrain_only.setChecked(self.config_model.terrain_only)
 
         if self.config_model.custom_image_path:
             self.chk_custom_image.setChecked(True)
