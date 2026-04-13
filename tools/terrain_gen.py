@@ -66,13 +66,6 @@ class TerrainGenerator:
         Returns:
             numpy array of heightmap values (0-1)
         """
-        try:
-            import worldengine
-        except ImportError:
-            raise ImportError(
-                "WorldEngine not installed. Please run:\npip install worldengine"
-            )
-
         if seed is None:
             import time
 
@@ -85,11 +78,7 @@ class TerrainGenerator:
         print(f"  Water: {water_level:.2f}")
         print(f"  Erosion: {erosion:.2f}")
 
-        from worldengine.plates import world_gen, Step, GenerationParameters
-
-        gen_params = GenerationParameters(
-            n_plates=int(5 + steepness * 20), ocean_level=water_level, step=Step("full")
-        )
+        from worldengine.plates import world_gen, Step
 
         world = world_gen(
             name="terrain",

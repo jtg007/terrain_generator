@@ -130,6 +130,8 @@ class PreviewWorker(QThread):
             result = run_pipeline(spec)
             self.finished.emit(result["grid"], result["spec"])
         except Exception:
+            import traceback
+            traceback.print_exc()
             self.finished.emit(None, None)
 
 
@@ -309,8 +311,11 @@ class TerrainGeneratorGUI(QMainWindow):
 
         # Fallback: spectacle (KDE)
         try:
+            spectacle_path = shutil.which("spectacle")
+            if not spectacle_path:
+                raise RuntimeError("Could not find 'spectacle' executable")
             subprocess.run(
-                ["spectacle", "-b", "-a", "-n", "-o", path],
+                [spectacle_path, "-b", "-a", "-n", "-o", path],
                 timeout=8,
                 capture_output=True,
             )
@@ -479,7 +484,7 @@ class TerrainGeneratorGUI(QMainWindow):
         main_area_layout.setContentsMargins(0, 0, 0, 0)
 
         # ── Helper: create a slider row with live value label ──
-        def make_slider_row(slider, value_label, suffix=""):
+        def make_slider_row(slider, value_label):
             row_layout = QHBoxLayout()
             row_layout.setContentsMargins(0, 0, 0, 0)
             row_layout.setSpacing(8)

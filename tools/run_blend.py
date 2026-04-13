@@ -13,7 +13,7 @@ import os
 import sys
 import argparse
 from pathlib import Path
-from typing import List, Tuple
+from typing import List
 
 
 class VmfBlendProcessor:
@@ -127,7 +127,7 @@ class VmfBlendProcessor:
         return arr
 
     def _generate_alpha_for_face(
-        self, face_coords: List[Tuple[int, int]], power: int
+        self, power: int
     ) -> List[str]:
         """Generate alpha values for a displacement face based on heightmap."""
 
