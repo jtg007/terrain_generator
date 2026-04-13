@@ -359,7 +359,7 @@ class TerrainGeneratorGUI(QMainWindow):
         main_area_layout.setContentsMargins(0, 0, 0, 0)
 
         # ── Helper: create a slider row with live value label ──
-        def make_slider_row(slider, value_label):
+        def make_slider_row(slider, value_label, *args):
             row_layout = QHBoxLayout()
             row_layout.setContentsMargins(0, 0, 0, 0)
             row_layout.setSpacing(8)
