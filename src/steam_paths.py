@@ -38,10 +38,10 @@ def _get_windows_steam_paths() -> List[str]:
                 common_path = os.path.join(steam_path, "steamapps", "common")
                 if os.path.exists(common_path):
                     paths.append(common_path)
-        except WindowsError:
+        except OSError:
             pass
         winreg.CloseKey(key)
-    except Exception:
+    except OSError:
         pass
 
     # Also check registry for SteamLibrary locations
@@ -53,10 +53,10 @@ def _get_windows_steam_paths() -> List[str]:
                 common_path = os.path.join(steam_path, "steamapps", "common")
                 if os.path.exists(common_path) and common_path not in paths:
                     paths.append(common_path)
-        except WindowsError:
+        except OSError:
             pass
         winreg.CloseKey(key)
-    except Exception:
+    except OSError:
         pass
 
     return paths

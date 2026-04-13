@@ -269,12 +269,15 @@ find_proton_installations() {
         local vdf_file="$steam_base/steamapps/libraryfolders.vdf"
         if [ -f "$vdf_file" ]; then
             while IFS= read -r line; do
-                if echo "$line" | grep -q '"path"'; then
+                if [[ "$line" == *'"path"'* ]]; then
                     local lib_path
-                    lib_path=$(echo "$line" | sed 's/.*"path"\s*"\([^"]*\)".*/\1/') || continue
-                    lib_path="${lib_path/~/$HOME}"
-                    if [ -d "$lib_path" ]; then
-                        libraries+=("$lib_path")
+                    # Extract the path using bash regex
+                    if [[ "$line" =~ \"path\"[[:space:]]*\"([^\"]*)\" ]]; then
+                        lib_path="${BASH_REMATCH[1]}"
+                        lib_path="${lib_path/~/$HOME}"
+                        if [ -d "$lib_path" ]; then
+                            libraries+=("$lib_path")
+                        fi
                     fi
                 fi
             done < "$vdf_file"
@@ -302,7 +305,7 @@ find_proton_installations() {
             for proton_dir in "$library_path/steamapps/compatibilitytools.d"/*; do
                 if [ -d "$proton_dir" ] && [ -f "$proton_dir/proton" ]; then
                     proton_name=$(basename "$proton_dir")
-                    if [[ ! " ${proton_paths[*]} " =~ " ${proton_name}|" ]]; then
+                    if [[ ! " ${proton_paths[*]} " =~ \ ${proton_name}\| ]]; then
                         proton_paths+=("$proton_name|$proton_dir|$proton_dir/proton")
                     fi
                 fi
@@ -313,7 +316,7 @@ find_proton_installations() {
             for proton_dir in "$library_path/steamapps/compatibility"/proton*; do
                 if [ -d "$proton_dir" ] && [ -f "$proton_dir/proton" ]; then
                     proton_name=$(basename "$proton_dir" | sed 's/_/ /g')
-                    if [[ ! " ${proton_paths[*]} " =~ " ${proton_name}|" ]]; then
+                    if [[ ! " ${proton_paths[*]} " =~ \ ${proton_name}\| ]]; then
                         proton_paths+=("$proton_name|$proton_dir|$proton_dir/proton")
                     fi
                 fi
@@ -336,8 +339,9 @@ find_proton_installations() {
             if [ -d "$sys_path" ]; then
                 for subdir in "$sys_path"/*; do
                     if [ -d "$subdir" ] && [ -f "$subdir/proton" ]; then
-                        local proton_name=$(basename "$subdir")
-                        if [[ ! " ${proton_paths[*]} " =~ " ${proton_name}|" ]]; then
+                        local proton_name
+                        proton_name=$(basename "$subdir")
+                        if [[ ! " ${proton_paths[*]} " =~ \ ${proton_name}\| ]]; then
                             proton_paths+=("System: $proton_name|$subdir|$subdir/proton")
                         fi
                     fi
@@ -360,10 +364,10 @@ find_proton_installations() {
         if [ -d "$steam_base" ]; then
             local library_root
             library_root=$(dirname "$steam_base") || continue
-            if [[ ! " ${all_libraries[*]} " =~ " ${library_root} " ]]; then
+            if [[ ! " ${all_libraries[*]} " =~ \ ${library_root}\  ]]; then
                 all_libraries+=("$library_root")
                 while IFS= read -r lib; do
-                    if [ -n "$lib" ] && [[ ! " ${all_libraries[*]} " =~ " ${lib} " ]]; then
+                    if [ -n "$lib" ] && [[ ! " ${all_libraries[*]} " =~ \ ${lib}\  ]]; then
                         all_libraries+=("$lib")
                     fi
                 done < <(_find_steam_libraries "$library_root")
@@ -383,7 +387,8 @@ find_proton_installations() {
 }
 
 check_wine_proton() {
-    local proton_list=$(find_proton_installations)
+    local proton_list
+    proton_list=$(find_proton_installations)
     
     if [ -n "$proton_list" ]; then
         echo "✓ Found Proton installations:"
@@ -398,7 +403,8 @@ check_wine_proton() {
 }
 
 select_proton() {
-    local proton_list=$(find_proton_installations)
+    local proton_list
+    proton_list=$(find_proton_installations)
     local options=()
     local index=1
     
@@ -416,7 +422,8 @@ select_proton() {
     fi
     
     echo ""
-    local choice=$(ask_question "Select Proton version" "1")
+    local choice
+    choice=$(ask_question "Select Proton version" "1")
     
     if [ -z "$choice" ]; then
         choice=1
@@ -439,7 +446,8 @@ ensure_proton() {
         return 0
     fi
     
-    local proton_list=$(find_proton_installations)
+    local proton_list
+    proton_list=$(find_proton_installations)
     if [ -z "$proton_list" ]; then
         print_error "No Proton installations found!"
         print_info "Install Proton via Steam (Settings > Compatibility > Tools)"
@@ -491,7 +499,8 @@ ensure_venv() {
         setup_venv || return 1
     elif ! check_venv_deps; then
         print_warning "Some dependencies are missing"
-        local reinstall=$(ask_yes_no "Reinstall dependencies?" "Y")
+        local reinstall
+        reinstall=$(ask_yes_no "Reinstall dependencies?" "Y")
         if [ "$reinstall" = "yes" ]; then
             setup_venv || return 1
         else
@@ -772,7 +781,8 @@ run_compile() {
         read -r vmf_file
     else
         echo -e "Found last VMF: ${WHITE}$vmf_file${NC}"
-        local use_default=$(ask_yes_no "Use this file?" "Y")
+        local use_default
+        use_default=$(ask_yes_no "Use this file?" "Y")
         if [ "$use_default" != "yes" ]; then
             echo -ne "${CYAN}Enter VMF path: ${NC}"
             read -r vmf_file
@@ -817,7 +827,8 @@ run_setup() {
     fi
     
     if check_venv; then
-        local reinstall=$(ask_yes_no "Recreate virtual environment?" "N")
+        local reinstall
+        reinstall=$(ask_yes_no "Recreate virtual environment?" "N")
         if [ "$reinstall" != "yes" ]; then
             echo "Keeping existing venv."
             wait_enter

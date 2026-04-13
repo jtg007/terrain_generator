@@ -261,7 +261,7 @@ class TerrainBlender:
         }
 
     def generate_vmf_blend_data(
-        self, power: int, tile_size: int, num_tiles: int
+        self, power: int, tile_size: int
     ) -> dict:
         """Generate alpha data for VMF displacement faces."""
         sample_size = (2**power) + 1
