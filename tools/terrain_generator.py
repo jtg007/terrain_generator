@@ -86,7 +86,12 @@ class PreviewWorker(QThread):
             self.finished.emit(result["grid"], result["spec"])
         except Exception:
             import traceback
-            traceback.print_exc()
+            if getattr(sys, "frozen", False):
+                log_path = Path(sys.executable).parent / "preview_error.log"
+                with open(log_path, "w") as f:
+                    traceback.print_exc(file=f)
+            else:
+                traceback.print_exc()
             self.finished.emit(None, None)
 
 
@@ -976,6 +981,11 @@ class TerrainGeneratorGUI(QMainWindow):
             self.preview_worker.start()
 
     def on_preview_finished(self, grid, spec):
+        if getattr(sys, "frozen", False) and not grid:
+            log_path = Path(sys.executable).parent / "preview_signal_received.log"
+            with open(log_path, "w") as f:
+                f.write("Signal received but grid is None.\n")
+
         if grid and spec:
             import numpy as np
 
