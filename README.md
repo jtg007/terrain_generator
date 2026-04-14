@@ -30,8 +30,6 @@ The launcher automatically:
 
 The Terrain Generator bridges the gap between procedural noise generation and the strict mapping requirements of the Source Engine. It creates organic, playable maps using multi-layered Fractal Brownian Motion (fBm) and hydraulic erosion, handling all the complex VMF (Valve Map Format) intricacies behind the scenes.
 
-With an interactive graphical interface, map creators can generate, preview, customize, and compile competitive multiplayer maps in minutes instead of weeks.
-
 ## Main Features
 
 *   **Interactive Live Map Preview:** Visualize the generated heightmap instantly as you tweak parameters. Changes to the noise seed, size, or ruggedness reflect in real-time.
