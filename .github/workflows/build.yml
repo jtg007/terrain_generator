@@ -9,6 +9,11 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+# FIX: This forces GitHub to use the newer Node.js 24 engine,
+# which silences the deprecation warning.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: windows-latest
@@ -17,7 +22,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4 # This will now run on Node 24 because of the 'env' above
 
       - name: Set up Python
         uses: actions/setup-python@v5
