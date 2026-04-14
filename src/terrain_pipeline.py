@@ -524,7 +524,27 @@ def flatten_base_areas(
         else spec.default_nf_base()
     )
 
-    avg_height = spec.terrain_max_height * 0.15  # Use the layout floor height
+    # Determine local average heights for the bases instead of global floor height
+    def get_local_avg(bx: float, by: float, r_area: float) -> float:
+        heights = []
+        for r_ in range(rows):
+            wy = spec.origin_y + r_ * vertex_spacing
+            if abs(wy - by) > r_area:
+                continue
+            for c_ in range(cols):
+                wx = spec.origin_x + c_ * vertex_spacing
+                if abs(wx - bx) > r_area:
+                    continue
+                if math.sqrt((wx - bx) ** 2 + (wy - by) ** 2) <= r_area:
+                    heights.append(grid.heights[r_][c_])
+        return sum(heights) / len(heights) if heights else spec.terrain_max_height * 0.15
+
+    imp_avg_height = get_local_avg(imp_base_x, imp_base_y, base_radius)
+    nf_avg_height = get_local_avg(nf_base_x, nf_base_y, base_radius)
+
+    # We want the plateau to be perfectly flat for the inner 80% of the radius.
+    plateau_radius = base_radius * 0.8
+    falloff_dist = base_radius - plateau_radius
 
     # Flatten bases
     for r in range(rows):
@@ -532,23 +552,30 @@ def flatten_base_areas(
         for c in range(cols):
             world_x = spec.origin_x + c * vertex_spacing
 
-            dist_to_imp = math.sqrt(
-                (world_x - imp_base_x) ** 2 + (world_y - imp_base_y) ** 2
-            )
-            dist_to_nf = math.sqrt(
-                (world_x - nf_base_x) ** 2 + (world_y - nf_base_y) ** 2
-            )
+            dist_to_imp = math.sqrt((world_x - imp_base_x) ** 2 + (world_y - imp_base_y) ** 2)
+            dist_to_nf = math.sqrt((world_x - nf_base_x) ** 2 + (world_y - nf_base_y) ** 2)
 
-            min_dist = min(dist_to_imp, dist_to_nf)
+            if dist_to_imp < base_radius:
+                dist = dist_to_imp
+                target_height = imp_avg_height
+            elif dist_to_nf < base_radius:
+                dist = dist_to_nf
+                target_height = nf_avg_height
+            else:
+                continue
 
-            if min_dist < base_radius:
-                t = 1.0 - (min_dist / base_radius)
+            if dist <= plateau_radius:
+                t = 1.0
+            else:
+                t = 1.0 - ((dist - plateau_radius) / falloff_dist)
                 t = t * t * (3 - 2 * t)
-                t = t * flatness
 
-                current = grid.heights[r][c]
-                grid.heights[r][c] = current * (1.0 - t) + avg_height * t
+            t = t * flatness
 
+            current = grid.heights[r][c]
+            grid.heights[r][c] = current * (1.0 - t) + target_height * t
+
+    avg_height = spec.terrain_max_height * 0.15  # Fallback for resource nodes
     # Flatten resource nodes
     if spec.base_clear_radius > 0 and spec.custom_resources:
         res_radius = spec.base_clear_radius * 0.5
