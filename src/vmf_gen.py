@@ -556,6 +556,14 @@ def spawn_resource_nodes_enhanced(
     )
     dist_to_base_avg = min(dist_to_base_avg, map_width * 0.4)
 
+    base_radius = rules.get("base_clear_radius", 512)
+    # Ensure resource node spawns INSIDE the base flattened area if possible,
+    # but strictly OUTSIDE the barracks center radius
+    if base_radius > 512:
+        dist_to_base_avg = min(dist_to_base_avg, base_radius * 0.8)
+
+    dist_to_base_avg = max(dist_to_base_avg, 256.0)
+
     team_num = 2 if faction == "imp" else 3
 
     prefabs = rules.get("learned_prefabs", {}).get("resource_cluster", {})
@@ -577,7 +585,9 @@ def spawn_resource_nodes_enhanced(
         if custom_points is None:
             angle = angles[i]
             offset_dist = random.uniform(dist_to_base_avg * 0.8, dist_to_base_avg * 1.2)
-            offset_dist = min(offset_dist, 2000)
+            if base_radius > 512:
+                offset_dist = min(offset_dist, base_radius * 0.95)
+            offset_dist = max(offset_dist, 256.0)
 
             angle_rad = math.radians(angle)
             node_x = base_x + (math.cos(angle_rad) * offset_dist)
@@ -621,14 +631,16 @@ def spawn_resource_nodes_enhanced(
             prop_offset.get("dy", {}).get("min", -88),
             prop_offset.get("dy", {}).get("max", 30),
         )
+        # Prevent negative Z offsets to ensure the model sticks out of the ground
+        # but retain the variation
         prop_dz_raw = random.uniform(
-            prop_offset.get("dz", {}).get("min", -196),
-            prop_offset.get("dz", {}).get("max", 49),
+            0,
+            max(0, prop_offset.get("dz", {}).get("max", 49)),
         )
 
         prop_x = node_x + prop_dx_raw
         prop_y = node_y + prop_dy_raw
-        prop_z = node_z + prop_dz_raw + 16
+        prop_z = node_z + prop_dz_raw
 
         prop_x = quantize_coord(max(map_min_x, min(map_max_x, prop_x)), 1.0)
         prop_y = quantize_coord(max(map_min_y, min(map_max_y, prop_y)), 1.0)
@@ -886,6 +898,7 @@ class PipelineSpec:
     disable_resource_nodes: bool = False
     minimal_map: bool = False
     terrain_only: bool = False
+    base_clear_radius: int = 512
 
     custom_imp_base_x: Optional[float] = None
     custom_imp_base_y: Optional[float] = None
@@ -999,6 +1012,9 @@ class DisplacementVMF:
         else:
             print(f"No rules file found at {rules_path}, using defaults")
 
+        # Ensure our generated rules dictionary contains pipeline overrides
+        rules["base_clear_radius"] = self.spec.base_clear_radius
+
         tiles_x = self.spec.terrain_tiles_x
         tiles_y = self.spec.terrain_tiles_y
         power = self.spec.terrain_power
@@ -1069,9 +1085,7 @@ class DisplacementVMF:
             else int(nf_default_y)
         )
 
-        base_building_size = 256
-        flatten_radius = int(base_building_size * scale_factor)
-        flatten_radius = max(128, min(384, flatten_radius))
+        flatten_radius = self.spec.base_clear_radius
 
         working_heightmap = self.heightmap.copy()
         working_heightmap = flatten_terrain_at_location(

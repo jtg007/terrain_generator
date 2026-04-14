@@ -643,7 +643,7 @@ class TerrainGeneratorGUI(QMainWindow):
         lbl_br.setToolTip("Radius of flat area around bases (0 = disabled)")
         br_row.addWidget(lbl_br)
         self.slider_base_radius = QSlider(Qt.Horizontal)
-        self.slider_base_radius.setRange(0, 4096)
+        self.slider_base_radius.setRange(0, 2048)
         self.lbl_base_radius_val = QLabel("0")
         br_row.addWidget(
             make_slider_row(self.slider_base_radius, self.lbl_base_radius_val), 1
