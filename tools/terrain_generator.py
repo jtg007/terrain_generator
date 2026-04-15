@@ -1820,7 +1820,12 @@ class TerrainGeneratorGUI(QMainWindow):
         if success:
             map_name = self.txt_map_name.text().strip() or "gui_terrain"
             self._last_vmf_path = str(OUTPUT_DIR / f"{map_name}.vmf")
-            QMessageBox.information(self, "Success", msg)
+
+            # If warning string is present, use a warning box
+            if "WARNING:" in msg:
+                QMessageBox.warning(self, "Success with Warnings", msg)
+            else:
+                QMessageBox.information(self, "Success", msg)
         else:
             QMessageBox.critical(self, "Generation Failed", msg)
 

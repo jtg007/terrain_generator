@@ -367,15 +367,50 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     # 2. Prepare grid constants
     floor_height = max_height * 0.15
     base_mountain_height = max_height * 0.85
+
+    # Scale mountain height exponentially. This makes the slider
+    # more intuitive: low values stay low, but it ramps up predictably
+    # rather than maxing out visually at ~10%
+    scaled_mountain_height = spec.mountain_height_scale ** 2
+
     mountain_height = (
         floor_height
-        + (base_mountain_height - floor_height) * spec.mountain_height_scale
+        + (base_mountain_height - floor_height) * scaled_mountain_height
     )
 
     warp_scale = 0.005
     warp_strength = 150.0 * roughness
     macro_scale = 0.0015
     ridge_scale = 0.0025
+
+    # Profile parameters to create flat lanes and steep cliffs
+    # We scale the sharp cliff approach based on the intended roughness and mountain scale.
+    # Flat presets (low mountain scale/roughness) will have softer transitions,
+    # while mountain pass or competitive will have sharp, defined cliffs.
+    if spec.mountain_height_scale > 0.6 and roughness > 0.3:
+        flat_core_ratio = 0.75  # Inner 75% is mostly flat
+
+        # Helper to calculate sharp cliff mask
+        def get_sharp_mask(distance, total_radius):
+            if total_radius <= 1e-5: return 0.0
+            normalized_dist = distance / total_radius
+
+            if normalized_dist <= flat_core_ratio:
+                return 1.0  # Completely flat inner lane
+            elif normalized_dist >= 1.0:
+                return 0.0  # Outside the lane (mountain)
+            else:
+                # Steep drop-off in the outer 25% margin
+                # Remap the outer margin (flat_core_ratio -> 1.0) to (1.0 -> 0.0)
+                t = 1.0 - (normalized_dist - flat_core_ratio) / (1.0 - flat_core_ratio)
+                return t**2 * (3 - 2 * t)  # Smoothstep on the steep cliff part
+    else:
+        # Fallback to smoothstep for flatter maps (like "flat" or "open_valley")
+        def get_sharp_mask(distance, total_radius):
+            if total_radius <= 1e-5: return 0.0
+            normalized_dist = distance / total_radius
+            mask = max(0.0, 1.0 - normalized_dist)
+            return mask**2 * (3 - 2 * mask)
 
     heightmap = []
 
@@ -410,8 +445,7 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
             # Evaluate Nodes
             for node in nodes:
                 dist = math.sqrt((wx - node.x) ** 2 + (wy - node.y) ** 2)
-                mask = max(0.0, 1.0 - (dist / max(1e-5, node.radius)))
-                mask = mask**2 * (3 - 2 * mask)  # Smoothstep
+                mask = get_sharp_mask(dist, node.radius)
 
                 if mask > zone_weights[node.type]:
                     zone_weights[node.type] = mask
@@ -441,18 +475,15 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
 
                 if 0 <= dot_product <= length:
                     if conn.type in (ZoneType.MAIN_LANE, ZoneType.SIDE_ROUTE):
-                        mask = max(0.0, 1.0 - (dist_to_lane / max(1e-5, conn.width)))
-                        mask = mask**2 * (3 - 2 * mask)
+                        mask = get_sharp_mask(dist_to_lane, conn.width)
                         if mask > zone_weights[conn.type]:
                             zone_weights[conn.type] = mask
 
                     elif conn.type == ZoneType.CHOKEPOINT:
                         # Chokepoints have a narrow playable lane and force high terrain next to them
                         choke_playable_width = conn.width * 0.5
-                        mask = max(
-                            0.0, 1.0 - (dist_to_lane / max(1e-5, choke_playable_width))
-                        )
-                        mask = mask**2 * (3 - 2 * mask)
+                        mask = get_sharp_mask(dist_to_lane, choke_playable_width)
+
                         if mask > zone_weights[ZoneType.CHOKEPOINT]:
                             zone_weights[ZoneType.CHOKEPOINT] = mask
 
@@ -508,11 +539,12 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
             # Base Zone: Perfectly flat
             base_target = floor_height
 
-            # Lane Zone: Mostly flat, slight noise
-            lane_target = floor_height + (max_height * 0.01 * base_noise)
+            # Lane Zone: Flat with very gentle, natural height variation for vehicles
+            # Using base_noise which is -1.0 to 1.0, scaled to a maximum variance of ~2% of max height
+            lane_target = floor_height + (max_height * 0.02 * base_noise)
 
-            # Vehicle Zone: Smooth rolling ground
-            veh_target = floor_height + (max_height * 0.03 * base_noise)
+            # Vehicle Zone: More prominent rolling ground, slightly more variation than lanes
+            veh_target = floor_height + (max_height * 0.04 * base_noise)
 
             # Wilderness Zone: Full mountains
             wilderness_target = (
@@ -523,7 +555,7 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
             base_choke_wall_target = base_mountain_height * (0.8 + 0.2 * ridge_val)
             choke_wall_target = (
                 floor_height
-                + (base_choke_wall_target - floor_height) * spec.mountain_height_scale
+                + (base_choke_wall_target - floor_height) * scaled_mountain_height
             )
 
             # Start with wilderness

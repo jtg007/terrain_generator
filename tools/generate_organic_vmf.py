@@ -26,20 +26,20 @@ COMPILE_SAFE_NODETAIL_MATERIAL = "common/terrain/blend_grass01a_dirt01a_nodetail
 
 def choose_compile_safe_material(
     requested_material: str, map_width: int, map_height: int
-) -> str:
+) -> tuple[str, bool]:
     """Prefer a no-detail terrain material for very large maps to avoid VBSP 64K detail prop cap."""
     if "nodetail" in requested_material.lower():
-        return requested_material
+        return requested_material, False
 
     large_map_threshold = 8192 * 8192
     if map_width * map_height >= large_map_threshold:
         print(
-            "Warning: switching terrain material to a _nodetail variant for compile safety "
-            f"({requested_material} -> {COMPILE_SAFE_NODETAIL_MATERIAL})"
+            "Warning: this material may fail on large maps due to detail prop limits "
+            f"({requested_material}). Consider {COMPILE_SAFE_NODETAIL_MATERIAL}."
         )
-        return COMPILE_SAFE_NODETAIL_MATERIAL
+        return requested_material, True
 
-    return requested_material
+    return requested_material, False
 
 
 def heightgrid_to_heightmap(
@@ -181,7 +181,8 @@ def main():
     )
     map_width = tiles_x * tile_size
     map_height = tiles_y * tile_size
-    compile_safe_material = choose_compile_safe_material(
+
+    material_to_use, is_unsafe = choose_compile_safe_material(
         args.material, map_width, map_height
     )
 
@@ -199,7 +200,7 @@ def main():
         erosion_iterations=0 if args.skip_erosion else args.erosion_iterations,
         erosion_droplet_lifetime=args.erosion_lifetime,
         terrain_max_height=calculated_max_height,
-        material=compile_safe_material,
+        material=material_to_use,
         underlay_material="TOOLS/TOOLSSKIP",
         underlay_height=128,
     )
@@ -246,7 +247,7 @@ def main():
         terrain_actual_max=grid.max_height(),
         terrain_tile_size=tile_size,
         terrain_power=args.power,
-        terrain_material=compile_safe_material,
+        terrain_material=material_to_use,
         skybox=args.skybox,
         terrain_tiles_x=tiles_x,
         terrain_tiles_y=tiles_y,

@@ -35,16 +35,20 @@ def heightgrid_to_heightmap(
 
 def choose_compile_safe_material(
     requested_material: str, map_width: int, map_height: int
-) -> str:
-    """Choose a safe terrain material for large maps to avoid detail prop overflow."""
+) -> tuple[str, bool]:
+    """
+    Check if the material is safe for large maps to avoid detail prop overflow.
+    Returns: (material_to_use, is_unsafe_warning)
+    """
     if "nodetail" in requested_material.lower():
-        return requested_material
+        return requested_material, False
 
     large_map_threshold = 8192 * 8192
     if map_width * map_height >= large_map_threshold:
-        return COMPILE_SAFE_NODETAIL_MATERIAL
+        # User requested material, but we return it alongside a warning flag instead of overriding
+        return requested_material, True
 
-    return requested_material
+    return requested_material, False
 
 
 from src.vmf_gen import PipelineSpec, DisplacementVMF
@@ -61,7 +65,8 @@ def export_vmf(grid, config_model, output_dir: Path, output_filename: str) -> st
     tiles_y = spec.size_y // tile_size
     map_width = tiles_x * tile_size
     map_height = tiles_y * tile_size
-    compile_safe_material = choose_compile_safe_material(
+
+    material_to_use, is_unsafe = choose_compile_safe_material(
         config_model.terrain_material,
         map_width,
         map_height,
@@ -86,7 +91,7 @@ def export_vmf(grid, config_model, output_dir: Path, output_filename: str) -> st
         terrain_actual_max=grid.max_height(),
         terrain_tile_size=tile_size,
         terrain_power=config_model.displacement_power,
-        terrain_material=compile_safe_material,
+        terrain_material=material_to_use,
         skybox=config_model.skybox,
         terrain_tiles_x=tiles_x,
         terrain_tiles_y=tiles_y,
@@ -148,9 +153,11 @@ def export_vmf(grid, config_model, output_dir: Path, output_filename: str) -> st
     hm_path.unlink(missing_ok=True)
 
     message = f"VMF saved: {vmf_path}"
-    if compile_safe_material != config_model.terrain_material:
+    if is_unsafe:
         message += (
-            f"\nLarge map safety: switched terrain material to {compile_safe_material}"
+            f"\nWARNING: You are using the material '{material_to_use}' on a large map. "
+            f"This may cause the map to fail compiling due to detail prop limits! "
+            f"If it fails, consider using '{COMPILE_SAFE_NODETAIL_MATERIAL}' instead."
         )
 
     return message
