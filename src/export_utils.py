@@ -4,6 +4,7 @@ from PIL import Image
 
 COMPILE_SAFE_NODETAIL_MATERIAL = "common/terrain/blend_grass01a_dirt01a_nodetail"
 
+
 def heightgrid_to_heightmap(
     grid, target_rows: int = 0, target_cols: int = 0
 ) -> np.ndarray:
@@ -31,6 +32,7 @@ def heightgrid_to_heightmap(
 
     return normalized
 
+
 def choose_compile_safe_material(
     requested_material: str, map_width: int, map_height: int
 ) -> str:
@@ -46,6 +48,7 @@ def choose_compile_safe_material(
 
 
 from src.vmf_gen import PipelineSpec, DisplacementVMF
+
 
 def export_vmf(grid, config_model, output_dir: Path, output_filename: str) -> str:
     """Exports the given height grid and config to a VMF file, returns a success message."""
@@ -147,8 +150,7 @@ def export_vmf(grid, config_model, output_dir: Path, output_filename: str) -> st
     message = f"VMF saved: {vmf_path}"
     if compile_safe_material != config_model.terrain_material:
         message += (
-            "\nLarge map safety: switched terrain material to "
-            f"{compile_safe_material}"
+            f"\nLarge map safety: switched terrain material to {compile_safe_material}"
         )
 
     return message

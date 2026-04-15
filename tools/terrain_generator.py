@@ -42,8 +42,6 @@ from PySide6.QtCore import Qt, QThread, Signal, QTimer
 from PySide6.QtGui import QImage, QKeySequence, QShortcut
 from tools.preview_widget import MapPreviewWidget
 
-from PIL import Image
-import numpy as np
 
 from src.config_model import GUIConfigModel
 from src.terrain_pipeline import run_pipeline
@@ -86,6 +84,7 @@ class PreviewWorker(QThread):
             self.finished.emit(result["grid"], result["spec"])
         except Exception:
             import traceback
+
             if getattr(sys, "frozen", False):
                 log_path = Path(sys.executable).parent / "preview_error.log"
                 with open(log_path, "w") as f:
@@ -129,7 +128,6 @@ class GenerationWorker(QThread):
 
 
 class TerrainGeneratorGUI(QMainWindow):
-
     @contextmanager
     def _block_signals(self, *widgets):
         for w in widgets:
@@ -1504,7 +1502,9 @@ class TerrainGeneratorGUI(QMainWindow):
             self.combo_topology.setCurrentIndex(
                 topology_map.get(preset.get("topology", "random"), 0)
             )
-            self.slider_lane_width.setValue(int(preset.get("lane_width_scale", 1.0) * 100))
+            self.slider_lane_width.setValue(
+                int(preset.get("lane_width_scale", 1.0) * 100)
+            )
             self.slider_choke_size.setValue(
                 int(preset.get("chokepoint_size_scale", 1.0) * 100)
             )
@@ -1514,8 +1514,12 @@ class TerrainGeneratorGUI(QMainWindow):
 
             self.slider_rough.setValue(int(preset.get("roughness", 0.5) * 100))
             self.slider_erosion.setValue(int(preset.get("erosion_strength", 0.5) * 100))
-            self.slider_base_radius.setValue(preset.get("base_clear_radius", 0))
-            self.slider_base_flatness.setValue(int(preset.get("base_flatness", 0.0) * 100))
+            self.slider_base_radius.setValue(
+                preset.get("base_clear_radius", self.config_model.base_clear_radius)
+            )
+            self.slider_base_flatness.setValue(
+                int(preset.get("base_flatness", self.config_model.base_flatness) * 100)
+            )
             self.slider_center_flatten.setValue(
                 int(preset.get("center_flatten", 0.0) * 100)
             )
@@ -1668,7 +1672,9 @@ class TerrainGeneratorGUI(QMainWindow):
             self.combo_topology.setCurrentIndex(
                 topology_map.get(self.config_model.topology, 0)
             )
-            self.slider_lane_width.setValue(int(self.config_model.lane_width_scale * 100))
+            self.slider_lane_width.setValue(
+                int(self.config_model.lane_width_scale * 100)
+            )
             self.slider_choke_size.setValue(
                 int(self.config_model.chokepoint_size_scale * 100)
             )
@@ -1678,8 +1684,12 @@ class TerrainGeneratorGUI(QMainWindow):
             self.slider_rough.setValue(int(self.config_model.roughness * 100))
             self.slider_erosion.setValue(int(self.config_model.erosion_strength * 100))
             self.slider_base_radius.setValue(self.config_model.base_clear_radius)
-            self.slider_base_flatness.setValue(int(self.config_model.base_flatness * 100))
-            self.slider_center_flatten.setValue(int(self.config_model.center_flatten * 100))
+            self.slider_base_flatness.setValue(
+                int(self.config_model.base_flatness * 100)
+            )
+            self.slider_center_flatten.setValue(
+                int(self.config_model.center_flatten * 100)
+            )
             self.slider_center_radius.setValue(
                 int(self.config_model.center_flatten_radius * 100)
             )
@@ -1695,7 +1705,9 @@ class TerrainGeneratorGUI(QMainWindow):
 
             self.chk_disable_commander.setChecked(self.config_model.disable_commander)
             self.chk_disable_buildings.setChecked(self.config_model.disable_buildings)
-            self.chk_disable_resources.setChecked(self.config_model.disable_resource_nodes)
+            self.chk_disable_resources.setChecked(
+                self.config_model.disable_resource_nodes
+            )
             self.chk_minimal_map.setChecked(self.config_model.minimal_map)
             self.chk_terrain_only.setChecked(self.config_model.terrain_only)
 

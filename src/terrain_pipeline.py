@@ -137,81 +137,209 @@ def generate_strategic_layout(
     connections = []
 
     if topology == "central_gorge":
-        center_node = LayoutNode(center_x, center_y, choke_length / 2, ZoneType.CHOKEPOINT)
+        center_node = LayoutNode(
+            center_x, center_y, choke_length / 2, ZoneType.CHOKEPOINT
+        )
         nodes.append(center_node)
-        connections.append(LayoutConnection(imp_base, center_node, lane_width, ZoneType.MAIN_LANE))
-        connections.append(LayoutConnection(center_node, nf_base, lane_width, ZoneType.MAIN_LANE))
+        connections.append(
+            LayoutConnection(imp_base, center_node, lane_width, ZoneType.MAIN_LANE)
+        )
+        connections.append(
+            LayoutConnection(center_node, nf_base, lane_width, ZoneType.MAIN_LANE)
+        )
 
         offset = map_min_dim * rng.uniform(0.2, 0.4)
-        side1 = LayoutNode(center_x + perp_dx * offset, center_y + perp_dy * offset, veh_radius, ZoneType.VEHICLE_OPEN)
-        side2 = LayoutNode(center_x - perp_dx * offset, center_y - perp_dy * offset, veh_radius, ZoneType.VEHICLE_OPEN)
+        side1 = LayoutNode(
+            center_x + perp_dx * offset,
+            center_y + perp_dy * offset,
+            veh_radius,
+            ZoneType.VEHICLE_OPEN,
+        )
+        side2 = LayoutNode(
+            center_x - perp_dx * offset,
+            center_y - perp_dy * offset,
+            veh_radius,
+            ZoneType.VEHICLE_OPEN,
+        )
         nodes.extend([side1, side2])
 
-        connections.append(LayoutConnection(imp_base, side1, lane_width * 0.8, ZoneType.SIDE_ROUTE))
-        connections.append(LayoutConnection(side1, nf_base, lane_width * 0.8, ZoneType.SIDE_ROUTE))
-        connections.append(LayoutConnection(imp_base, side2, lane_width * 0.8, ZoneType.SIDE_ROUTE))
-        connections.append(LayoutConnection(side2, nf_base, lane_width * 0.8, ZoneType.SIDE_ROUTE))
+        connections.append(
+            LayoutConnection(imp_base, side1, lane_width * 0.8, ZoneType.SIDE_ROUTE)
+        )
+        connections.append(
+            LayoutConnection(side1, nf_base, lane_width * 0.8, ZoneType.SIDE_ROUTE)
+        )
+        connections.append(
+            LayoutConnection(imp_base, side2, lane_width * 0.8, ZoneType.SIDE_ROUTE)
+        )
+        connections.append(
+            LayoutConnection(side2, nf_base, lane_width * 0.8, ZoneType.SIDE_ROUTE)
+        )
 
     elif topology == "valley":
-        valley_node = LayoutNode(center_x, center_y, map_min_dim * rng.uniform(0.3, 0.4), ZoneType.VEHICLE_OPEN)
+        valley_node = LayoutNode(
+            center_x,
+            center_y,
+            map_min_dim * rng.uniform(0.3, 0.4),
+            ZoneType.VEHICLE_OPEN,
+        )
         nodes.append(valley_node)
-        connections.append(LayoutConnection(imp_base, valley_node, lane_width * 2, ZoneType.MAIN_LANE))
-        connections.append(LayoutConnection(valley_node, nf_base, lane_width * 2, ZoneType.MAIN_LANE))
+        connections.append(
+            LayoutConnection(imp_base, valley_node, lane_width * 2, ZoneType.MAIN_LANE)
+        )
+        connections.append(
+            LayoutConnection(valley_node, nf_base, lane_width * 2, ZoneType.MAIN_LANE)
+        )
 
     elif topology == "two_lane":
         offset = map_min_dim * rng.uniform(0.15, 0.3)
-        choke1 = LayoutNode(center_x + perp_dx * offset, center_y + perp_dy * offset, choke_length, ZoneType.CHOKEPOINT)
-        choke2 = LayoutNode(center_x - perp_dx * offset, center_y - perp_dy * offset, choke_length, ZoneType.CHOKEPOINT)
+        choke1 = LayoutNode(
+            center_x + perp_dx * offset,
+            center_y + perp_dy * offset,
+            choke_length,
+            ZoneType.CHOKEPOINT,
+        )
+        choke2 = LayoutNode(
+            center_x - perp_dx * offset,
+            center_y - perp_dy * offset,
+            choke_length,
+            ZoneType.CHOKEPOINT,
+        )
         nodes.extend([choke1, choke2])
 
-        v_imp1 = LayoutNode(imp_x + lane_dx * lane_len * 0.25 + perp_dx * offset * 0.5, imp_y + lane_dy * lane_len * 0.25 + perp_dy * offset * 0.5, veh_radius * 0.8, ZoneType.VEHICLE_OPEN)
-        v_nf1 = LayoutNode(nf_x - lane_dx * lane_len * 0.25 + perp_dx * offset * 0.5, nf_y - lane_dy * lane_len * 0.25 + perp_dy * offset * 0.5, veh_radius * 0.8, ZoneType.VEHICLE_OPEN)
-        v_imp2 = LayoutNode(imp_x + lane_dx * lane_len * 0.25 - perp_dx * offset * 0.5, imp_y + lane_dy * lane_len * 0.25 - perp_dy * offset * 0.5, veh_radius * 0.8, ZoneType.VEHICLE_OPEN)
-        v_nf2 = LayoutNode(nf_x - lane_dx * lane_len * 0.25 - perp_dx * offset * 0.5, nf_y - lane_dy * lane_len * 0.25 - perp_dy * offset * 0.5, veh_radius * 0.8, ZoneType.VEHICLE_OPEN)
+        v_imp1 = LayoutNode(
+            imp_x + lane_dx * lane_len * 0.25 + perp_dx * offset * 0.5,
+            imp_y + lane_dy * lane_len * 0.25 + perp_dy * offset * 0.5,
+            veh_radius * 0.8,
+            ZoneType.VEHICLE_OPEN,
+        )
+        v_nf1 = LayoutNode(
+            nf_x - lane_dx * lane_len * 0.25 + perp_dx * offset * 0.5,
+            nf_y - lane_dy * lane_len * 0.25 + perp_dy * offset * 0.5,
+            veh_radius * 0.8,
+            ZoneType.VEHICLE_OPEN,
+        )
+        v_imp2 = LayoutNode(
+            imp_x + lane_dx * lane_len * 0.25 - perp_dx * offset * 0.5,
+            imp_y + lane_dy * lane_len * 0.25 - perp_dy * offset * 0.5,
+            veh_radius * 0.8,
+            ZoneType.VEHICLE_OPEN,
+        )
+        v_nf2 = LayoutNode(
+            nf_x - lane_dx * lane_len * 0.25 - perp_dx * offset * 0.5,
+            nf_y - lane_dy * lane_len * 0.25 - perp_dy * offset * 0.5,
+            veh_radius * 0.8,
+            ZoneType.VEHICLE_OPEN,
+        )
         nodes.extend([v_imp1, v_nf1, v_imp2, v_nf2])
 
-        connections.append(LayoutConnection(imp_base, v_imp1, lane_width, ZoneType.MAIN_LANE))
-        connections.append(LayoutConnection(v_imp1, choke1, lane_width, ZoneType.CHOKEPOINT))
-        connections.append(LayoutConnection(choke1, v_nf1, lane_width, ZoneType.CHOKEPOINT))
-        connections.append(LayoutConnection(v_nf1, nf_base, lane_width, ZoneType.MAIN_LANE))
+        connections.append(
+            LayoutConnection(imp_base, v_imp1, lane_width, ZoneType.MAIN_LANE)
+        )
+        connections.append(
+            LayoutConnection(v_imp1, choke1, lane_width, ZoneType.CHOKEPOINT)
+        )
+        connections.append(
+            LayoutConnection(choke1, v_nf1, lane_width, ZoneType.CHOKEPOINT)
+        )
+        connections.append(
+            LayoutConnection(v_nf1, nf_base, lane_width, ZoneType.MAIN_LANE)
+        )
 
-        connections.append(LayoutConnection(imp_base, v_imp2, lane_width, ZoneType.MAIN_LANE))
-        connections.append(LayoutConnection(v_imp2, choke2, lane_width, ZoneType.CHOKEPOINT))
-        connections.append(LayoutConnection(choke2, v_nf2, lane_width, ZoneType.CHOKEPOINT))
-        connections.append(LayoutConnection(v_nf2, nf_base, lane_width, ZoneType.MAIN_LANE))
+        connections.append(
+            LayoutConnection(imp_base, v_imp2, lane_width, ZoneType.MAIN_LANE)
+        )
+        connections.append(
+            LayoutConnection(v_imp2, choke2, lane_width, ZoneType.CHOKEPOINT)
+        )
+        connections.append(
+            LayoutConnection(choke2, v_nf2, lane_width, ZoneType.CHOKEPOINT)
+        )
+        connections.append(
+            LayoutConnection(v_nf2, nf_base, lane_width, ZoneType.MAIN_LANE)
+        )
 
     elif topology == "island":
-        center_island = LayoutNode(center_x, center_y, veh_radius * 1.5, ZoneType.VEHICLE_OPEN)
+        center_island = LayoutNode(
+            center_x, center_y, veh_radius * 1.5, ZoneType.VEHICLE_OPEN
+        )
         nodes.append(center_island)
 
-        choke_imp = LayoutNode(imp_x + lane_dx * lane_len * 0.3, imp_y + lane_dy * lane_len * 0.3, choke_length, ZoneType.CHOKEPOINT)
-        choke_nf = LayoutNode(nf_x - lane_dx * lane_len * 0.3, nf_y - lane_dy * lane_len * 0.3, choke_length, ZoneType.CHOKEPOINT)
+        choke_imp = LayoutNode(
+            imp_x + lane_dx * lane_len * 0.3,
+            imp_y + lane_dy * lane_len * 0.3,
+            choke_length,
+            ZoneType.CHOKEPOINT,
+        )
+        choke_nf = LayoutNode(
+            nf_x - lane_dx * lane_len * 0.3,
+            nf_y - lane_dy * lane_len * 0.3,
+            choke_length,
+            ZoneType.CHOKEPOINT,
+        )
         nodes.extend([choke_imp, choke_nf])
 
-        connections.append(LayoutConnection(imp_base, choke_imp, lane_width, ZoneType.CHOKEPOINT))
-        connections.append(LayoutConnection(choke_imp, center_island, lane_width, ZoneType.MAIN_LANE))
-        connections.append(LayoutConnection(center_island, choke_nf, lane_width, ZoneType.MAIN_LANE))
-        connections.append(LayoutConnection(choke_nf, nf_base, lane_width, ZoneType.CHOKEPOINT))
+        connections.append(
+            LayoutConnection(imp_base, choke_imp, lane_width, ZoneType.CHOKEPOINT)
+        )
+        connections.append(
+            LayoutConnection(choke_imp, center_island, lane_width, ZoneType.MAIN_LANE)
+        )
+        connections.append(
+            LayoutConnection(center_island, choke_nf, lane_width, ZoneType.MAIN_LANE)
+        )
+        connections.append(
+            LayoutConnection(choke_nf, nf_base, lane_width, ZoneType.CHOKEPOINT)
+        )
 
     else:
-        center_choke = LayoutNode(center_x, center_y, choke_length / 2, ZoneType.CHOKEPOINT)
+        center_choke = LayoutNode(
+            center_x, center_y, choke_length / 2, ZoneType.CHOKEPOINT
+        )
         nodes.append(center_choke)
 
-        veh1 = LayoutNode(imp_x + lane_dx * lane_len * 0.25, imp_y + lane_dy * lane_len * 0.25, veh_radius, ZoneType.VEHICLE_OPEN)
-        veh2 = LayoutNode(imp_x + lane_dx * lane_len * 0.75, imp_y + lane_dy * lane_len * 0.75, veh_radius, ZoneType.VEHICLE_OPEN)
+        veh1 = LayoutNode(
+            imp_x + lane_dx * lane_len * 0.25,
+            imp_y + lane_dy * lane_len * 0.25,
+            veh_radius,
+            ZoneType.VEHICLE_OPEN,
+        )
+        veh2 = LayoutNode(
+            imp_x + lane_dx * lane_len * 0.75,
+            imp_y + lane_dy * lane_len * 0.75,
+            veh_radius,
+            ZoneType.VEHICLE_OPEN,
+        )
         nodes.extend([veh1, veh2])
 
-        connections.append(LayoutConnection(imp_base, veh1, lane_width, ZoneType.MAIN_LANE))
-        connections.append(LayoutConnection(veh1, center_choke, lane_width, ZoneType.CHOKEPOINT))
-        connections.append(LayoutConnection(center_choke, veh2, lane_width, ZoneType.CHOKEPOINT))
-        connections.append(LayoutConnection(veh2, nf_base, lane_width, ZoneType.MAIN_LANE))
+        connections.append(
+            LayoutConnection(imp_base, veh1, lane_width, ZoneType.MAIN_LANE)
+        )
+        connections.append(
+            LayoutConnection(veh1, center_choke, lane_width, ZoneType.CHOKEPOINT)
+        )
+        connections.append(
+            LayoutConnection(center_choke, veh2, lane_width, ZoneType.CHOKEPOINT)
+        )
+        connections.append(
+            LayoutConnection(veh2, nf_base, lane_width, ZoneType.MAIN_LANE)
+        )
 
         side_offset = map_min_dim * rng.uniform(0.25, 0.4)
-        side_veh = LayoutNode(center_x + perp_dx * side_offset, center_y + perp_dy * side_offset, veh_radius * 0.7, ZoneType.VEHICLE_OPEN)
+        side_veh = LayoutNode(
+            center_x + perp_dx * side_offset,
+            center_y + perp_dy * side_offset,
+            veh_radius * 0.7,
+            ZoneType.VEHICLE_OPEN,
+        )
         nodes.append(side_veh)
 
-        connections.append(LayoutConnection(veh1, side_veh, lane_width * 0.7, ZoneType.SIDE_ROUTE))
-        connections.append(LayoutConnection(side_veh, veh2, lane_width * 0.7, ZoneType.SIDE_ROUTE))
+        connections.append(
+            LayoutConnection(veh1, side_veh, lane_width * 0.7, ZoneType.SIDE_ROUTE)
+        )
+        connections.append(
+            LayoutConnection(side_veh, veh2, lane_width * 0.7, ZoneType.SIDE_ROUTE)
+        )
 
     return nodes, connections
 
@@ -239,7 +367,10 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     # 2. Prepare grid constants
     floor_height = max_height * 0.15
     base_mountain_height = max_height * 0.85
-    mountain_height = floor_height + (base_mountain_height - floor_height) * spec.mountain_height_scale
+    mountain_height = (
+        floor_height
+        + (base_mountain_height - floor_height) * spec.mountain_height_scale
+    )
 
     warp_scale = 0.005
     warp_strength = 150.0 * roughness
@@ -390,7 +521,10 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
 
             # Chokepoint Wall: High cliffs flanking the choke
             base_choke_wall_target = base_mountain_height * (0.8 + 0.2 * ridge_val)
-            choke_wall_target = floor_height + (base_choke_wall_target - floor_height) * spec.mountain_height_scale
+            choke_wall_target = (
+                floor_height
+                + (base_choke_wall_target - floor_height) * spec.mountain_height_scale
+            )
 
             # Start with wilderness
             final_height = wilderness_target
@@ -537,10 +671,20 @@ def flatten_base_areas(
                     continue
                 if math.sqrt((wx - bx) ** 2 + (wy - by) ** 2) <= r_area:
                     heights.append(grid.heights[r_][c_])
-        return sum(heights) / len(heights) if heights else spec.terrain_max_height * 0.15
+        return (
+            sum(heights) / len(heights) if heights else spec.terrain_max_height * 0.15
+        )
 
     imp_avg_height = get_local_avg(imp_base_x, imp_base_y, base_radius)
     nf_avg_height = get_local_avg(nf_base_x, nf_base_y, base_radius)
+
+    floor_h = spec.terrain_max_height * 0.15
+    blend_to_floor = max(0.0, (spec.base_flatness - 0.5) * 2.0)
+
+    imp_target_height = (
+        imp_avg_height * (1.0 - blend_to_floor) + floor_h * blend_to_floor
+    )
+    nf_target_height = nf_avg_height * (1.0 - blend_to_floor) + floor_h * blend_to_floor
 
     # We want the plateau to be perfectly flat for the inner 80% of the radius.
     plateau_radius = base_radius * 0.8
@@ -552,15 +696,19 @@ def flatten_base_areas(
         for c in range(cols):
             world_x = spec.origin_x + c * vertex_spacing
 
-            dist_to_imp = math.sqrt((world_x - imp_base_x) ** 2 + (world_y - imp_base_y) ** 2)
-            dist_to_nf = math.sqrt((world_x - nf_base_x) ** 2 + (world_y - nf_base_y) ** 2)
+            dist_to_imp = math.sqrt(
+                (world_x - imp_base_x) ** 2 + (world_y - imp_base_y) ** 2
+            )
+            dist_to_nf = math.sqrt(
+                (world_x - nf_base_x) ** 2 + (world_y - nf_base_y) ** 2
+            )
 
             if dist_to_imp < base_radius:
                 dist = dist_to_imp
-                target_height = imp_avg_height
+                target_height = imp_target_height
             elif dist_to_nf < base_radius:
                 dist = dist_to_nf
-                target_height = nf_avg_height
+                target_height = nf_target_height
             else:
                 continue
 
@@ -587,18 +735,24 @@ def flatten_base_areas(
                 world_y = spec.origin_y + r * vertex_spacing
                 for c in range(cols):
                     world_x = spec.origin_x + c * vertex_spacing
-                    dist_to_res = math.sqrt((world_x - res_x) ** 2 + (world_y - res_y) ** 2)
+                    dist_to_res = math.sqrt(
+                        (world_x - res_x) ** 2 + (world_y - res_y) ** 2
+                    )
                     if dist_to_res <= res_radius:
                         local_heights.append(grid.heights[r][c])
 
-            local_avg_height = sum(local_heights) / len(local_heights) if local_heights else avg_height
+            local_avg_height = (
+                sum(local_heights) / len(local_heights) if local_heights else avg_height
+            )
 
             # Now apply flattening using the local average height
             for r in range(rows):
                 world_y = spec.origin_y + r * vertex_spacing
                 for c in range(cols):
                     world_x = spec.origin_x + c * vertex_spacing
-                    dist_to_res = math.sqrt((world_x - res_x) ** 2 + (world_y - res_y) ** 2)
+                    dist_to_res = math.sqrt(
+                        (world_x - res_x) ** 2 + (world_y - res_y) ** 2
+                    )
                     if dist_to_res < res_radius:
                         t = 1.0 - (dist_to_res / res_radius)
                         t = t * t * (3 - 2 * t)
@@ -1174,7 +1328,9 @@ def run_pipeline(spec: TerrainSpec) -> dict:
     # Validate layout before starting
     layout_result = spec.validate_layout()
     if not layout_result.valid:
-        raise ValueError("Invalid layout configuration:\n" + "\n".join(layout_result.errors))
+        raise ValueError(
+            "Invalid layout configuration:\n" + "\n".join(layout_result.errors)
+        )
 
     print("Running terrain pipeline...")
     print(
@@ -1195,6 +1351,12 @@ def run_pipeline(spec: TerrainSpec) -> dict:
 
     print(f"    Height range: {grid.min_height():.1f} to {grid.max_height():.1f}")
 
+    if spec.base_clear_radius > 0:
+        print(
+            f"  Step 2b: Pre-stamp base areas (radius={spec.base_clear_radius}, flatness={spec.base_flatness})"
+        )
+        grid = flatten_base_areas(grid, spec)
+
     print(
         f"  Step 3: Simulate hydraulic erosion ({spec.erosion_iterations} droplets, lifetime={spec.erosion_droplet_lifetime})"
     )
@@ -1209,13 +1371,15 @@ def run_pipeline(spec: TerrainSpec) -> dict:
     print("  Step 5: Smooth heights")
     grid = smooth_heights(grid, iterations=2)
 
-    if spec.base_clear_radius > 0:
+    if spec.base_clear_radius > 0 and spec.base_flatness > 0.5:
+        print("  Step 5b: Light touch-up for base areas after erosion")
+        import copy
+
+        spec_light = copy.copy(spec)
+        spec_light.base_flatness = spec.base_flatness * 0.3
+        grid = flatten_base_areas(grid, spec_light)
         print(
-            f"  Step 5b: Flatten base areas (radius={spec.base_clear_radius}, flatness={spec.base_flatness})"
-        )
-        grid = flatten_base_areas(grid, spec)
-        print(
-            f"    Height range after base flatten: {grid.min_height():.1f} to {grid.max_height():.1f}"
+            f"    Height range after base flatten touch-up: {grid.min_height():.1f} to {grid.max_height():.1f}"
         )
 
     print(f"  Step 6: Clamp slope (max_step={spec.max_slope_step})")

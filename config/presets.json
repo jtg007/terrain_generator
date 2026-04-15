@@ -63,8 +63,8 @@
             "displacement_power": 3,
             "terrain_material": "common/nature/blend_grass_mountainwall_000",
             "skybox": "empsky_overcast1",
-            "base_clear_radius": 1024,
-            "base_flatness": 1.0,
+            "base_clear_radius": 700,
+            "base_flatness": 0.9,
             "center_flatten": 0.8,
             "center_flatten_radius": 0.5
         },

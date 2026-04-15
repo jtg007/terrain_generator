@@ -126,9 +126,7 @@ class VmfBlendProcessor:
             arr = np.array(img.convert("L"), dtype=np.float32) / 255.0
         return arr
 
-    def _generate_alpha_for_face(
-        self, power: int
-    ) -> List[str]:
+    def _generate_alpha_for_face(self, power: int) -> List[str]:
         """Generate alpha values for a displacement face based on heightmap."""
 
         heightmap = self._load_heightmap()
