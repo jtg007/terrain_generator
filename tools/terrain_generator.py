@@ -914,6 +914,15 @@ class TerrainGeneratorGUI(QMainWindow):
         return layout_result.invalid_entities
 
     def clear_resources(self):
+        reply = QMessageBox.question(
+            self,
+            "Confirm Clear",
+            "Are you sure you want to clear all resource nodes?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply == QMessageBox.No:
+            return
+
         self.config_model.custom_resources = []
         invalid_entities = self.validate_current_layout()
         self.preview_widget.set_entities(
