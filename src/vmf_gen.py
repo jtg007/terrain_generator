@@ -264,7 +264,10 @@ def flatten_terrain_at_location(
         for px in range(img_width):
             world_x = origin_x + (px / (img_width - 1)) * map_width
             world_y = origin_y + (py / (img_height - 1)) * map_height
-            if math.sqrt((world_x - center_x) ** 2 + (world_y - center_y) ** 2) <= radius:
+            if (
+                math.sqrt((world_x - center_x) ** 2 + (world_y - center_y) ** 2)
+                <= radius
+            ):
                 local_heights.append(float(heightmap[py, px]))
 
     if local_heights:
@@ -295,7 +298,9 @@ def flatten_terrain_at_location(
                 else:
                     target_height = float(heightmap[center_py, center_px])
 
-                flat_heightmap[py, px] = flat_heightmap[py, px] * (1 - t) + target_height * t
+                flat_heightmap[py, px] = (
+                    flat_heightmap[py, px] * (1 - t) + target_height * t
+                )
 
     return flat_heightmap
 

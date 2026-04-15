@@ -33,9 +33,7 @@ class LayoutValidator:
         res_to_res_min_dist = 0.10 * min_dim
 
         # Check Bases within bounds
-        def check_bounds(
-            entity_pos: Tuple[float, float], margin: float
-        ):
+        def check_bounds(entity_pos: Tuple[float, float], margin: float):
             x, y = entity_pos
             if (
                 x < spec.origin_x + margin
