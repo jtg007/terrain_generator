@@ -258,8 +258,22 @@ def flatten_terrain_at_location(
     center_px = max(0, min(center_px, img_width - 1))
     center_py = max(0, min(center_py, img_height - 1))
 
-    center_height = float(heightmap[center_py, center_px])
-    avg_height = float(np.mean(heightmap))
+    # Determine local average height in the base area
+    local_heights = []
+    for py in range(img_height):
+        for px in range(img_width):
+            world_x = origin_x + (px / (img_width - 1)) * map_width
+            world_y = origin_y + (py / (img_height - 1)) * map_height
+            if math.sqrt((world_x - center_x) ** 2 + (world_y - center_y) ** 2) <= radius:
+                local_heights.append(float(heightmap[py, px]))
+
+    if local_heights:
+        local_avg = sum(local_heights) / len(local_heights)
+    else:
+        local_avg = float(heightmap[center_py, center_px])
+
+    plateau_radius = radius * 0.8
+    falloff_dist = radius - plateau_radius
 
     for py in range(img_height):
         for px in range(img_width):
@@ -269,17 +283,19 @@ def flatten_terrain_at_location(
             dist = math.sqrt((world_x - center_x) ** 2 + (world_y - center_y) ** 2)
 
             if dist < radius:
-                falloff = dist / radius
-                falloff = falloff**0.5
+                if dist <= plateau_radius:
+                    t = 1.0
+                else:
+                    # Smooth step falloff
+                    t = 1.0 - ((dist - plateau_radius) / falloff_dist)
+                    t = t * t * (3 - 2 * t)
 
                 if blend_to_avg:
-                    target_height = avg_height * 0.7 + center_height * 0.3
+                    target_height = local_avg
                 else:
-                    target_height = center_height
+                    target_height = float(heightmap[center_py, center_px])
 
-                flat_heightmap[py, px] = flat_heightmap[
-                    py, px
-                ] * falloff + target_height * (1 - falloff)
+                flat_heightmap[py, px] = flat_heightmap[py, px] * (1 - t) + target_height * t
 
     return flat_heightmap
 
