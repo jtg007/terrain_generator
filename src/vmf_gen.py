@@ -591,30 +591,18 @@ def spawn_resource_nodes_enhanced(
     prop_offset = prefabs.get("prop_offset", {})
 
     yaw_to_center = calculate_yaw_to_center(base_x, base_y, map_center_x, map_center_y)
-
-    if rules.get("custom_resources") is not None:
-        custom_points = rules.get("custom_resources")
-        # Ensure we only iterate over what's provided, so we simulate angles logic just for loops
-        node_count = len(custom_points)
-        for i, (node_x, node_y) in enumerate(custom_points):
-            pass  # node_x and node_y already assigned
-    else:
-        angles = [yaw_to_center + i * (360 / node_count) for i in range(node_count)]
-        custom_points = None
+    angles = [yaw_to_center + i * (360 / node_count) for i in range(node_count)]
 
     for i in range(node_count):
-        if custom_points is None:
-            angle = angles[i]
-            offset_dist = random.uniform(dist_to_base_avg * 0.8, dist_to_base_avg * 1.2)
-            if base_radius > 512:
-                offset_dist = min(offset_dist, base_radius * 0.95)
-            offset_dist = max(offset_dist, 256.0)
+        angle = angles[i]
+        offset_dist = random.uniform(dist_to_base_avg * 0.8, dist_to_base_avg * 1.2)
+        if base_radius > 512:
+            offset_dist = min(offset_dist, base_radius * 0.95)
+        offset_dist = max(offset_dist, 256.0)
 
-            angle_rad = math.radians(angle)
-            node_x = base_x + (math.cos(angle_rad) * offset_dist)
-            node_y = base_y + (math.sin(angle_rad) * offset_dist)
-        else:
-            node_x, node_y = custom_points[i]
+        angle_rad = math.radians(angle)
+        node_x = base_x + (math.cos(angle_rad) * offset_dist)
+        node_y = base_y + (math.sin(angle_rad) * offset_dist)
 
         map_min_x = origin_x + 64
         map_max_x = origin_x + map_width - 64
@@ -683,6 +671,95 @@ def spawn_resource_nodes_enhanced(
         resource_prop.origin = f"{prop_x:.1f} {prop_y:.1f} {prop_z:.1f}"
         resource_prop.properties["targetname"] = model_targetname
         resource_prop.properties["team"] = str(team_num)
+        resource_prop.properties["model"] = "models/props_wasteland/rockcliff01b.mdl"
+        resource_prop.properties["Enabled"] = "1"
+        resource_prop.properties["angles"] = f"0 {random.uniform(0, 360):.1f} 0"
+
+
+def spawn_custom_resources(
+    valve_map: vmf.ValveMap,
+    custom_points: List[Tuple[float, float]],
+    heightmap: Optional[np.ndarray] = None,
+    origin_x: int = 0,
+    origin_y: int = 0,
+    map_width: int = 4096,
+    map_height: int = 4096,
+    max_height: int = 512,
+    tiles_x: int = 8,
+    tiles_y: int = 8,
+    power: int = 3,
+) -> None:
+    """Spawn neutral custom resource nodes at user-specified positions."""
+    prefabs = {
+        "prop_offset": {
+            "dx": {"min": -40, "max": 64},
+            "dy": {"min": -88, "max": 30},
+            "dz": {"max": 49},
+        }
+    }
+    prop_offset = prefabs.get("prop_offset", {})
+
+    map_min_x = origin_x + 64
+    map_max_x = origin_x + map_width - 64
+    map_min_y = origin_y + 64
+    map_max_y = origin_y + map_height - 64
+
+    for i, (node_x, node_y) in enumerate(custom_points):
+        node_x = quantize_coord(max(map_min_x, min(map_max_x, node_x)), 1.0)
+        node_y = quantize_coord(max(map_min_y, min(map_max_y, node_y)), 1.0)
+        node_z = quantize_coord(
+            get_terrain_height_at(
+                node_x,
+                node_y,
+                heightmap,
+                origin_x,
+                origin_y,
+                map_width,
+                map_height,
+                max_height,
+                tiles_x,
+                tiles_y,
+                power,
+            )
+            + 8,
+            1.0,
+        )
+
+        point_targetname = f"Res_Point_Neutral_{i}"
+        model_targetname = f"Res_Model_Neutral_{i}"
+
+        prop_dx_raw = random.uniform(
+            prop_offset.get("dx", {}).get("min", -40),
+            prop_offset.get("dx", {}).get("max", 64),
+        )
+        prop_dy_raw = random.uniform(
+            prop_offset.get("dy", {}).get("min", -88),
+            prop_offset.get("dy", {}).get("max", 30),
+        )
+        prop_dz_raw = random.uniform(
+            0,
+            max(0, prop_offset.get("dz", {}).get("max", 49)),
+        )
+
+        prop_x = node_x + prop_dx_raw
+        prop_y = node_y + prop_dy_raw
+        prop_z = node_z + prop_dz_raw
+
+        prop_x = quantize_coord(max(map_min_x, min(map_max_x, prop_x)), 1.0)
+        prop_y = quantize_coord(max(map_min_y, min(map_max_y, prop_y)), 1.0)
+        prop_z = quantize_coord(prop_z, 1.0)
+
+        resource_logic = vmf_lib.Entity("emp_resource_point")
+        resource_logic.origin = f"{node_x:.1f} {node_y:.1f} {node_z:.1f}"
+        resource_logic.properties["targetname"] = point_targetname
+        resource_logic.properties["StartDisabled"] = "0"
+        resource_logic.properties["Enabled"] = "1"
+        resource_logic.properties["ResourcesSecond"] = "3"
+        resource_logic.properties["MaxResources"] = "-1"
+
+        resource_prop = vmf_lib.Entity("emp_resource_point_prop")
+        resource_prop.origin = f"{prop_x:.1f} {prop_y:.1f} {prop_z:.1f}"
+        resource_prop.properties["targetname"] = model_targetname
         resource_prop.properties["model"] = "models/props_wasteland/rockcliff01b.mdl"
         resource_prop.properties["Enabled"] = "1"
         resource_prop.properties["angles"] = f"0 {random.uniform(0, 360):.1f} 0"
@@ -1279,9 +1356,20 @@ class DisplacementVMF:
                 )
 
             if self.spec.custom_resources is not None:
-                rules["custom_resources"] = self.spec.custom_resources
-
-            if not skip_resources:
+                spawn_custom_resources(
+                    valve_map,
+                    self.spec.custom_resources,
+                    heightmap=height_array,
+                    origin_x=origin_x,
+                    origin_y=origin_y,
+                    map_width=map_width,
+                    map_height=map_height,
+                    max_height=height_scale,
+                    tiles_x=tiles_x,
+                    tiles_y=tiles_y,
+                    power=power,
+                )
+            elif not skip_resources:
                 spawn_resource_nodes_enhanced(
                     valve_map,
                     "imp",
@@ -1301,7 +1389,6 @@ class DisplacementVMF:
                     tiles_y=tiles_y,
                     power=power,
                 )
-            if not skip_resources:
                 spawn_resource_nodes_enhanced(
                     valve_map,
                     "nf",
@@ -1389,9 +1476,20 @@ class DisplacementVMF:
                     power=power,
                 )
             if self.spec.custom_resources is not None:
-                rules["custom_resources"] = self.spec.custom_resources
-
-            if not skip_resources:
+                spawn_custom_resources(
+                    valve_map,
+                    self.spec.custom_resources,
+                    heightmap=height_array,
+                    origin_x=origin_x,
+                    origin_y=origin_y,
+                    map_width=map_width,
+                    map_height=map_height,
+                    max_height=height_scale,
+                    tiles_x=tiles_x,
+                    tiles_y=tiles_y,
+                    power=power,
+                )
+            elif not skip_resources:
                 spawn_resource_nodes_enhanced(
                     valve_map,
                     "imp",
@@ -1411,7 +1509,6 @@ class DisplacementVMF:
                     tiles_y=tiles_y,
                     power=power,
                 )
-            if not skip_resources:
                 spawn_resource_nodes_enhanced(
                     valve_map,
                     "nf",
@@ -1430,8 +1527,6 @@ class DisplacementVMF:
                     tiles_x=tiles_x,
                     tiles_y=tiles_y,
                     power=power,
-                    skip_commander=skip_commander,
-                    skip_buildings=skip_buildings,
                 )
 
         if not skip_misc:
