@@ -475,6 +475,14 @@ def generate_playability_mask(
             # Apply blockade if outside the narrow lane
             out_of_lane = min_dist_grid > choke_playable_width
             block_val = np.minimum(1.0, (min_dist_grid - choke_playable_width) / max(1e-5, choke_playable_width * 2))
+
+            # Fade out the blockade so it doesn't cover the entire map
+            fade_out_start = conn.width * 1.5
+            fade_out_end = conn.width * 2.0
+            falloff = 1.0 - (min_dist_grid - fade_out_start) / max(1e-5, fade_out_end - fade_out_start)
+            falloff = np.clip(falloff, 0.0, 1.0)
+            block_val = block_val * falloff
+
             block_grid = np.zeros_like(choke_block_mask)
             block_grid[out_of_lane] = block_val[out_of_lane]
             choke_block_mask = np.maximum(choke_block_mask, block_grid)
