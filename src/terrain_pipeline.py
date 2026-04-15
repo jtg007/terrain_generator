@@ -56,6 +56,7 @@ class LayoutConnection:
     end_node: LayoutNode
     width: float
     type: str  # 'main_lane', 'side_lane', 'chokepoint_lane'
+    path_points: List[Tuple[float, float]] = None
 
 
 def generate_vertex_grid(spec: TerrainSpec) -> HeightGrid:
@@ -77,6 +78,60 @@ def generate_vertex_grid(spec: TerrainSpec) -> HeightGrid:
         cell_size=spec.cell_size,
     )
 
+
+
+def create_connection_path(
+    start_node: LayoutNode,
+    end_node: LayoutNode,
+    width: float,
+    conn_type: str,
+    spec: TerrainSpec
+) -> LayoutConnection:
+    import math
+    from src.noise import NoiseGenerator
+
+    noise = NoiseGenerator(spec.seed)
+
+    dx = end_node.x - start_node.x
+    dy = end_node.y - start_node.y
+    length = math.sqrt(dx*dx + dy*dy)
+
+    if length == 0:
+        return LayoutConnection(start_node, end_node, width, conn_type, [(start_node.x, start_node.y)])
+
+    nx = -dy / length
+    ny = dx / length
+
+    # Subdivide line: roughly one point every 150 units
+    num_segments = max(1, int(length / 150.0))
+    path_points = []
+
+    # Max offset is 20% of the total connection length
+    max_offset = length * 0.20
+    freq = 3.0  # Frequency of the winding
+
+    for i in range(num_segments + 1):
+        t = i / num_segments
+        base_x = start_node.x + t * dx
+        base_y = start_node.y + t * dy
+
+        if i == 0 or i == num_segments:
+            # Anchor perfectly to the start and end nodes
+            path_points.append((base_x, base_y))
+            continue
+
+        # Sine envelope forces noise to 0 at the start and end
+        envelope = math.sin(t * math.pi)
+
+        # 1D noise sampled along t
+        noise_val = noise.fbm(t * freq, spec.seed * 0.1, octaves=2)
+        offset = noise_val * envelope * max_offset
+
+        px = base_x + nx * offset
+        py = base_y + ny * offset
+        path_points.append((px, py))
+
+    return LayoutConnection(start_node, end_node, width, conn_type, path_points)
 
 def generate_strategic_layout(
     spec: TerrainSpec,
@@ -142,10 +197,10 @@ def generate_strategic_layout(
         )
         nodes.append(center_node)
         connections.append(
-            LayoutConnection(imp_base, center_node, lane_width, ZoneType.MAIN_LANE)
+            create_connection_path(imp_base, center_node, lane_width, ZoneType.MAIN_LANE, spec)
         )
         connections.append(
-            LayoutConnection(center_node, nf_base, lane_width, ZoneType.MAIN_LANE)
+            create_connection_path(center_node, nf_base, lane_width, ZoneType.MAIN_LANE, spec)
         )
 
         offset = map_min_dim * rng.uniform(0.2, 0.4)
@@ -164,16 +219,16 @@ def generate_strategic_layout(
         nodes.extend([side1, side2])
 
         connections.append(
-            LayoutConnection(imp_base, side1, lane_width * 0.8, ZoneType.SIDE_ROUTE)
+            create_connection_path(imp_base, side1, lane_width * 0.8, ZoneType.SIDE_ROUTE, spec)
         )
         connections.append(
-            LayoutConnection(side1, nf_base, lane_width * 0.8, ZoneType.SIDE_ROUTE)
+            create_connection_path(side1, nf_base, lane_width * 0.8, ZoneType.SIDE_ROUTE, spec)
         )
         connections.append(
-            LayoutConnection(imp_base, side2, lane_width * 0.8, ZoneType.SIDE_ROUTE)
+            create_connection_path(imp_base, side2, lane_width * 0.8, ZoneType.SIDE_ROUTE, spec)
         )
         connections.append(
-            LayoutConnection(side2, nf_base, lane_width * 0.8, ZoneType.SIDE_ROUTE)
+            create_connection_path(side2, nf_base, lane_width * 0.8, ZoneType.SIDE_ROUTE, spec)
         )
 
     elif topology == "valley":
@@ -185,10 +240,10 @@ def generate_strategic_layout(
         )
         nodes.append(valley_node)
         connections.append(
-            LayoutConnection(imp_base, valley_node, lane_width * 2, ZoneType.MAIN_LANE)
+            create_connection_path(imp_base, valley_node, lane_width * 2, ZoneType.MAIN_LANE, spec)
         )
         connections.append(
-            LayoutConnection(valley_node, nf_base, lane_width * 2, ZoneType.MAIN_LANE)
+            create_connection_path(valley_node, nf_base, lane_width * 2, ZoneType.MAIN_LANE, spec)
         )
 
     elif topology == "two_lane":
@@ -234,29 +289,29 @@ def generate_strategic_layout(
         nodes.extend([v_imp1, v_nf1, v_imp2, v_nf2])
 
         connections.append(
-            LayoutConnection(imp_base, v_imp1, lane_width, ZoneType.MAIN_LANE)
+            create_connection_path(imp_base, v_imp1, lane_width, ZoneType.MAIN_LANE, spec)
         )
         connections.append(
-            LayoutConnection(v_imp1, choke1, lane_width, ZoneType.CHOKEPOINT)
+            create_connection_path(v_imp1, choke1, lane_width, ZoneType.CHOKEPOINT, spec)
         )
         connections.append(
-            LayoutConnection(choke1, v_nf1, lane_width, ZoneType.CHOKEPOINT)
+            create_connection_path(choke1, v_nf1, lane_width, ZoneType.CHOKEPOINT, spec)
         )
         connections.append(
-            LayoutConnection(v_nf1, nf_base, lane_width, ZoneType.MAIN_LANE)
+            create_connection_path(v_nf1, nf_base, lane_width, ZoneType.MAIN_LANE, spec)
         )
 
         connections.append(
-            LayoutConnection(imp_base, v_imp2, lane_width, ZoneType.MAIN_LANE)
+            create_connection_path(imp_base, v_imp2, lane_width, ZoneType.MAIN_LANE, spec)
         )
         connections.append(
-            LayoutConnection(v_imp2, choke2, lane_width, ZoneType.CHOKEPOINT)
+            create_connection_path(v_imp2, choke2, lane_width, ZoneType.CHOKEPOINT, spec)
         )
         connections.append(
-            LayoutConnection(choke2, v_nf2, lane_width, ZoneType.CHOKEPOINT)
+            create_connection_path(choke2, v_nf2, lane_width, ZoneType.CHOKEPOINT, spec)
         )
         connections.append(
-            LayoutConnection(v_nf2, nf_base, lane_width, ZoneType.MAIN_LANE)
+            create_connection_path(v_nf2, nf_base, lane_width, ZoneType.MAIN_LANE, spec)
         )
 
     elif topology == "island":
@@ -280,16 +335,16 @@ def generate_strategic_layout(
         nodes.extend([choke_imp, choke_nf])
 
         connections.append(
-            LayoutConnection(imp_base, choke_imp, lane_width, ZoneType.CHOKEPOINT)
+            create_connection_path(imp_base, choke_imp, lane_width, ZoneType.CHOKEPOINT, spec)
         )
         connections.append(
-            LayoutConnection(choke_imp, center_island, lane_width, ZoneType.MAIN_LANE)
+            create_connection_path(choke_imp, center_island, lane_width, ZoneType.MAIN_LANE, spec)
         )
         connections.append(
-            LayoutConnection(center_island, choke_nf, lane_width, ZoneType.MAIN_LANE)
+            create_connection_path(center_island, choke_nf, lane_width, ZoneType.MAIN_LANE, spec)
         )
         connections.append(
-            LayoutConnection(choke_nf, nf_base, lane_width, ZoneType.CHOKEPOINT)
+            create_connection_path(choke_nf, nf_base, lane_width, ZoneType.CHOKEPOINT, spec)
         )
 
     else:
@@ -313,16 +368,16 @@ def generate_strategic_layout(
         nodes.extend([veh1, veh2])
 
         connections.append(
-            LayoutConnection(imp_base, veh1, lane_width, ZoneType.MAIN_LANE)
+            create_connection_path(imp_base, veh1, lane_width, ZoneType.MAIN_LANE, spec)
         )
         connections.append(
-            LayoutConnection(veh1, center_choke, lane_width, ZoneType.CHOKEPOINT)
+            create_connection_path(veh1, center_choke, lane_width, ZoneType.CHOKEPOINT, spec)
         )
         connections.append(
-            LayoutConnection(center_choke, veh2, lane_width, ZoneType.CHOKEPOINT)
+            create_connection_path(center_choke, veh2, lane_width, ZoneType.CHOKEPOINT, spec)
         )
         connections.append(
-            LayoutConnection(veh2, nf_base, lane_width, ZoneType.MAIN_LANE)
+            create_connection_path(veh2, nf_base, lane_width, ZoneType.MAIN_LANE, spec)
         )
 
         side_offset = map_min_dim * rng.uniform(0.25, 0.4)
@@ -335,42 +390,119 @@ def generate_strategic_layout(
         nodes.append(side_veh)
 
         connections.append(
-            LayoutConnection(veh1, side_veh, lane_width * 0.7, ZoneType.SIDE_ROUTE)
+            create_connection_path(veh1, side_veh, lane_width * 0.7, ZoneType.SIDE_ROUTE, spec)
         )
         connections.append(
-            LayoutConnection(side_veh, veh2, lane_width * 0.7, ZoneType.SIDE_ROUTE)
+            create_connection_path(side_veh, veh2, lane_width * 0.7, ZoneType.SIDE_ROUTE, spec)
         )
 
     return nodes, connections
 
 
-def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
-    """
-    Step 2: Generate heights using a Strategic Macro Layout approach.
 
-    Replaces the generic central hill noise with a structured terrain model:
-    1. Strategic Layout: Defines base positions, main lane, side routes, chokepoints, open vehicle areas.
-    2. Field Generation: Calculates layout masks and distance fields.
-    3. Macro Shaping: Flattens bases, carves lanes/vehicle areas, creates ridges and chokepoints.
-    4. Micro Variation: Adds noise only for natural variation, keeping structural integrity.
+def generate_playability_mask(
+    spec: TerrainSpec,
+    rows: int,
+    cols: int,
+    nodes: List[LayoutNode],
+    connections: List[LayoutConnection]
+) -> Tuple['np.ndarray', 'np.ndarray']:
     """
+    Calculates the playability mask and chokepoint block mask using numpy for speed.
+    Returns two 2D float64 arrays (playable_mask, choke_block_mask).
+    """
+    import numpy as np
+
+    # Create coordinate grids
+    x_coords = np.linspace(spec.origin_x, spec.origin_x + spec.size_x, cols)
+    y_coords = np.linspace(spec.origin_y, spec.origin_y + spec.size_y, rows)
+    WX, WY = np.meshgrid(x_coords, y_coords)
+
+    playable_mask = np.zeros((rows, cols), dtype=np.float64)
+    choke_block_mask = np.zeros((rows, cols), dtype=np.float64)
+
+    # Helper to calculate smooth edge falloff (get_sharp_mask logic)
+    def apply_mask_weight(current_mask, dist_grid, radius, flat_core_ratio=0.75):
+        normalized_dist = dist_grid / max(1e-5, radius)
+        # Core is 1.0, outside is 0.0
+        weight = np.where(normalized_dist <= flat_core_ratio, 1.0, 0.0)
+        # Smooth drop-off margin
+        margin_mask = (normalized_dist > flat_core_ratio) & (normalized_dist < 1.0)
+        t = 1.0 - (normalized_dist[margin_mask] - flat_core_ratio) / (1.0 - flat_core_ratio)
+        weight[margin_mask] = t**2 * (3 - 2 * t)
+        return np.maximum(current_mask, weight)
+
+    # 1. Evaluate Nodes (Bases, Vehicle Areas)
+    for node in nodes:
+        dist_grid = np.sqrt((WX - node.x)**2 + (WY - node.y)**2)
+        if node.type in (ZoneType.BASE, ZoneType.VEHICLE_OPEN):
+            playable_mask = apply_mask_weight(playable_mask, dist_grid, node.radius)
+
+    # 2. Evaluate Polyline Connections
+    for conn in connections:
+        # We need the minimum distance to ANY segment of the polyline
+        min_dist_grid = np.full((rows, cols), np.inf)
+
+        pts = conn.path_points
+        for i in range(len(pts) - 1):
+            ax, ay = pts[i]
+            bx, by = pts[i+1]
+
+            # Vectorized point-to-line-segment distance
+            dx, dy = bx - ax, by - ay
+            l2 = dx*dx + dy*dy
+
+            if l2 == 0:
+                dist = np.sqrt((WX - ax)**2 + (WY - ay)**2)
+            else:
+                # t = dot(P-A, B-A) / |B-A|^2
+                t = ((WX - ax) * dx + (WY - ay) * dy) / l2
+                t_clamped = np.clip(t, 0.0, 1.0)
+                px = ax + t_clamped * dx
+                py = ay + t_clamped * dy
+                dist = np.sqrt((WX - px)**2 + (WY - py)**2)
+
+            min_dist_grid = np.minimum(min_dist_grid, dist)
+
+        # Apply weights based on zone type
+        if conn.type in (ZoneType.MAIN_LANE, ZoneType.SIDE_ROUTE):
+            playable_mask = apply_mask_weight(playable_mask, min_dist_grid, conn.width)
+
+        elif conn.type == ZoneType.CHOKEPOINT:
+            choke_playable_width = conn.width * 0.5
+            playable_mask = apply_mask_weight(playable_mask, min_dist_grid, choke_playable_width)
+
+            # Apply blockade if outside the narrow lane
+            out_of_lane = min_dist_grid > choke_playable_width
+            block_val = np.minimum(1.0, (min_dist_grid - choke_playable_width) / max(1e-5, choke_playable_width * 2))
+            block_grid = np.zeros_like(choke_block_mask)
+            block_grid[out_of_lane] = block_val[out_of_lane]
+            choke_block_mask = np.maximum(choke_block_mask, block_grid)
+
+    # Combine masks as previously done in generate_heights
+    playable_mask = np.maximum(0.0, playable_mask - choke_block_mask)
+
+    return playable_mask, choke_block_mask
+
+
+
+def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     rows = grid.rows
     cols = grid.cols
+    from src.noise import NoiseGenerator
     noise = NoiseGenerator(spec.seed)
-
     roughness = getattr(spec, "roughness", 0.5)
     max_height = spec.terrain_max_height
 
-    # 1. Generate Explicit Layout objects
     nodes, connections = generate_strategic_layout(spec)
 
-    # 2. Prepare grid constants
+    # 1. Fetch the pre-computed playability masks
+    playable_mask_grid, choke_block_mask_grid = generate_playability_mask(spec, rows, cols, nodes, connections)
+
     floor_height = max_height * 0.15
     base_mountain_height = max_height * 0.85
-    mountain_height = (
-        floor_height
-        + (base_mountain_height - floor_height) * spec.mountain_height_scale
-    )
+    scaled_mountain_height = spec.mountain_height_scale ** 2
+    mountain_height = floor_height + (base_mountain_height - floor_height) * scaled_mountain_height
 
     warp_scale = 0.005
     warp_strength = 150.0 * roughness
@@ -385,181 +517,47 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
         for c in range(cols):
             wx = spec.origin_x + c * spec.size_x / max(1, cols - 1)
 
-            # Domain warping for noise lookups (keeps structural masks unwarped for layout integrity)
-            wx_warp = (
-                wx
-                + noise.fbm(wx * warp_scale, wy * warp_scale, octaves=2) * warp_strength
-            )
-            wy_warp = (
-                wy
-                + noise.fbm(wx * warp_scale + 100, wy * warp_scale + 100, octaves=2)
-                * warp_strength
-            )
+            wx_warp = wx + noise.fbm(wx * warp_scale, wy * warp_scale, octaves=2) * warp_strength
+            wy_warp = wy + noise.fbm(wx * warp_scale + 100, wy * warp_scale + 100, octaves=2) * warp_strength
 
-            # 3. Zone Evaluation (Build Zone Map for current position)
-            # Find the dominant zone affecting this coordinate
+            # Retrieve mask values for this specific coordinate
+            playable_mask = float(playable_mask_grid[r, c])
+            choke_block_mask = float(choke_block_mask_grid[r, c])
 
-            zone_weights = {
-                ZoneType.BASE: 0.0,
-                ZoneType.VEHICLE_OPEN: 0.0,
-                ZoneType.MAIN_LANE: 0.0,
-                ZoneType.SIDE_ROUTE: 0.0,
-                ZoneType.CHOKEPOINT: 0.0,
-            }
-
-            # Evaluate Nodes
-            for node in nodes:
-                dist = math.sqrt((wx - node.x) ** 2 + (wy - node.y) ** 2)
-                mask = max(0.0, 1.0 - (dist / max(1e-5, node.radius)))
-                mask = mask**2 * (3 - 2 * mask)  # Smoothstep
-
-                if mask > zone_weights[node.type]:
-                    zone_weights[node.type] = mask
-
-            # Evaluate Connections (Lanes and Chokepoints)
-            choke_block_mask = 0.0
-
-            for conn in connections:
-                # Connection vector
-                dx = conn.end_node.x - conn.start_node.x
-                dy = conn.end_node.y - conn.start_node.y
-                length = math.sqrt(dx * dx + dy * dy)
-
-                if length > 0:
-                    dx /= length
-                    dy /= length
-                else:
-                    dx, dy = 1.0, 0.0
-
-                # Distance along and orthogonal to connection segment
-                dot_product = (wx - conn.start_node.x) * dx + (
-                    wy - conn.start_node.y
-                ) * dy
-                dist_to_lane = abs(
-                    dy * (wx - conn.start_node.x) - dx * (wy - conn.start_node.y)
-                )
-
-                if 0 <= dot_product <= length:
-                    if conn.type in (ZoneType.MAIN_LANE, ZoneType.SIDE_ROUTE):
-                        mask = max(0.0, 1.0 - (dist_to_lane / max(1e-5, conn.width)))
-                        mask = mask**2 * (3 - 2 * mask)
-                        if mask > zone_weights[conn.type]:
-                            zone_weights[conn.type] = mask
-
-                    elif conn.type == ZoneType.CHOKEPOINT:
-                        # Chokepoints have a narrow playable lane and force high terrain next to them
-                        choke_playable_width = conn.width * 0.5
-                        mask = max(
-                            0.0, 1.0 - (dist_to_lane / max(1e-5, choke_playable_width))
-                        )
-                        mask = mask**2 * (3 - 2 * mask)
-                        if mask > zone_weights[ZoneType.CHOKEPOINT]:
-                            zone_weights[ZoneType.CHOKEPOINT] = mask
-
-                        # Apply blockade if outside the narrow lane
-                        if dist_to_lane > choke_playable_width:
-                            block_val = min(
-                                1.0,
-                                (dist_to_lane - choke_playable_width)
-                                / max(1e-5, choke_playable_width * 2),
-                            )
-                            choke_block_mask = max(choke_block_mask, block_val)
-
-            # Determine dominant zone (max weight) and overall playability
-            base_mask = zone_weights[ZoneType.BASE]
-            veh_mask = zone_weights[ZoneType.VEHICLE_OPEN]
-            lane_mask = max(
-                zone_weights[ZoneType.MAIN_LANE],
-                zone_weights[ZoneType.SIDE_ROUTE],
-                zone_weights[ZoneType.CHOKEPOINT],
-            )
-
-            # Combine playable area masks
-            # Areas with high playable mask will be flattened towards floor_height
-            playable_mask = max(base_mask, max(lane_mask, veh_mask))
-
-            # Subtract choke block mask so mountains can form right next to the chokepoint lane
-            playable_mask = max(0.0, playable_mask - choke_block_mask)
-
-            # 4. Micro Variation (Noise)
-            # Add noise only to non-flat areas, or very subtle noise to flat areas
-            base_noise = noise.fbm(
-                wx_warp * macro_scale, wy_warp * macro_scale, octaves=spec.noise_octaves
-            )
-
-            ridge_val = noise.fbm(
-                wx_warp * ridge_scale + 50,
-                wy_warp * ridge_scale + 50,
-                octaves=spec.noise_octaves,
-            )
-            ridge_val = 1.0 - abs(ridge_val)
-            ridge_val = ridge_val * ridge_val
-
+            # Noise generation
+            base_noise = noise.fbm(wx_warp * macro_scale, wy_warp * macro_scale, octaves=spec.noise_octaves)
+            ridge_val = noise.fbm(wx_warp * ridge_scale + 50, wy_warp * ridge_scale + 50, octaves=spec.noise_octaves)
+            ridge_val = (1.0 - abs(ridge_val)) ** 2
             detail_val = noise.fbm(wx_warp * 0.008, wy_warp * 0.008, octaves=3)
 
-            noise_combined = (
-                (0.5 - 0.2 * roughness) * base_noise
-                + (0.3 + 0.4 * roughness) * ridge_val
-                + 0.05 * detail_val
-            )
+            noise_combined = ((0.5 - 0.2 * roughness) * base_noise
+                              + (0.3 + 0.4 * roughness) * ridge_val
+                              + 0.05 * detail_val)
 
-            # 5. Zone Target Heights & Blending
+            # Noise suppression near paths
+            noise_suppression_margin = 0.3
+            suppressed_noise = noise_combined * max(0.0, 1.0 - noise_suppression_margin * (1.0 - playable_mask))
 
-            # Base Zone: Perfectly flat
-            base_target = floor_height
-
-            # Lane Zone: Mostly flat, slight noise
-            lane_target = floor_height + (max_height * 0.01 * base_noise)
-
-            # Vehicle Zone: Smooth rolling ground
-            veh_target = floor_height + (max_height * 0.03 * base_noise)
-
-            # Wilderness Zone: Full mountains
-            wilderness_target = (
-                floor_height + (mountain_height - floor_height) * noise_combined
-            )
-
-            # Chokepoint Wall: High cliffs flanking the choke
+            # Target heights
+            playable_height = floor_height + (max_height * 0.03 * base_noise) # Blend of lane/base targets
+            wilderness_target = floor_height + (mountain_height - floor_height) * suppressed_noise
             base_choke_wall_target = base_mountain_height * (0.8 + 0.2 * ridge_val)
-            choke_wall_target = (
-                floor_height
-                + (base_choke_wall_target - floor_height) * spec.mountain_height_scale
-            )
+            choke_wall_target = floor_height + (base_choke_wall_target - floor_height) * scaled_mountain_height
 
-            # Start with wilderness
-            final_height = wilderness_target
+            # Blend
+            final_height = playable_height * playable_mask + wilderness_target * (1.0 - playable_mask)
 
-            # Blend in Playable Zones
-            # We determine the dominant playable zone by checking which mask is strongest
-            playable_sum = base_mask + veh_mask + lane_mask
-
-            if playable_sum > 0:
-                # Normalize the playable weights
-                b_w = base_mask / playable_sum
-                v_w = veh_mask / playable_sum
-                l_w = lane_mask / playable_sum
-
-                # Composite the playable height
-                playable_height = (
-                    (base_target * b_w) + (veh_target * v_w) + (lane_target * l_w)
-                )
-
-                # Blend playable height onto the wilderness background
-                final_height = playable_height * playable_mask + wilderness_target * (
-                    1.0 - playable_mask
-                )
-
-            # Force chokepoint cliffs
-            # If we are in the wall portion of a chokepoint, override the terrain upwards
             if choke_block_mask > 0.0:
-                final_height = choke_wall_target * choke_block_mask + final_height * (
-                    1.0 - choke_block_mask
-                )
+                final_height = choke_wall_target * choke_block_mask + final_height * (1.0 - choke_block_mask)
 
             row_heights.append(final_height)
         heightmap.append(row_heights)
 
     grid.heights = heightmap
+
+    # Attach mask to grid so later steps (like erosion) can use it without recalculating
+    grid.playability_mask = playable_mask_grid
+
     return grid
 
 
@@ -877,9 +875,16 @@ def simulate_hydraulic_erosion(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
 
     rng = random.Random(spec.seed + 1000)
 
+    # Fetch mask safely
+    playability_mask = getattr(grid, 'playability_mask', None)
+
     for _ in range(iterations):
         start_r = rng.randint(1, rows - 2)
         start_c = rng.randint(1, cols - 2)
+
+        # Protect playable lanes: DO NOT spawn droplets on paths or bases
+        if playability_mask is not None and playability_mask[start_r, start_c] > 0.5:
+            continue
 
         pos_r = float(start_r)
         pos_c = float(start_c)
@@ -891,6 +896,10 @@ def simulate_hydraulic_erosion(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
             ic = int(pos_c)
 
             if ir <= 0 or ir >= rows - 1 or ic <= 0 or ic >= cols - 1:
+                break
+
+            # Protect playable lanes: droplets instantly evaporate when hitting a lane
+            if playability_mask is not None and playability_mask[ir, ic] > 0.5:
                 break
 
             fx = pos_c - ic
