@@ -447,7 +447,7 @@ def generate_playability_mask(
     cols: int,
     nodes: List[LayoutNode],
     connections: List[LayoutConnection],
-) -> np.ndarray:
+):
     """
     Calculates the hard binary playability mask using numpy.
 
@@ -509,9 +509,11 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     roughness = getattr(spec, "roughness", 0.5)
     max_height = spec.terrain_max_height
 
-    nodes, connections = generate_strategic_layout(spec)
-
-    playable_mask_grid = generate_playability_mask(spec, rows, cols, nodes, connections)
+    smoothed_mask = getattr(grid, "playability_mask", None)
+    if smoothed_mask is None:
+        nodes, connections = generate_strategic_layout(spec)
+        hard_mask = generate_playability_mask(spec, rows, cols, nodes, connections)
+        smoothed_mask = smooth_transition_zones(hard_mask, spec)
 
     floor_height = max_height * 0.15
     base_mountain_height = max_height * 0.85
@@ -543,7 +545,7 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
                 * warp_strength
             )
 
-            smoothed_mask = float(playable_mask_grid[r, c])
+            mask_val = float(smoothed_mask[r, c])
 
             base_noise = noise.fbm(
                 wx_warp * macro_scale, wy_warp * macro_scale, octaves=spec.noise_octaves
@@ -567,17 +569,14 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
                 floor_height + (mountain_height - floor_height) * noise_combined
             )
 
-            final_height = playable_height * smoothed_mask + wilderness_target * (
-                1.0 - smoothed_mask
+            final_height = playable_height * mask_val + wilderness_target * (
+                1.0 - mask_val
             )
 
             row_heights.append(final_height)
         heightmap.append(row_heights)
 
     grid.heights = heightmap
-
-    # Attach mask to grid so later steps (like erosion) can use it without recalculating
-    grid.playability_mask = playable_mask_grid
 
     return grid
 
@@ -648,33 +647,26 @@ def smooth_heights(grid: HeightGrid, iterations: int = 1) -> HeightGrid:
 
 
 def smooth_transition_zones(
-    grid: HeightGrid,
+    hard_mask,
     spec: "TerrainSpec",
-) -> HeightGrid:
+):
     """
-    Blur the hard binary playability mask using Gaussian filter.
+    Apply Gaussian blur to the global hard binary playability mask exactly once.
 
-    This creates soft, smooth transition zones at path/wilderness boundaries.
-    The blurred mask is stored back to grid.playability_mask for use in generate_heights.
+    This creates soft, continuous transition zones at path/wilderness boundaries
+    across the entire map, avoiding per-cell seam discontinuities.
 
     Args:
-        grid: HeightGrid with hard binary playability_mask
+        hard_mask: Hard binary numpy array (0.0 or 1.0)
         spec: TerrainSpec containing transition_blur_sigma parameter
 
     Returns:
-        HeightGrid with blurred playability_mask
+        Blurred mask numpy array, clipped to [0.0, 1.0]
     """
-    import numpy as np
     from scipy.ndimage import gaussian_filter
 
-    playability_mask = getattr(grid, "playability_mask", None)
-    if playability_mask is None:
-        return grid
-
-    blurred_mask = gaussian_filter(playability_mask, sigma=spec.transition_blur_sigma)
-    grid.playability_mask = np.clip(blurred_mask, 0.0, 1.0)
-
-    return grid
+    blurred_mask = gaussian_filter(hard_mask, sigma=spec.transition_blur_sigma)
+    return blurred_mask.clip(0.0, 1.0)
 
 
 def flatten_base_areas(
@@ -1406,12 +1398,14 @@ def run_pipeline(spec: TerrainSpec) -> dict:
     else:
         print("  Step 2a: Generate playability mask (hard binary)")
         nodes, connections = generate_strategic_layout(spec)
-        grid.playability_mask = generate_playability_mask(
+        hard_mask = generate_playability_mask(
             spec, grid.rows, grid.cols, nodes, connections
         )
 
-        print(f"  Step 2b: Blur transition zones (sigma={spec.transition_blur_sigma})")
-        grid = smooth_transition_zones(grid, spec)
+        print(
+            f"  Step 2b: Blur transition zones globally (sigma={spec.transition_blur_sigma})"
+        )
+        grid.playability_mask = smooth_transition_zones(hard_mask, spec)
 
         print(
             f"  Step 2c: Generate heights with fBm (seed={spec.seed}, octaves={spec.noise_octaves})"
