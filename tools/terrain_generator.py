@@ -352,6 +352,8 @@ class TerrainGeneratorGUI(QMainWindow):
         self.btn_compile = QPushButton("Compile (VBSP)")
         self.btn_compile.setObjectName("CompileButton")
         self.btn_compile.setMinimumHeight(40)
+        self.btn_compile.setEnabled(False)
+        self.btn_compile.setToolTip("Generate a map first before compiling.")
         self.btn_compile.clicked.connect(self.compile_map)
         sidebar_layout.addWidget(self.btn_compile)
 
@@ -403,6 +405,7 @@ class TerrainGeneratorGUI(QMainWindow):
         name_lbl.setObjectName("FieldLabel")
         name_row.addWidget(name_lbl)
         self.txt_map_name = QLineEdit()
+        name_lbl.setBuddy(self.txt_map_name)
         self.txt_map_name.setText("gui_terrain")
         self.txt_map_name.setPlaceholderText("Enter map name...")
         name_row.addWidget(self.txt_map_name, 1)
@@ -415,11 +418,13 @@ class TerrainGeneratorGUI(QMainWindow):
         seed_lbl.setObjectName("FieldLabel")
         seed_row.addWidget(seed_lbl)
         self.spin_seed = QSpinBox()
+        seed_lbl.setBuddy(self.spin_seed)
         self.spin_seed.setRange(0, 999999999)
         seed_row.addWidget(self.spin_seed, 1)
         self.btn_random_seed = QPushButton("🎲")
         self.btn_random_seed.setFixedSize(34, 30)
         self.btn_random_seed.setToolTip("Randomize seed")
+        self.btn_random_seed.setAccessibleName("Randomize seed")
         self.btn_random_seed.clicked.connect(
             lambda: self.spin_seed.setValue(random.randint(0, 999999999))
         )
@@ -462,6 +467,7 @@ class TerrainGeneratorGUI(QMainWindow):
         )
         dim_grid.addWidget(lbl_tx, 0, 0)
         self.spin_tiles_x = QSpinBox()
+        lbl_tx.setBuddy(self.spin_tiles_x)
         self.spin_tiles_x.setRange(1, 64)
         dim_grid.addWidget(self.spin_tiles_x, 0, 1)
 
@@ -472,6 +478,7 @@ class TerrainGeneratorGUI(QMainWindow):
         )
         dim_grid.addWidget(lbl_ty, 0, 2)
         self.spin_tiles_y = QSpinBox()
+        lbl_ty.setBuddy(self.spin_tiles_y)
         self.spin_tiles_y.setRange(1, 64)
         dim_grid.addWidget(self.spin_tiles_y, 0, 3)
 
@@ -480,6 +487,7 @@ class TerrainGeneratorGUI(QMainWindow):
         lbl_hs.setToolTip("Maximum terrain height in world units")
         dim_grid.addWidget(lbl_hs, 1, 0)
         self.spin_height = QSpinBox()
+        lbl_hs.setBuddy(self.spin_height)
         self.spin_height.setRange(128, 4096)
         dim_grid.addWidget(self.spin_height, 1, 1)
 
@@ -488,6 +496,7 @@ class TerrainGeneratorGUI(QMainWindow):
         lbl_pw.setToolTip("Displacement power — vertices per tile edge")
         dim_grid.addWidget(lbl_pw, 1, 2)
         self.combo_power = QComboBox()
+        lbl_pw.setBuddy(self.combo_power)
         self.combo_power.addItems(["2 (5×5)", "3 (9×9)", "4 (17×17)"])
         dim_grid.addWidget(self.combo_power, 1, 3)
 
@@ -516,6 +525,7 @@ class TerrainGeneratorGUI(QMainWindow):
         lbl_topo.setToolTip("Select the fundamental layout structure")
         topo_row.addWidget(lbl_topo)
         self.combo_topology = QComboBox()
+        lbl_topo.setBuddy(self.combo_topology)
         self.combo_topology.addItems(
             ["Random", "Central Gorge", "Valley", "Two Lane", "Island", "Classic Cross"]
         )
@@ -533,6 +543,7 @@ class TerrainGeneratorGUI(QMainWindow):
         )
         lw_row.addWidget(lbl_lw)
         self.slider_lane_width = QSlider(Qt.Horizontal)
+        lbl_lw.setBuddy(self.slider_lane_width)
         self.slider_lane_width.setRange(0, 200)
         self.slider_lane_width.setValue(100)
         self.lbl_lane_width_val = QLabel("100%")
@@ -551,6 +562,7 @@ class TerrainGeneratorGUI(QMainWindow):
         )
         cs_row.addWidget(lbl_cs)
         self.slider_choke_size = QSlider(Qt.Horizontal)
+        lbl_cs.setBuddy(self.slider_choke_size)
         self.slider_choke_size.setRange(0, 200)
         self.slider_choke_size.setValue(100)
         self.lbl_choke_size_val = QLabel("100%")
@@ -569,6 +581,7 @@ class TerrainGeneratorGUI(QMainWindow):
         )
         mh_row.addWidget(lbl_mh)
         self.slider_mountain_height = QSlider(Qt.Horizontal)
+        lbl_mh.setBuddy(self.slider_mountain_height)
         self.slider_mountain_height.setRange(0, 100)
         self.slider_mountain_height.setValue(50)
         self.lbl_mountain_height_val = QLabel("50%")
@@ -588,6 +601,7 @@ class TerrainGeneratorGUI(QMainWindow):
         lbl_r.setToolTip("Low = smooth rolling hills, High = jagged mountains")
         rough_row.addWidget(lbl_r)
         self.slider_rough = QSlider(Qt.Horizontal)
+        lbl_r.setBuddy(self.slider_rough)
         self.slider_rough.setRange(0, 100)
         self.lbl_rough_val = QLabel("50%")
         rough_row.addWidget(
@@ -603,6 +617,7 @@ class TerrainGeneratorGUI(QMainWindow):
         lbl_e.setToolTip("Hydraulic erosion — smooths sharp features naturally")
         eros_row.addWidget(lbl_e)
         self.slider_erosion = QSlider(Qt.Horizontal)
+        lbl_e.setBuddy(self.slider_erosion)
         self.slider_erosion.setRange(0, 100)
         self.lbl_erosion_val = QLabel("50%")
         eros_row.addWidget(
@@ -646,6 +661,7 @@ class TerrainGeneratorGUI(QMainWindow):
         lbl_br.setToolTip("Radius of flat area around bases (0 = disabled)")
         br_row.addWidget(lbl_br)
         self.slider_base_radius = QSlider(Qt.Horizontal)
+        lbl_br.setBuddy(self.slider_base_radius)
         self.slider_base_radius.setRange(0, 8192)
         self.lbl_base_radius_val = QLabel("0")
         br_row.addWidget(
@@ -663,6 +679,7 @@ class TerrainGeneratorGUI(QMainWindow):
         )
         bf_row.addWidget(lbl_bf)
         self.slider_base_flatness = QSlider(Qt.Horizontal)
+        lbl_bf.setBuddy(self.slider_base_flatness)
         self.slider_base_flatness.setRange(0, 100)
         self.lbl_base_flat_val = QLabel("0%")
         bf_row.addWidget(
@@ -678,6 +695,7 @@ class TerrainGeneratorGUI(QMainWindow):
         lbl_cf.setToolTip("Flatten terrain towards the map center (0 = disabled)")
         cf_row.addWidget(lbl_cf)
         self.slider_center_flatten = QSlider(Qt.Horizontal)
+        lbl_cf.setBuddy(self.slider_center_flatten)
         self.slider_center_flatten.setRange(0, 100)
         self.lbl_cf_val = QLabel("0%")
         cf_row.addWidget(
@@ -693,6 +711,7 @@ class TerrainGeneratorGUI(QMainWindow):
         lbl_cr.setToolTip("Size of center flatten zone (10–50% of map)")
         cr_row.addWidget(lbl_cr)
         self.slider_center_radius = QSlider(Qt.Horizontal)
+        lbl_cr.setBuddy(self.slider_center_radius)
         self.slider_center_radius.setRange(10, 50)
         self.lbl_cr_val = QLabel("10%")
         cr_row.addWidget(
@@ -729,6 +748,7 @@ class TerrainGeneratorGUI(QMainWindow):
         lbl_mat.setToolTip("Ground surface blend material")
         mat_row.addWidget(lbl_mat)
         self.combo_material = QComboBox()
+        lbl_mat.setBuddy(self.combo_material)
         self.combo_material.addItems(self.terrain_materials)
         self.combo_material.setCurrentText("common/nature/blend_grass_mountainwall_000")
         mat_row.addWidget(self.combo_material, 1)
@@ -741,6 +761,7 @@ class TerrainGeneratorGUI(QMainWindow):
         lbl_sky.setObjectName("FieldLabel")
         sky_row.addWidget(lbl_sky)
         self.combo_skybox = QComboBox()
+        lbl_sky.setBuddy(self.combo_skybox)
         self.combo_skybox.addItems(self.skyboxes)
         self.combo_skybox.setCurrentText("empsky_overcast3yellow")
         sky_row.addWidget(self.combo_skybox, 1)
@@ -1791,6 +1812,7 @@ class TerrainGeneratorGUI(QMainWindow):
                 "background: #122218; border-radius: 6px; padding: 8px 10px;"
             )
             self.btn_generate.setEnabled(True)
+            self.btn_generate.setToolTip("")
         else:
             self.lbl_validation.setText(f"✗  {msg}")
             self.lbl_validation.setStyleSheet(
@@ -1798,6 +1820,7 @@ class TerrainGeneratorGUI(QMainWindow):
                 "background: #221212; border-radius: 6px; padding: 8px 10px;"
             )
             self.btn_generate.setEnabled(False)
+            self.btn_generate.setToolTip(msg)
 
     def generate_map(self):
         is_valid, msg = self.config_model.validate()
@@ -1820,6 +1843,8 @@ class TerrainGeneratorGUI(QMainWindow):
         if success:
             map_name = self.txt_map_name.text().strip() or "gui_terrain"
             self._last_vmf_path = str(OUTPUT_DIR / f"{map_name}.vmf")
+            self.btn_compile.setEnabled(True)
+            self.btn_compile.setToolTip("")
             QMessageBox.information(self, "Success", msg)
         else:
             QMessageBox.critical(self, "Generation Failed", msg)
