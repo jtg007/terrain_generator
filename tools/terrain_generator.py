@@ -105,8 +105,7 @@ class GenerationWorker(QThread):
     def run(self):
         try:
             spec = self.config_model.make_spec()
-
-            result = run_pipeline(spec)
+            result = run_pipeline(spec, map_name=self.output_filename, output_dir=str(OUTPUT_DIR))
             if result["errors"]:
                 raise Exception(f"Pipeline errors: {result['errors']}")
 

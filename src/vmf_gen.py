@@ -611,26 +611,25 @@ def spawn_resource_nodes_enhanced(
 
         node_x = quantize_coord(max(map_min_x, min(map_max_x, node_x)), 1.0)
         node_y = quantize_coord(max(map_min_y, min(map_max_y, node_y)), 1.0)
-        node_z = quantize_coord(
-            get_terrain_height_at(
-                node_x,
-                node_y,
-                heightmap,
-                origin_x,
-                origin_y,
-                map_width,
-                map_height,
-                max_height,
-                tiles_x,
-                tiles_y,
-                power,
-            )
-            + 8,
-            1.0,
+        node_terrain_z = get_terrain_height_at(
+            node_x,
+            node_y,
+            heightmap,
+            origin_x,
+            origin_y,
+            map_width,
+            map_height,
+            max_height,
+            tiles_x,
+            tiles_y,
+            power,
         )
+        # Tutorial: Place it at the very bottom, touching the ground.
+        node_z = node_terrain_z
 
         model_targetname = f"Res_Model_{faction.upper()}_{i}"
         point_targetname = f"Res_Point_{faction.upper()}_{i}"
+        smoke_targetname = f"Res_Smoke_{faction.upper()}_{i}"
 
         prop_dx_raw = random.uniform(
             prop_offset.get("dx", {}).get("min", -40),
@@ -640,6 +639,26 @@ def spawn_resource_nodes_enhanced(
             prop_offset.get("dy", {}).get("min", -88),
             prop_offset.get("dy", {}).get("max", 30),
         )
+        
+        prop_x = node_x + prop_dx_raw
+        prop_y = node_y + prop_dy_raw
+        prop_x = quantize_coord(max(map_min_x, min(map_max_x, prop_x)), 1.0)
+        prop_y = quantize_coord(max(map_min_y, min(map_max_y, prop_y)), 1.0)
+        
+        prop_terrain_z = get_terrain_height_at(
+            prop_x,
+            prop_y,
+            heightmap,
+            origin_x,
+            origin_y,
+            map_width,
+            map_height,
+            max_height,
+            tiles_x,
+            tiles_y,
+            power,
+        )
+        
         # Prevent negative Z offsets to ensure the model sticks out of the ground
         # but retain the variation
         prop_dz_raw = random.uniform(
@@ -647,12 +666,8 @@ def spawn_resource_nodes_enhanced(
             max(0, prop_offset.get("dz", {}).get("max", 49)),
         )
 
-        prop_x = node_x + prop_dx_raw
-        prop_y = node_y + prop_dy_raw
-        prop_z = node_z + prop_dz_raw
+        prop_z = prop_terrain_z + prop_dz_raw
 
-        prop_x = quantize_coord(max(map_min_x, min(map_max_x, prop_x)), 1.0)
-        prop_y = quantize_coord(max(map_min_y, min(map_max_y, prop_y)), 1.0)
         prop_z = quantize_coord(prop_z, 1.0)
         node_x = quantize_coord(node_x, 1.0)
         node_y = quantize_coord(node_y, 1.0)
@@ -674,6 +689,20 @@ def spawn_resource_nodes_enhanced(
         resource_prop.properties["model"] = "models/props_wasteland/rockcliff01b.mdl"
         resource_prop.properties["Enabled"] = "1"
         resource_prop.properties["angles"] = f"0 {random.uniform(0, 360):.1f} 0"
+
+        smoke = vmf_lib.Entity("env_smokestack")
+        smoke.origin = f"{prop_x:.1f} {prop_y:.1f} {prop_z + 80:.1f}"
+        smoke.properties["targetname"] = smoke_targetname
+        smoke.properties["InitialState"] = "1"
+        smoke.properties["BaseSpread"] = "20"
+        smoke.properties["SpreadSpeed"] = "10"
+        smoke.properties["Speed"] = "30"
+        smoke.properties["StartSize"] = "20"
+        smoke.properties["EndSize"] = "30"
+        smoke.properties["Rate"] = "15"
+        smoke.properties["JetLength"] = "200"
+        smoke.properties["SmokeMaterial"] = "particle/particle_smokegrenade.vmt"
+        smoke.properties["rendercolor"] = "100 100 100"
 
 
 def spawn_custom_resources(
@@ -707,26 +736,25 @@ def spawn_custom_resources(
     for i, (node_x, node_y) in enumerate(custom_points):
         node_x = quantize_coord(max(map_min_x, min(map_max_x, node_x)), 1.0)
         node_y = quantize_coord(max(map_min_y, min(map_max_y, node_y)), 1.0)
-        node_z = quantize_coord(
-            get_terrain_height_at(
-                node_x,
-                node_y,
-                heightmap,
-                origin_x,
-                origin_y,
-                map_width,
-                map_height,
-                max_height,
-                tiles_x,
-                tiles_y,
-                power,
-            )
-            + 8,
-            1.0,
+        node_terrain_z = get_terrain_height_at(
+            node_x,
+            node_y,
+            heightmap,
+            origin_x,
+            origin_y,
+            map_width,
+            map_height,
+            max_height,
+            tiles_x,
+            tiles_y,
+            power,
         )
+        # Tutorial: Place it at the very bottom, touching the ground.
+        node_z = node_terrain_z
 
         point_targetname = f"Res_Point_Neutral_{i}"
         model_targetname = f"Res_Model_Neutral_{i}"
+        smoke_targetname = f"Res_Smoke_Neutral_{i}"
 
         prop_dx_raw = random.uniform(
             prop_offset.get("dx", {}).get("min", -40),
@@ -736,18 +764,35 @@ def spawn_custom_resources(
             prop_offset.get("dy", {}).get("min", -88),
             prop_offset.get("dy", {}).get("max", 30),
         )
+
+        prop_x = node_x + prop_dx_raw
+        prop_y = node_y + prop_dy_raw
+        
+        prop_x = quantize_coord(max(map_min_x, min(map_max_x, prop_x)), 1.0)
+        prop_y = quantize_coord(max(map_min_y, min(map_max_y, prop_y)), 1.0)
+        
+        prop_terrain_z = get_terrain_height_at(
+            prop_x,
+            prop_y,
+            heightmap,
+            origin_x,
+            origin_y,
+            map_width,
+            map_height,
+            max_height,
+            tiles_x,
+            tiles_y,
+            power,
+        )
+        
         prop_dz_raw = random.uniform(
             0,
             max(0, prop_offset.get("dz", {}).get("max", 49)),
         )
 
-        prop_x = node_x + prop_dx_raw
-        prop_y = node_y + prop_dy_raw
-        prop_z = node_z + prop_dz_raw
-
-        prop_x = quantize_coord(max(map_min_x, min(map_max_x, prop_x)), 1.0)
-        prop_y = quantize_coord(max(map_min_y, min(map_max_y, prop_y)), 1.0)
+        prop_z = prop_terrain_z + prop_dz_raw
         prop_z = quantize_coord(prop_z, 1.0)
+        node_z = quantize_coord(node_z, 1.0)
 
         resource_logic = vmf_lib.Entity("emp_resource_point")
         resource_logic.origin = f"{node_x:.1f} {node_y:.1f} {node_z:.1f}"
@@ -763,6 +808,20 @@ def spawn_custom_resources(
         resource_prop.properties["model"] = "models/props_wasteland/rockcliff01b.mdl"
         resource_prop.properties["Enabled"] = "1"
         resource_prop.properties["angles"] = f"0 {random.uniform(0, 360):.1f} 0"
+
+        smoke = vmf_lib.Entity("env_smokestack")
+        smoke.origin = f"{prop_x:.1f} {prop_y:.1f} {prop_z + 80:.1f}"
+        smoke.properties["targetname"] = smoke_targetname
+        smoke.properties["InitialState"] = "1"
+        smoke.properties["BaseSpread"] = "20"
+        smoke.properties["SpreadSpeed"] = "10"
+        smoke.properties["Speed"] = "30"
+        smoke.properties["StartSize"] = "20"
+        smoke.properties["EndSize"] = "30"
+        smoke.properties["Rate"] = "15"
+        smoke.properties["JetLength"] = "200"
+        smoke.properties["SmokeMaterial"] = "particle/particle_smokegrenade.vmt"
+        smoke.properties["rendercolor"] = "100 100 100"
 
 
 def spawn_info_nodes(

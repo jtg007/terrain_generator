@@ -21,7 +21,7 @@ import math
 import random
 import sys
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 if getattr(sys, "frozen", False):
     from terrain_spec import TerrainSpec, HeightGrid, TerrainCell, UnderlayBrush
@@ -449,10 +449,10 @@ def generate_playability_mask(
     connections: List[LayoutConnection],
 ):
     """
-    Calculates the hard binary playability mask using numpy.
+    Calculates the playability mask using numpy.
 
-    Returns a 2D float64 array with values 0.0 or 1.0 (hard binary).
-    The Gaussian blur in smooth_transition_zones will handle soft edges.
+    Returns a 2D float64 array with values bounded between 0.0 and 1.0.
+    Uses Smoothstep to calculate a smooth ramp directly from the distance grids.
     """
     import numpy as np
 
@@ -461,14 +461,15 @@ def generate_playability_mask(
     WX, WY = np.meshgrid(x_coords, y_coords)
 
     playable_mask = np.zeros((rows, cols), dtype=np.float64)
+    ramp_width = max(100.0, spec.transition_blur_sigma * 30.0)
 
-    # 1. Evaluate Nodes (BASE, VEHICLE_OPEN): hard binary
+    # 1. Evaluate Nodes (BASE, VEHICLE_OPEN): smooth ramp
     for node in nodes:
         dist_grid = np.sqrt((WX - node.x) ** 2 + (WY - node.y) ** 2)
         if node.type in (ZoneType.BASE, ZoneType.VEHICLE_OPEN):
-            playable_mask = np.maximum(
-                playable_mask, np.where(dist_grid <= node.radius, 1.0, 0.0)
-            )
+            fade = np.clip((dist_grid - node.radius) / ramp_width, 0.0, 1.0)
+            node_mask = 1.0 - (fade * fade * (3.0 - 2.0 * fade))
+            playable_mask = np.maximum(playable_mask, node_mask)
 
     # 2. Evaluate Polyline Connections: hard binary
     for conn in connections:
@@ -500,7 +501,8 @@ def generate_playability_mask(
         else:
             continue
 
-        conn_mask = np.where(min_dist_grid <= playable_width, 1.0, 0.0)
+        fade = np.clip((min_dist_grid - playable_width) / ramp_width, 0.0, 1.0)
+        conn_mask = 1.0 - (fade * fade * (3.0 - 2.0 * fade))
         playable_mask = np.maximum(playable_mask, conn_mask)
 
     return np.clip(playable_mask, 0.0, 1.0)
@@ -515,11 +517,10 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     roughness = getattr(spec, "roughness", 0.5)
     max_height = spec.terrain_max_height
 
-    smoothed_mask = getattr(grid, "playability_mask", None)
-    if smoothed_mask is None:
+    hard_mask = getattr(grid, "playability_mask", None)
+    if hard_mask is None:
         nodes, connections = generate_strategic_layout(spec)
         hard_mask = generate_playability_mask(spec, rows, cols, nodes, connections)
-        smoothed_mask = smooth_transition_zones(hard_mask, spec)
 
     floor_height = max_height * 0.15
     base_mountain_height = max_height * 0.85
@@ -551,7 +552,7 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
                 * warp_strength
             )
 
-            mask_val = float(smoothed_mask[r, c])
+            mask_val = float(hard_mask[r, c])
 
             base_noise = noise.fbm(
                 wx_warp * macro_scale, wy_warp * macro_scale, octaves=spec.noise_octaves
@@ -652,19 +653,6 @@ def smooth_heights(grid: HeightGrid, iterations: int = 1) -> HeightGrid:
     return grid
 
 
-def smooth_transition_zones(
-    hard_mask,
-    spec: "TerrainSpec",
-):
-    from scipy.ndimage import gaussian_filter
-    import numpy as np
-
-    blurred_mask = gaussian_filter(hard_mask, sigma=spec.transition_blur_sigma)
-
-    boost_factor = 4.0
-    boosted_mask = blurred_mask * boost_factor
-
-    return np.clip(boosted_mask, 0.0, 1.0)
 
 
 def flatten_base_areas(
@@ -1364,7 +1352,82 @@ def get_cell_alphas(
     return alphas
 
 
-def run_pipeline(spec: TerrainSpec) -> dict:
+def export_minimap(spec: TerrainSpec, grid: HeightGrid, map_name: str, output_dir: str) -> None:
+    """
+    Exports a minimap texture combining heights (grayscale) and playability mask.
+    Saves as 1024x1024 .vtf and creates corresponding .vmt file.
+    """
+    import struct
+    import numpy as np
+    from PIL import Image
+    from pathlib import Path
+
+    if grid.rows <= 0 or grid.cols <= 0:
+        return
+
+    min_h = grid.min_height()
+    max_h = grid.max_height()
+    h_range = max_h - min_h
+    if h_range < 1e-6:
+        h_range = 1.0
+
+    heights_arr = np.array(grid.heights, dtype=np.float32)
+    normalized = (heights_arr - min_h) / h_range
+    base_img = (np.clip(normalized, 0.0, 1.0) * 255.0).astype(np.uint8)
+
+    img_rgb = np.stack((base_img, base_img, base_img), axis=-1)
+
+    mask = getattr(grid, "playability_mask", None)
+    if mask is not None:
+        shading = img_rgb.astype(np.float32)
+        tint_color = np.array([200.0, 180.0, 140.0], dtype=np.float32)
+        tinted_shading = shading * (tint_color / 255.0)
+        
+        # Tint slightly brighter where mask > 0.1
+        mask_clip = np.clip(mask, 0.0, 1.0)
+        alpha = mask_clip[:, :, np.newaxis] * 0.6
+        
+        final_rgb = shading * (1.0 - alpha) + tinted_shading * alpha
+        img_rgb = np.clip(final_rgb, 0, 255).astype(np.uint8)
+
+    out_folder = Path(output_dir)
+    out_folder.mkdir(parents=True, exist_ok=True)
+    
+    # Generate 1024x1024 image
+    img = Image.fromarray(img_rgb, mode="RGB")
+    img = img.resize((1024, 1024), Image.LANCZOS)
+    
+    # Native VTF Export (v7.2, BGR888)
+    bgr_data = np.array(img)[..., ::-1].copy()
+    
+    header = struct.pack(
+        "<4s 2I I 2H I 2H 4s 3f 4s f I B i 2B H",
+        b"VTF\0", 7, 2, 80, 1024, 1024, 0x0100 | 0x0200 | 0x2000, 1, 0,
+        b"\0\0\0\0", 0.0, 0.0, 0.0, b"\0\0\0\0", 1.0, 3, 1, -1, 0, 0, 1
+    )
+    header += b"\0" * 15  # Padding to 80 bytes
+    
+    vtf_path = out_folder / f"{map_name}.vtf"
+    with open(vtf_path, "wb") as f:
+        f.write(header)
+        f.write(bgr_data.tobytes())
+    
+    vmt_path = out_folder / f"{map_name}.vmt"
+    vmt_content = f""""UnlitGeneric"
+{{
+    "$baseTexture" "maps/{map_name}"
+    "$vertexcolor" 1
+    "$vertexalpha" 1
+    "$no_fullbright" 1
+    "$ignorez" 1
+    "%keywords" "empires"
+}}"""
+    vmt_path.write_text(vmt_content)
+    
+    print("Minimap generated. For your Empires map script, use Top-Left: (0, 0) and Bottom-Right: (1024, 1024).")
+
+
+def run_pipeline(spec: TerrainSpec, map_name: Optional[str] = None, output_dir: Optional[str] = None) -> dict:
     """
     Run the complete terrain generation pipeline.
 
@@ -1394,16 +1457,13 @@ def run_pipeline(spec: TerrainSpec) -> dict:
         print(f"  Step 2: Loading custom heightmap from {spec.custom_image_path}")
         grid = load_custom_heights(spec, grid)
     else:
-        print("  Step 2a: Generate playability mask (hard binary)")
+        print("  Step 2a: Generate playability mask (Smoothstep distance field)")
         nodes, connections = generate_strategic_layout(spec)
         hard_mask = generate_playability_mask(
             spec, grid.rows, grid.cols, nodes, connections
         )
-
-        print(
-            f"  Step 2b: Blur transition zones globally (sigma={spec.transition_blur_sigma})"
-        )
-        grid.playability_mask = smooth_transition_zones(hard_mask, spec)
+        
+        grid.playability_mask = hard_mask
 
         print(
             f"  Step 2c: Generate heights with fBm (seed={spec.seed}, octaves={spec.noise_octaves})"
@@ -1443,6 +1503,9 @@ def run_pipeline(spec: TerrainSpec) -> dict:
             f"    Height range after base flatten touch-up: {grid.min_height():.1f} to {grid.max_height():.1f}"
         )
 
+    print(f"  Step 6: Clamp slope (max step={spec.max_slope_step})")
+    grid = clamp_slope(grid, spec.max_slope_step)
+
     print(f"  Step 7: Quantize heights (step={spec.height_quantization})")
     grid = quantize_heights(grid, spec.height_quantization)
 
@@ -1462,6 +1525,10 @@ def run_pipeline(spec: TerrainSpec) -> dict:
     print("  Step 10: Build underlay")
     underlay = build_underlay(spec, grid)
     print(f"    Underlay: z={underlay.bottom_z} to {underlay.top_z}")
+
+    if map_name and output_dir:
+        print("  Step 11: Export minimap")
+        export_minimap(spec, grid, map_name, output_dir)
 
     return {
         "spec": spec,

@@ -142,22 +142,21 @@ def compile_vmf(
                     shutil.copy2(str(txt_path), final_txt)
                     print(f"TXT script copied to: {final_txt}")
 
-                # Automatically generate a .vmt for the minimap to prevent crash
+                # Copy minimap VMT and VTF to materials
                 vmt_dest_dir = os.path.join(empires_path, "materials", "maps")
                 os.makedirs(vmt_dest_dir, exist_ok=True)
-                final_vmt = os.path.join(vmt_dest_dir, f"{vmf_path.stem}.vmt")
-                vmt_content = f""""UnlitGeneric"
-{{
-	"$baseTexture" "maps/{vmf_path.stem}"
-	"$vertexcolor" 1
-	"$vertexalpha" 1
-	"$no_fullbright" 1
-	"$ignorez" 1
-	"%keywords" "empires"
-}}"""
-                with open(final_vmt, "w") as f:
-                    f.write(vmt_content)
-                print(f"VMT minimap material generated at: {final_vmt}")
+
+                vmt_src = output_dir / f"{vmf_path.stem}.vmt"
+                if vmt_src.exists():
+                    final_vmt = os.path.join(vmt_dest_dir, f"{vmf_path.stem}.vmt")
+                    shutil.copy2(str(vmt_src), final_vmt)
+                    print(f"VMT minimap material copied to: {final_vmt}")
+
+                vtf_src = output_dir / f"{vmf_path.stem}.vtf"
+                if vtf_src.exists():
+                    final_vtf = os.path.join(vmt_dest_dir, f"{vmf_path.stem}.vtf")
+                    shutil.copy2(str(vtf_src), final_vtf)
+                    print(f"VTF minimap texture copied to: {final_vtf}")
 
             return True
         else:

@@ -215,7 +215,8 @@ def main():
     print(f"  Enhanced spawning: {'enabled' if not args.no_enhanced else 'disabled'}")
     print()
 
-    result = run_pipeline(spec)
+    map_name = Path(args.output).stem
+    result = run_pipeline(spec, map_name=map_name, output_dir=str(output_dir))
 
     if result["errors"]:
         print("\nPipeline errors:")
