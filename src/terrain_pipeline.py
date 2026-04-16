@@ -493,8 +493,14 @@ def generate_playability_mask(
 
             min_dist_grid = np.minimum(min_dist_grid, dist)
 
-        # Hard binary: inside = 1.0, outside = 0.0
-        conn_mask = np.where(min_dist_grid <= conn.width, 1.0, 0.0)
+        if conn.type in (ZoneType.MAIN_LANE, ZoneType.SIDE_ROUTE):
+            playable_width = conn.width
+        elif conn.type == ZoneType.CHOKEPOINT:
+            playable_width = conn.width * 0.5
+        else:
+            continue
+
+        conn_mask = np.where(min_dist_grid <= playable_width, 1.0, 0.0)
         playable_mask = np.maximum(playable_mask, conn_mask)
 
     return np.clip(playable_mask, 0.0, 1.0)

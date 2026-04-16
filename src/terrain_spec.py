@@ -17,8 +17,8 @@ class TerrainSpec:
     All measurements are in Source engine world units.
     """
 
-    origin_x: int = 0
-    origin_y: int = 0
+    origin_x: int = -4096
+    origin_y: int = -4096
     size_x: int = 8192
     size_y: int = 8192
     cell_size: int = 512
@@ -345,8 +345,8 @@ class UnderlayBrush:
 
 def create_default_spec() -> TerrainSpec:
     return TerrainSpec(
-        origin_x=0,
-        origin_y=0,
+        origin_x=-4096,
+        origin_y=-4096,
         size_x=8192,
         size_y=8192,
         cell_size=512,
