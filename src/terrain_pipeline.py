@@ -656,23 +656,15 @@ def smooth_transition_zones(
     hard_mask,
     spec: "TerrainSpec",
 ):
-    """
-    Apply Gaussian blur to the global hard binary playability mask exactly once.
-
-    This creates soft, continuous transition zones at path/wilderness boundaries
-    across the entire map, avoiding per-cell seam discontinuities.
-
-    Args:
-        hard_mask: Hard binary numpy array (0.0 or 1.0)
-        spec: TerrainSpec containing transition_blur_sigma parameter
-
-    Returns:
-        Blurred mask numpy array, clipped to [0.0, 1.0]
-    """
     from scipy.ndimage import gaussian_filter
+    import numpy as np
 
     blurred_mask = gaussian_filter(hard_mask, sigma=spec.transition_blur_sigma)
-    return blurred_mask.clip(0.0, 1.0)
+
+    boost_factor = 4.0
+    boosted_mask = blurred_mask * boost_factor
+
+    return np.clip(boosted_mask, 0.0, 1.0)
 
 
 def flatten_base_areas(
