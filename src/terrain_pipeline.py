@@ -422,7 +422,7 @@ def generate_playability_mask(
     choke_block_mask = np.zeros((rows, cols), dtype=np.float64)
 
     # Helper to calculate smooth edge falloff (get_sharp_mask logic)
-    def apply_mask_weight(current_mask, dist_grid, radius, flat_core_ratio=0.75):
+    def apply_mask_weight(current_mask, dist_grid, radius, flat_core_ratio=0.85):
         normalized_dist = dist_grid / max(1e-5, radius)
         # Core is 1.0, outside is 0.0
         weight = np.where(normalized_dist <= flat_core_ratio, 1.0, 0.0)
@@ -489,6 +489,7 @@ def generate_playability_mask(
 
     # Combine masks as previously done in generate_heights
     playable_mask = np.maximum(0.0, playable_mask - choke_block_mask)
+    playable_mask = np.clip(playable_mask, 0.0, 1.0)
 
     return playable_mask, choke_block_mask
 
