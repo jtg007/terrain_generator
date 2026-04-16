@@ -24,39 +24,16 @@ from dataclasses import dataclass
 from typing import List, Tuple, Optional
 
 if getattr(sys, "frozen", False):
-    from terrain_spec import TerrainSpec, HeightGrid, TerrainCell, UnderlayBrush
+    from terrain_spec import TerrainSpec, HeightGrid, TerrainCell, UnderlayBrush, ZoneType, LayoutNode, LayoutConnection
     from noise import NoiseGenerator
 else:
-    from src.terrain_spec import TerrainSpec, HeightGrid, TerrainCell, UnderlayBrush
+    from src.terrain_spec import TerrainSpec, HeightGrid, TerrainCell, UnderlayBrush, ZoneType, LayoutNode, LayoutConnection
     from src.noise import NoiseGenerator
 
 from PIL import Image, ImageOps
 
 
-class ZoneType:
-    BASE = "base_zone"
-    MAIN_LANE = "main_lane_zone"
-    SIDE_ROUTE = "side_route_zone"
-    VEHICLE_OPEN = "vehicle_open_zone"
-    CHOKEPOINT = "chokepoint_zone"
-    WILDERNESS = "wilderness_zone"
 
-
-@dataclass
-class LayoutNode:
-    x: float
-    y: float
-    radius: float
-    type: str  # ZoneType
-
-
-@dataclass
-class LayoutConnection:
-    start_node: LayoutNode
-    end_node: LayoutNode
-    width: float
-    type: str  # 'main_lane', 'side_lane', 'chokepoint_lane'
-    path_points: List[Tuple[float, float]] = None
 
 
 def generate_vertex_grid(spec: TerrainSpec) -> HeightGrid:
@@ -1458,7 +1435,10 @@ def run_pipeline(spec: TerrainSpec, map_name: Optional[str] = None, output_dir: 
         grid = load_custom_heights(spec, grid)
     else:
         print("  Step 2a: Generate playability mask (Smoothstep distance field)")
-        nodes, connections = generate_strategic_layout(spec)
+        if spec.custom_layout_nodes is not None and spec.custom_layout_connections is not None:
+            nodes, connections = spec.custom_layout_nodes, spec.custom_layout_connections
+        else:
+            nodes, connections = generate_strategic_layout(spec)
         hard_mask = generate_playability_mask(
             spec, grid.rows, grid.cols, nodes, connections
         )

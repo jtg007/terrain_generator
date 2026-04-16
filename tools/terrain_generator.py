@@ -37,10 +37,12 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QSplitter,
     QScrollArea,
+    QTabWidget,
 )
 from PySide6.QtCore import Qt, QThread, Signal, QTimer
 from PySide6.QtGui import QImage, QKeySequence, QShortcut
 from tools.preview_widget import MapPreviewWidget
+from tools.editor_widget import MapEditorWidget
 
 
 from src.config_model import GUIConfigModel
@@ -66,9 +68,11 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 class PreviewWorker(QThread):
     finished = Signal(object, object)  # grid, spec
 
-    def __init__(self, config_model):
+    def __init__(self, config_model, custom_nodes=None, custom_connections=None):
         super().__init__()
         self.config_model = config_model
+        self.custom_nodes = custom_nodes
+        self.custom_connections = custom_connections
 
     def run(self):
         try:
@@ -79,6 +83,10 @@ class PreviewWorker(QThread):
             spec.disable_commander = True
             spec.disable_buildings = True
             spec.disable_resource_nodes = True
+            
+            if self.custom_nodes and self.custom_connections:
+                spec.custom_layout_nodes = self.custom_nodes
+                spec.custom_layout_connections = self.custom_connections
 
             result = run_pipeline(spec)
             self.finished.emit(result["grid"], result["spec"])
@@ -97,14 +105,20 @@ class PreviewWorker(QThread):
 class GenerationWorker(QThread):
     finished = Signal(bool, str)
 
-    def __init__(self, config_model, output_filename="gui_terrain"):
+    def __init__(self, config_model, custom_nodes=None, custom_connections=None, output_filename="gui_terrain"):
         super().__init__()
         self.config_model = config_model
+        self.custom_nodes = custom_nodes
+        self.custom_connections = custom_connections
         self.output_filename = output_filename
 
     def run(self):
         try:
             spec = self.config_model.make_spec()
+            if self.custom_nodes and self.custom_connections:
+                spec.custom_layout_nodes = self.custom_nodes
+                spec.custom_layout_connections = self.custom_connections
+                
             result = run_pipeline(spec, map_name=self.output_filename, output_dir=str(OUTPUT_DIR))
             if result["errors"]:
                 raise Exception(f"Pipeline errors: {result['errors']}")
@@ -818,61 +832,19 @@ class TerrainGeneratorGUI(QMainWindow):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll.setMinimumWidth(320)
 
-        # ── Preview Area ──
-        preview_container = QWidget()
-        preview_container_layout = QVBoxLayout(preview_container)
-        preview_container_layout.setContentsMargins(0, 6, 6, 6)
-        preview_container_layout.setSpacing(6)
-
-        # Preview header
-        preview_header = QLabel("MAP PREVIEW")
-        preview_header.setObjectName("ConfigSection")
-        preview_container_layout.addWidget(preview_header)
-
+        # ── Data & Tools Setup ──
+        self.tab_widget = QTabWidget()
+        self.tab_widget.setObjectName("MapTabs")
+        self.editor_widget = MapEditorWidget()
         self.preview_widget = MapPreviewWidget()
-        self.preview_widget.setMinimumSize(200, 200)
-        preview_container_layout.addWidget(self.preview_widget, 1)
 
-        # Tools toolbar
-        tools_row = QHBoxLayout()
-        tools_row.setSpacing(6)
-        self.tool_group = QButtonGroup(self)
+        self.tab_widget.addTab(self.editor_widget, "Strategy Editor")
+        self.tab_widget.addTab(self.preview_widget, "Heightmap Preview")
 
-        tool_names = [
-            ("Move", "ToolButton", 0),
-            ("BE Base", "ToolButtonBlue", 1),
-            ("NF Base", "ToolButtonRed", 2),
-            ("Resource", "ToolButtonGreen", 3),
-        ]
-        self.rbtn_none = None
-        self.rbtn_imp = None
-        self.rbtn_nf = None
-        self.rbtn_res = None
-        tool_refs = []
-        for label, obj_name, tid in tool_names:
-            btn = QPushButton(label)
-            btn.setCheckable(True)
-            btn.setObjectName(obj_name)
-            self.tool_group.addButton(btn, tid)
-            tools_row.addWidget(btn)
-            tool_refs.append(btn)
-        self.rbtn_none, self.rbtn_imp, self.rbtn_nf, self.rbtn_res = tool_refs
-        self.rbtn_none.setChecked(True)
-
-        tools_row.addStretch()
-
-        self.btn_clear_res = QPushButton("Clear")
-        self.btn_clear_res.setObjectName("SmallButton")
-        self.btn_clear_res.setToolTip("Clear all resource nodes")
-        self.btn_clear_res.clicked.connect(self.clear_resources)
-        tools_row.addWidget(self.btn_clear_res)
-
-        preview_container_layout.addLayout(tools_row)
-
-        # Inner splitter: config scroll | preview
+        # Inner splitter: config scroll | tabs
         self._inner_splitter = QSplitter(Qt.Horizontal)
         self._inner_splitter.addWidget(scroll)
-        self._inner_splitter.addWidget(preview_container)
+        self._inner_splitter.addWidget(self.tab_widget)
         self._inner_splitter.setStretchFactor(0, 1)
         self._inner_splitter.setStretchFactor(1, 1)
         self._inner_splitter.setSizes([480, 520])
@@ -882,12 +854,6 @@ class TerrainGeneratorGUI(QMainWindow):
         self.preview_timer = QTimer(self)
         self.preview_timer.setSingleShot(True)
         self.preview_timer.timeout.connect(self.run_preview)
-
-        # Connect preview widget signals
-        self.preview_widget.base_moved.connect(self.on_base_moved)
-        self.preview_widget.resource_moved.connect(self.on_resource_moved)
-        self.preview_widget.resource_added.connect(self.on_resource_added)
-        self.tool_group.idClicked.connect(self.on_tool_changed)
 
         self._root_splitter.addWidget(sidebar)
         self._root_splitter.addWidget(main_area)
@@ -982,7 +948,12 @@ class TerrainGeneratorGUI(QMainWindow):
 
     def run_preview(self):
         if not hasattr(self, "preview_worker") or not self.preview_worker.isRunning():
-            self.preview_worker = PreviewWorker(self.config_model)
+            nodes, connections = self.editor_widget.get_layout_from_editor() if hasattr(self, "editor_widget") else (None, None)
+            self.preview_worker = PreviewWorker(
+                self.config_model,
+                custom_nodes=nodes if nodes else None,
+                custom_connections=connections if connections else None
+            )
             self.preview_worker.finished.connect(self.on_preview_finished)
             self.preview_worker.start()
 
@@ -1808,7 +1779,13 @@ class TerrainGeneratorGUI(QMainWindow):
 
         # Run generation in background
         map_name = self.txt_map_name.text().strip() or "gui_terrain"
-        self.worker = GenerationWorker(self.config_model, map_name)
+        nodes, connections = self.editor_widget.get_layout_from_editor() if hasattr(self, "editor_widget") else (None, None)
+        self.worker = GenerationWorker(
+            self.config_model,
+            custom_nodes=nodes if nodes else None,
+            custom_connections=connections if connections else None,
+            output_filename=map_name
+        )
         self.worker.finished.connect(self.on_generation_finished)
         self.worker.start()
 
