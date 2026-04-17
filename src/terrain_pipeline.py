@@ -453,6 +453,9 @@ def generate_playability_mask(
         min_dist_grid = np.full((rows, cols), np.inf)
 
         pts = conn.path_points
+        if not pts:
+            pts = [(conn.start_node.x, conn.start_node.y), (conn.end_node.x, conn.end_node.y)]
+
         for i in range(len(pts) - 1):
             ax, ay = pts[i]
             bx, by = pts[i + 1]

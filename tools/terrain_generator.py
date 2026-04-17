@@ -846,6 +846,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self._inner_splitter.addWidget(scroll)
         self._inner_splitter.addWidget(self.preview_widget)
         self._inner_splitter.setStretchFactor(0, 1)
+        self.preview_widget.layout_changed.connect(lambda: self.preview_timer.start(500))
         self._inner_splitter.setStretchFactor(1, 1)
         self._inner_splitter.setSizes([480, 520])
 
@@ -897,8 +898,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.preview_timer.start(500)
 
     def on_tool_changed(self, id):
-        tools = {0: "none", 1: "imp_base", 2: "nf_base", 3: "add_res"}
-        self.preview_widget.current_tool = tools.get(id, "none")
+        pass # Tools are fully managed by preview_widget internally now
 
     def on_base_moved(self, faction, x, y):
         if faction == "imp":

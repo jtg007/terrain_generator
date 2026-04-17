@@ -33,9 +33,15 @@ class VisualFreehandEdge(QGraphicsItem):
         self.end_node = end_node
         self.setZValue(1)
         self.setFlags(QGraphicsItem.ItemIsSelectable)
-        self.pen = QPen(QColor(200, 200, 200, 150), max(3, width / 50))
+
+        pen_w = max(4, width / 25.0)
+        self.pen = QPen(QColor(255, 255, 255, 90), pen_w)
         self.pen.setCapStyle(Qt.RoundCap)
         self.pen.setJoinStyle(Qt.RoundJoin)
+
+        self.outline_pen = QPen(QColor(200, 200, 255, 120), 2)
+        self.outline_pen.setCapStyle(Qt.RoundCap)
+        self.outline_pen.setJoinStyle(Qt.RoundJoin)
 
     def update_position(self):
         if not self.points or len(self.points) < 2:
@@ -94,12 +100,19 @@ class VisualFreehandEdge(QGraphicsItem):
     def paint(self, painter, option, widget):
         if len(self.points) < 2:
             return
-        painter.setPen(self.pen)
-        painter.setBrush(Qt.NoBrush)
+
         from PySide6.QtGui import QPainterPath
         path = QPainterPath(self.points[0])
         for p in self.points[1:]:
             path.lineTo(p)
+
+        # Draw translucent thick body
+        painter.setPen(self.pen)
+        painter.setBrush(Qt.NoBrush)
+        painter.drawPath(path)
+
+        # Draw thin crisp outline
+        painter.setPen(self.outline_pen)
         painter.drawPath(path)
 
 class VisualEdge(QGraphicsLineItem):
@@ -109,7 +122,9 @@ class VisualEdge(QGraphicsLineItem):
         self.end_node = end_node
         self.logical_width = 600.0
         self.setZValue(1)
-        self.setPen(QPen(QColor(200, 200, 200, 150), 3))
+        pen = QPen(QColor(255, 255, 255, 90), 12) # Thick but translucent base
+        pen.setCapStyle(Qt.RoundCap)
+        self.setPen(pen)
         self.update_position()
 
     def update_position(self):
@@ -168,6 +183,7 @@ class MapPreviewWidget(QWidget):
     base_moved = Signal(str, float, float)  # (faction, x, y)
     resource_moved = Signal(int, float, float)  # (index, x, y)
     resource_added = Signal(float, float)  # (x, y)
+    layout_changed = Signal()  # emitted when nodes/links change to update preview
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -176,65 +192,109 @@ class MapPreviewWidget(QWidget):
 
         # ── Toolbar ──
         self.tools_row = QHBoxLayout()
+        self.tools_row.setSpacing(12)
+
         self.tool_group = QButtonGroup(self)
-
-        tool_names = [
-            ("Move", "ToolButton", 0),
-            ("Add Node", "ToolButton", 1),
-            ("Add Base", "ToolButtonBlue", 2),
-            ("Add Resource", "ToolButtonGreen", 3),
-            ("Link Nodes", "ToolButton", 4),
-        ]
         self.modes = {}
-        for label, obj_name, tid in tool_names:
-            btn = QPushButton(label)
-            btn.setCheckable(True)
-            btn.setObjectName(obj_name)
-            self.tool_group.addButton(btn, tid)
-            self.tools_row.addWidget(btn)
-            self.modes[tid] = label
 
-        self.tool_group.button(0).setChecked(True)
-        self.current_mode = 0  # 0: Move, 1: Add Node, 2: Add Base, 3: Add Resource, 4: Link Nodes
-        self.tool_group.idClicked.connect(self.on_tool_changed)
+        # Helper to add section labels
+        def add_separator(text):
+            lbl = QLabel(text)
+            lbl.setStyleSheet("color: #888; font-weight: bold; font-size: 10px; margin-left: 8px; margin-right: 4px;")
+            self.tools_row.addWidget(lbl)
 
-        # Mode: Remove (5) and Freehand Lane (6)
-        tool_names.append(("Remove", "ToolButtonRed", 5))
-        tool_names.append(("Draw Lane", "ToolButton", 6))
+        # 1. Selection & Manipulation
+        add_separator("TOOLS")
+
+        btn_move = QPushButton("Move")
+        btn_move.setCheckable(True)
+        btn_move.setObjectName("ToolButton")
+        self.tool_group.addButton(btn_move, 0)
+        self.tools_row.addWidget(btn_move)
 
         btn_remove = QPushButton("Remove")
         btn_remove.setCheckable(True)
         btn_remove.setObjectName("ToolButtonRed")
         self.tool_group.addButton(btn_remove, 5)
         self.tools_row.addWidget(btn_remove)
-        self.modes[5] = "Remove"
+
+        # 2. Strategy Layout
+        add_separator("STRATEGY")
+
+        btn_node = QPushButton("Add Node")
+        btn_node.setCheckable(True)
+        btn_node.setObjectName("ToolButton")
+        self.tool_group.addButton(btn_node, 1)
+        self.tools_row.addWidget(btn_node)
+
+        btn_link = QPushButton("Link Nodes")
+        btn_link.setCheckable(True)
+        btn_link.setObjectName("ToolButton")
+        self.tool_group.addButton(btn_link, 4)
+        self.tools_row.addWidget(btn_link)
 
         btn_draw = QPushButton("Draw Lane")
         btn_draw.setCheckable(True)
         btn_draw.setObjectName("ToolButton")
         self.tool_group.addButton(btn_draw, 6)
         self.tools_row.addWidget(btn_draw)
-        self.modes[6] = "Draw Lane"
 
         # Thickness selector for drawing lanes
+        # Wrapped in a sub-layout for tighter grouping
+        self.thickness_widget = QWidget()
+        thick_layout = QHBoxLayout(self.thickness_widget)
+        thick_layout.setContentsMargins(0, 0, 0, 0)
+        thick_layout.setSpacing(4)
+
+        self.thickness_label = QLabel("Width: 600")
+        self.thickness_label.setStyleSheet("color: #ccc; font-size: 11px;")
+
         self.thickness_slider = QSlider(Qt.Horizontal)
         self.thickness_slider.setRange(100, 1500)
         self.thickness_slider.setValue(600)
-        self.thickness_slider.setToolTip("Lane Width")
-        self.thickness_slider.setFixedWidth(100)
-        self.thickness_label = QLabel("Width: 600")
+        self.thickness_slider.setFixedWidth(80)
         self.thickness_slider.valueChanged.connect(lambda v: self.thickness_label.setText(f"Width: {v}"))
 
-        # Hide them initially
-        self.thickness_slider.setVisible(False)
-        self.thickness_label.setVisible(False)
+        thick_layout.addWidget(self.thickness_label)
+        thick_layout.addWidget(self.thickness_slider)
 
-        self.tools_row.addWidget(self.thickness_label)
-        self.tools_row.addWidget(self.thickness_slider)
+        # Hide them initially
+        self.thickness_widget.setVisible(False)
+        self.tools_row.addWidget(self.thickness_widget)
+
+        # 3. Entities
+        add_separator("ENTITIES")
+
+        btn_be = QPushButton("Set BE Base")
+        btn_be.setCheckable(True)
+        btn_be.setObjectName("ToolButtonBlue")
+        self.tool_group.addButton(btn_be, 2)
+        self.tools_row.addWidget(btn_be)
+
+        # We need a new ID for NF Base since previous code overwrote it or merged it incorrectly
+        # Old map: 1: Add Node, 2: Add Base, 3: Add Resource
+        # Let's use 7 for Set NF Base
+        btn_nf = QPushButton("Set NF Base")
+        btn_nf.setCheckable(True)
+        btn_nf.setObjectName("ToolButtonRed") # NF is typically red in this UI
+        self.tool_group.addButton(btn_nf, 7)
+        self.tools_row.addWidget(btn_nf)
+
+        btn_res = QPushButton("Add Resource")
+        btn_res.setCheckable(True)
+        btn_res.setObjectName("ToolButtonGreen")
+        self.tool_group.addButton(btn_res, 3)
+        self.tools_row.addWidget(btn_res)
+
+        self.tool_group.button(0).setChecked(True)
+        self.current_mode = 0
+        self.tool_group.idClicked.connect(self.on_tool_changed)
 
         self.tools_row.addStretch()
 
-        # Undo / Redo
+        # 4. Actions
+        add_separator("ACTIONS")
+
         self.btn_undo = QPushButton("Undo")
         self.btn_undo.setObjectName("SmallButton")
         self.btn_undo.clicked.connect(self.undo)
@@ -496,8 +556,7 @@ class MapPreviewWidget(QWidget):
 
         # Show thickness slider only for Draw Lane mode (6) or Link Nodes (4)
         show_thickness = tid in [4, 6]
-        self.thickness_slider.setVisible(show_thickness)
-        self.thickness_label.setVisible(show_thickness)
+        self.thickness_widget.setVisible(show_thickness)
 
         if tid == 0:
             self.view.setDragMode(QGraphicsView.RubberBandDrag)
@@ -528,6 +587,7 @@ class MapPreviewWidget(QWidget):
     def record_action(self, action_type, item):
         self.history.append((action_type, item))
         self.redo_history.clear()
+        self.layout_changed.emit()
 
     def undo(self):
         if not self.history: return
@@ -543,6 +603,7 @@ class MapPreviewWidget(QWidget):
             for i in item:
                 self.scene.addItem(i)
             self.redo_history.append(("remove_multiple", item))
+        self.layout_changed.emit()
 
     def redo(self):
         if not self.redo_history: return
@@ -558,6 +619,7 @@ class MapPreviewWidget(QWidget):
             for i in item:
                 self.scene.removeItem(i)
             self.history.append(("remove_multiple", item))
+        self.layout_changed.emit()
 
     def on_wheel_event(self, event):
         zoom_factor = 1.15
@@ -578,9 +640,14 @@ class MapPreviewWidget(QWidget):
         if self.current_mode == 1:
             node = VisualNode(scene_pos.x(), scene_pos.y(), 256, ZoneType.WILDERNESS, self.scene)
             self.record_action("add", node)
-        elif self.current_mode == 2:
-            node = VisualNode(scene_pos.x(), scene_pos.y(), 512, ZoneType.BASE, self.scene)
-            self.record_action("add", node)
+        elif self.current_mode == 2: # BE Base
+            self.imp_base = (scene_pos.x(), scene_pos.y())
+            if isinstance(self.scene.views()[0].parent(), MapPreviewWidget):
+                self.scene.views()[0].parent().base_moved.emit("imp", scene_pos.x(), scene_pos.y())
+        elif self.current_mode == 7: # NF Base
+            self.nf_base = (scene_pos.x(), scene_pos.y())
+            if isinstance(self.scene.views()[0].parent(), MapPreviewWidget):
+                self.scene.views()[0].parent().base_moved.emit("nf", scene_pos.x(), scene_pos.y())
         elif self.current_mode == 5: # Remove
             item = self.scene.itemAt(scene_pos, self.view.transform())
             if isinstance(item, VisualNode) or isinstance(item, VisualEdge) or isinstance(item, VisualFreehandEdge):
@@ -638,7 +705,11 @@ class MapPreviewWidget(QWidget):
                         if not existing:
                             edge = VisualEdge(self.link_start_node, item)
                             # Set explicit width based on slider
-                            edge.setPen(QPen(QColor(200, 200, 200, 150), max(3, self.thickness_slider.value() / 50)))
+                            # Visual mapping from logical to pixels roughly
+                            pen_w = max(4, self.thickness_slider.value() / 25.0)
+                            p = QPen(QColor(255, 255, 255, 90), pen_w)
+                            p.setCapStyle(Qt.RoundCap)
+                            edge.setPen(p)
                             edge.logical_width = self.thickness_slider.value()
                             self.scene.addItem(edge)
                             self.link_start_node.edges.append(edge)
