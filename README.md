@@ -49,7 +49,10 @@ The Terrain Generator bridges the gap between procedural noise generation and th
 ## Step-by-Step Guide
 
 1. **Configure Your Map:** Choose a baseline style under the **PRESETS** section on the left sidebar. Adjust basic parameters such as **Tiles X** / **Tiles Y** (map size), **Roughness**, **Erosion**, and **Height**. Optionally, choose a custom heightmap image.
-2. **Setup Base Layout:** In the **MAP PREVIEW** section at the bottom, select a tool (e.g., *BE Base*, *NF Base*, or *Resource*). Click or drag within the preview image to accurately position entity spawns.
+2. **Setup Map Strategy:** In the **STRATEGY PREVIEW** section at the bottom, you have a unified canvas allowing you to:
+   * Select a tool (e.g., *Add Base*, *Add Resource*, *Add Node*) to set up spawns.
+   * Draw structural paths or strategy lanes using the **Draw Lane** tool (with adjustable width) to guide players and vehicles.
+   * Review all elements mapped interactively onto your real-time heightmap. Use **Undo/Redo** or the **Remove** tool to refine your layout.
 3. **Generate VMF:** Ensure you have selected a valid **COMPILE PATH** pointing to your Empires Mod folder. Click the **Generate VMF** button to bake the map and layout.
 4. **Compile Map:** Once the VMF is successfully generated, click **Compile (VBSP)**. The tool will process your map and place it into the game directories.
 5. **Play:** Launch Empires Mod, open the developer console, and load your new map using `map gui_terrain` (or the custom map name you provided).

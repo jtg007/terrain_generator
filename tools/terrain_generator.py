@@ -42,7 +42,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QThread, Signal, QTimer
 from PySide6.QtGui import QImage, QKeySequence, QShortcut
 from tools.preview_widget import MapPreviewWidget
-from tools.editor_widget import MapEditorWidget
+
 
 
 from src.config_model import GUIConfigModel
@@ -833,18 +833,18 @@ class TerrainGeneratorGUI(QMainWindow):
         scroll.setMinimumWidth(320)
 
         # ── Data & Tools Setup ──
-        self.tab_widget = QTabWidget()
-        self.tab_widget.setObjectName("MapTabs")
-        self.editor_widget = MapEditorWidget()
+
+
+
         self.preview_widget = MapPreviewWidget()
 
-        self.tab_widget.addTab(self.editor_widget, "Strategy Editor")
-        self.tab_widget.addTab(self.preview_widget, "Heightmap Preview")
+
+
 
         # Inner splitter: config scroll | tabs
         self._inner_splitter = QSplitter(Qt.Horizontal)
         self._inner_splitter.addWidget(scroll)
-        self._inner_splitter.addWidget(self.tab_widget)
+        self._inner_splitter.addWidget(self.preview_widget)
         self._inner_splitter.setStretchFactor(0, 1)
         self._inner_splitter.setStretchFactor(1, 1)
         self._inner_splitter.setSizes([480, 520])
@@ -948,7 +948,7 @@ class TerrainGeneratorGUI(QMainWindow):
 
     def run_preview(self):
         if not hasattr(self, "preview_worker") or not self.preview_worker.isRunning():
-            nodes, connections = self.editor_widget.get_layout_from_editor() if hasattr(self, "editor_widget") else (None, None)
+            nodes, connections = self.preview_widget.get_layout_from_editor()
             self.preview_worker = PreviewWorker(
                 self.config_model,
                 custom_nodes=nodes if nodes else None,
@@ -1779,7 +1779,7 @@ class TerrainGeneratorGUI(QMainWindow):
 
         # Run generation in background
         map_name = self.txt_map_name.text().strip() or "gui_terrain"
-        nodes, connections = self.editor_widget.get_layout_from_editor() if hasattr(self, "editor_widget") else (None, None)
+        nodes, connections = self.preview_widget.get_layout_from_editor()
         self.worker = GenerationWorker(
             self.config_model,
             custom_nodes=nodes if nodes else None,

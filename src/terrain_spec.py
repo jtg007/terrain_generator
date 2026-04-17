@@ -29,7 +29,7 @@ class LayoutConnection:
     end_node: LayoutNode
     width: float
     type: str  # 'main_lane', 'side_lane', 'chokepoint_lane'
-    path_points: List[Tuple[float, float]] = None
+    path_points: Optional[List[Tuple[float, float]]] = None
 
 @dataclass
 class TerrainSpec:
