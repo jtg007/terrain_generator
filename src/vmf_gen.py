@@ -639,12 +639,12 @@ def spawn_resource_nodes_enhanced(
             prop_offset.get("dy", {}).get("min", -88),
             prop_offset.get("dy", {}).get("max", 30),
         )
-        
+
         prop_x = node_x + prop_dx_raw
         prop_y = node_y + prop_dy_raw
         prop_x = quantize_coord(max(map_min_x, min(map_max_x, prop_x)), 1.0)
         prop_y = quantize_coord(max(map_min_y, min(map_max_y, prop_y)), 1.0)
-        
+
         prop_terrain_z = get_terrain_height_at(
             prop_x,
             prop_y,
@@ -658,7 +658,7 @@ def spawn_resource_nodes_enhanced(
             tiles_y,
             power,
         )
-        
+
         # Prevent negative Z offsets to ensure the model sticks out of the ground
         # but retain the variation
         prop_dz_raw = random.uniform(
@@ -767,10 +767,10 @@ def spawn_custom_resources(
 
         prop_x = node_x + prop_dx_raw
         prop_y = node_y + prop_dy_raw
-        
+
         prop_x = quantize_coord(max(map_min_x, min(map_max_x, prop_x)), 1.0)
         prop_y = quantize_coord(max(map_min_y, min(map_max_y, prop_y)), 1.0)
-        
+
         prop_terrain_z = get_terrain_height_at(
             prop_x,
             prop_y,
@@ -784,7 +784,7 @@ def spawn_custom_resources(
             tiles_y,
             power,
         )
-        
+
         prop_dz_raw = random.uniform(
             0,
             max(0, prop_offset.get("dz", {}).get("max", 49)),

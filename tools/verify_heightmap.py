@@ -12,10 +12,10 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.terrain_spec import create_default_spec, TerrainSpec
 from src.terrain_pipeline import run_pipeline
 from src.export_utils import heightgrid_to_heightmap
 from src.config_model import GUIConfigModel
+
 
 def verify_preset(preset_name, preset_data):
     print(f"\nVerifying preset: {preset_name}")
@@ -46,6 +46,7 @@ def verify_preset(preset_name, preset_data):
     Image.fromarray(hm_array).save(img_path)
     print(f"Saved heightmap to {img_path}")
 
+
 def main():
     presets_file = Path("config/presets.json")
     if not presets_file.exists():
@@ -62,6 +63,7 @@ def main():
             verify_preset(target, presets_data[target])
         else:
             print(f"Warning: preset {target} not found")
+
 
 if __name__ == "__main__":
     main()

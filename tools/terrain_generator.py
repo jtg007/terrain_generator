@@ -83,7 +83,7 @@ class PreviewWorker(QThread):
             spec.disable_commander = True
             spec.disable_buildings = True
             spec.disable_resource_nodes = True
-            
+
             if self.custom_nodes and self.custom_connections:
                 spec.custom_layout_nodes = self.custom_nodes
                 spec.custom_layout_connections = self.custom_connections
@@ -105,7 +105,13 @@ class PreviewWorker(QThread):
 class GenerationWorker(QThread):
     finished = Signal(bool, str)
 
-    def __init__(self, config_model, custom_nodes=None, custom_connections=None, output_filename="gui_terrain"):
+    def __init__(
+        self,
+        config_model,
+        custom_nodes=None,
+        custom_connections=None,
+        output_filename="gui_terrain",
+    ):
         super().__init__()
         self.config_model = config_model
         self.custom_nodes = custom_nodes
@@ -118,8 +124,10 @@ class GenerationWorker(QThread):
             if self.custom_nodes and self.custom_connections:
                 spec.custom_layout_nodes = self.custom_nodes
                 spec.custom_layout_connections = self.custom_connections
-                
-            result = run_pipeline(spec, map_name=self.output_filename, output_dir=str(OUTPUT_DIR))
+
+            result = run_pipeline(
+                spec, map_name=self.output_filename, output_dir=str(OUTPUT_DIR)
+            )
             if result["errors"]:
                 raise Exception(f"Pipeline errors: {result['errors']}")
 
@@ -418,6 +426,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.txt_map_name = QLineEdit()
         self.txt_map_name.setText("gui_terrain")
         self.txt_map_name.setPlaceholderText("Enter map name...")
+        name_lbl.setBuddy(self.txt_map_name)
         name_row.addWidget(self.txt_map_name, 1)
         config_layout.addLayout(name_row)
 
@@ -429,10 +438,12 @@ class TerrainGeneratorGUI(QMainWindow):
         seed_row.addWidget(seed_lbl)
         self.spin_seed = QSpinBox()
         self.spin_seed.setRange(0, 999999999)
+        seed_lbl.setBuddy(self.spin_seed)
         seed_row.addWidget(self.spin_seed, 1)
         self.btn_random_seed = QPushButton("🎲")
         self.btn_random_seed.setFixedSize(34, 30)
         self.btn_random_seed.setToolTip("Randomize seed")
+        self.btn_random_seed.setAccessibleName("Randomize seed")
         self.btn_random_seed.clicked.connect(
             lambda: self.spin_seed.setValue(random.randint(0, 999999999))
         )
@@ -948,11 +959,15 @@ class TerrainGeneratorGUI(QMainWindow):
 
     def run_preview(self):
         if not hasattr(self, "preview_worker") or not self.preview_worker.isRunning():
-            nodes, connections = self.editor_widget.get_layout_from_editor() if hasattr(self, "editor_widget") else (None, None)
+            nodes, connections = (
+                self.editor_widget.get_layout_from_editor()
+                if hasattr(self, "editor_widget")
+                else (None, None)
+            )
             self.preview_worker = PreviewWorker(
                 self.config_model,
                 custom_nodes=nodes if nodes else None,
-                custom_connections=connections if connections else None
+                custom_connections=connections if connections else None,
             )
             self.preview_worker.finished.connect(self.on_preview_finished)
             self.preview_worker.start()
@@ -1779,12 +1794,16 @@ class TerrainGeneratorGUI(QMainWindow):
 
         # Run generation in background
         map_name = self.txt_map_name.text().strip() or "gui_terrain"
-        nodes, connections = self.editor_widget.get_layout_from_editor() if hasattr(self, "editor_widget") else (None, None)
+        nodes, connections = (
+            self.editor_widget.get_layout_from_editor()
+            if hasattr(self, "editor_widget")
+            else (None, None)
+        )
         self.worker = GenerationWorker(
             self.config_model,
             custom_nodes=nodes if nodes else None,
             custom_connections=connections if connections else None,
-            output_filename=map_name
+            output_filename=map_name,
         )
         self.worker.finished.connect(self.on_generation_finished)
         self.worker.start()
