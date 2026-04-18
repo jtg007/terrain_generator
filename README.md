@@ -10,14 +10,15 @@ The Terrain Generator bridges the gap between procedural noise generation and th
 
 ## Features
 
-*   **Interactive Live Map Preview:** Visualize the generated heightmap instantly as you tweak parameters. Changes to the noise seed, size, or ruggedness reflect in real-time.
+*   **Interactive Strategy Canvas:** A dedicated editor tab with a professional canvas for visually planning your map. Place bases, resource nodes, and connect them with lanes.
+*   **SVG Strategy Markers:** High-visibility SVG markers for Imperial (BE), Northern Faction (NF), and Resource nodes for clear tactical planning.
+*   **Interactive Terrain Sculpting:** Real-time terrain manipulation tools. Use the **Raise** and **Lower** brushes with smooth Gaussian falloff to manually sculpt tactical features.
 *   **Procedural Landscape Engine:** Combines rolling hills, sharp mountain ridges, and hydraulic erosion to create natural-looking, continuous terrain grids.
-*   **Intelligent Auto-Balancing:** Built-in algorithms flatten the terrain gently at base locations to ensure builders have a level playing field, while avoiding unnatural sudden drops.
-*   **Drag-and-Drop Entity Placement:** Directly click and drag on the live preview to custom place the Imperial Commander Base, Northern Faction Base, and Resource Nodes exactly where you want them.
-*   **Custom Heightmaps:** You can also choose to import your own custom `.png` image heightmaps to manually author the fundamental terrain shapes, skipping the procedural noise entirely.
-*   **Source Engine Compliance:** Generates 100% mathematically convex, correctly aligned, airtight displacement geometry designed specifically to avoid VBSP compilation errors or engine crashes.
-*   **Automatic VBSP Compilation:** Automatically locates your Empires Mod installation and directly compiles the generated VMF into a playable BSP format with one click.
-*   **Ready-to-Play Presets:** Select from pre-configured terrain styles like *Flat*, *Hills*, *Rugged*, or *Competitive* to get a fast start.
+*   **Intelligent Auto-Balancing:** Built-in algorithms flatten the terrain gently at base locations to ensure builders have a level playing field.
+*   **Real-time Layout Validation:** Immediate visual feedback on entity placement validity directly in the GUI status label.
+*   **Source Engine Compliance:** Generates 100% mathematically convex, correctly aligned, airtight displacement geometry designed for Empires Mod.
+*   **Automatic VBSP Compilation:** Detects your Empires Mod installation and compiles the generated VMF into a playable BSP format with one click.
+*   **Ready-to-Play Presets:** Select from pre-configured terrain styles like *Flat*, *Hills*, *Rugged*, *Competitive*, *Mountain Pass*, and *Open Valley*.
 
 ## Quick Start
 
@@ -49,10 +50,11 @@ The Terrain Generator bridges the gap between procedural noise generation and th
 ## Step-by-Step Guide
 
 1. **Configure Your Map:** Choose a baseline style under the **PRESETS** section on the left sidebar. Adjust basic parameters such as **Tiles X** / **Tiles Y** (map size), **Roughness**, **Erosion**, and **Height**. Optionally, choose a custom heightmap image.
-2. **Setup Map Strategy:** In the **STRATEGY PREVIEW** section at the bottom, you have a unified canvas allowing you to:
+2. **Setup Map Strategy:** In the **STRATEGY PREVIEW** section, use the interactive canvas to:
    * Select a tool (e.g., *Add Base*, *Add Resource*, *Add Node*) to set up spawns.
-   * Draw structural paths or strategy lanes using the **Draw Lane** tool (with adjustable width) to guide players and vehicles.
-   * Review all elements mapped interactively onto your real-time heightmap. Use **Undo/Redo** or the **Remove** tool to refine your layout.
-3. **Generate VMF:** Ensure you have selected a valid **COMPILE PATH** pointing to your Empires Mod folder. Click the **Generate VMF** button to bake the map and layout.
-4. **Compile Map:** Once the VMF is successfully generated, click **Compile (VBSP)**. The tool will process your map and place it into the game directories.
-5. **Play:** Launch Empires Mod, open the developer console, and load your new map using `map gui_terrain` (or the custom map name you provided).
+   * Draw structural paths or strategy lanes using the **Lane** tool with adjustable widths.
+   * Manually sculpt terrain details using the **Raise** and **Lower** tools.
+   * Review all elements mapped onto your heightmap with **Undo/Redo** support.
+3. **Generate VMF:** Ensure your **COMPILE PATH** is correct, then click **Generate VMF**.
+4. **Compile Map:** Click **Compile (VBSP)** to process and deploy the map to your game directories.
+5. **Play:** Launch Empires Mod and load your map using `map gui_terrain`.
