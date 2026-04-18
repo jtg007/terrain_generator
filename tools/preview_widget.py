@@ -1,6 +1,8 @@
 import math
 from typing import List, Optional, Tuple, Set
 
+import numpy as np
+
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -16,6 +18,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QSlider,
     QSizePolicy,
+    QScrollArea,
 )
 from PySide6.QtCore import Qt, Signal, QPoint, QRectF, QPointF
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QImage, QPixmap, QPolygon
@@ -190,9 +193,18 @@ class MapPreviewWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 6, 6, 6)
 
-        # ── Toolbar ──
-        self.tools_row = QHBoxLayout()
-        self.tools_row.setSpacing(12)
+        # ── Toolbar (Scrollable) ──
+        toolbar_scroll = QScrollArea()
+        toolbar_scroll.setWidgetResizable(True)
+        toolbar_scroll.setFrameShape(QScrollArea.NoFrame)
+        toolbar_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        toolbar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        toolbar_scroll.setFixedHeight(40) # Keep it compact
+        
+        toolbar_widget = QWidget()
+        self.tools_row = QHBoxLayout(toolbar_widget)
+        self.tools_row.setSpacing(6)
+        self.tools_row.setContentsMargins(4, 0, 4, 0)
 
         self.tool_group = QButtonGroup(self)
         self.modes = {}
@@ -200,7 +212,7 @@ class MapPreviewWidget(QWidget):
         # Helper to add section labels
         def add_separator(text):
             lbl = QLabel(text)
-            lbl.setStyleSheet("color: #888; font-weight: bold; font-size: 10px; margin-left: 8px; margin-right: 4px;")
+            lbl.setStyleSheet("color: #888; font-weight: bold; font-size: 9px; margin-left: 4px; margin-right: 2px;")
             self.tools_row.addWidget(lbl)
 
         # 1. Selection & Manipulation
@@ -218,8 +230,8 @@ class MapPreviewWidget(QWidget):
         self.tool_group.addButton(btn_remove, 5)
         self.tools_row.addWidget(btn_remove)
 
-        # 2. Strategy Layout
-        add_separator("STRATEGY")
+        # 2. Layout
+        add_separator("LAYOUT")
 
         btn_node = QPushButton("Add Node")
         btn_node.setCheckable(True)
@@ -227,13 +239,13 @@ class MapPreviewWidget(QWidget):
         self.tool_group.addButton(btn_node, 1)
         self.tools_row.addWidget(btn_node)
 
-        btn_link = QPushButton("Link Nodes")
+        btn_link = QPushButton("Link")
         btn_link.setCheckable(True)
         btn_link.setObjectName("ToolButton")
         self.tool_group.addButton(btn_link, 4)
         self.tools_row.addWidget(btn_link)
 
-        btn_draw = QPushButton("Draw Lane")
+        btn_draw = QPushButton("Lane")
         btn_draw.setCheckable(True)
         btn_draw.setObjectName("ToolButton")
         self.tool_group.addButton(btn_draw, 6)
@@ -244,7 +256,7 @@ class MapPreviewWidget(QWidget):
         self.thickness_widget = QWidget()
         thick_layout = QHBoxLayout(self.thickness_widget)
         thick_layout.setContentsMargins(0, 0, 0, 0)
-        thick_layout.setSpacing(4)
+        thick_layout.setSpacing(2)
 
         self.thickness_label = QLabel("Width: 600")
         self.thickness_label.setStyleSheet("color: #ccc; font-size: 11px;")
@@ -265,7 +277,7 @@ class MapPreviewWidget(QWidget):
         # 3. Entities
         add_separator("ENTITIES")
 
-        btn_be = QPushButton("Set BE Base")
+        btn_be = QPushButton("Set BE")
         btn_be.setCheckable(True)
         btn_be.setObjectName("ToolButtonBlue")
         self.tool_group.addButton(btn_be, 2)
@@ -274,17 +286,61 @@ class MapPreviewWidget(QWidget):
         # We need a new ID for NF Base since previous code overwrote it or merged it incorrectly
         # Old map: 1: Add Node, 2: Add Base, 3: Add Resource
         # Let's use 7 for Set NF Base
-        btn_nf = QPushButton("Set NF Base")
+        btn_nf = QPushButton("Set NF")
         btn_nf.setCheckable(True)
         btn_nf.setObjectName("ToolButtonRed") # NF is typically red in this UI
         self.tool_group.addButton(btn_nf, 7)
         self.tools_row.addWidget(btn_nf)
 
-        btn_res = QPushButton("Add Resource")
+        btn_res = QPushButton("Add Res")
         btn_res.setCheckable(True)
         btn_res.setObjectName("ToolButtonGreen")
         self.tool_group.addButton(btn_res, 3)
         self.tools_row.addWidget(btn_res)
+
+        # 4. Sculpting
+        add_separator("SCULPT")
+
+        btn_raise = QPushButton("Raise ▲")
+        btn_raise.setCheckable(True)
+        btn_raise.setObjectName("ToolButtonGreen")
+        self.tool_group.addButton(btn_raise, 8)
+        self.tools_row.addWidget(btn_raise)
+
+        btn_lower = QPushButton("Lower ▼")
+        btn_lower.setCheckable(True)
+        btn_lower.setObjectName("ToolButtonRed")
+        self.tool_group.addButton(btn_lower, 9)
+        self.tools_row.addWidget(btn_lower)
+
+        # Brush controls (shown for sculpt tools)
+        self.brush_widget = QWidget()
+        brush_layout = QHBoxLayout(self.brush_widget)
+        brush_layout.setContentsMargins(0, 0, 0, 0)
+        brush_layout.setSpacing(2)
+
+        self.brush_size_label = QLabel("Size: 512")
+        self.brush_size_label.setStyleSheet("color: #ccc; font-size: 11px;")
+        self.brush_size_slider = QSlider(Qt.Horizontal)
+        self.brush_size_slider.setRange(64, 4096)
+        self.brush_size_slider.setValue(512)
+        self.brush_size_slider.setFixedWidth(80)
+        self.brush_size_slider.valueChanged.connect(lambda v: self.brush_size_label.setText(f"Size: {v}"))
+
+        self.brush_strength_label = QLabel("Str: 50")
+        self.brush_strength_label.setStyleSheet("color: #ccc; font-size: 11px;")
+        self.brush_strength_slider = QSlider(Qt.Horizontal)
+        self.brush_strength_slider.setRange(5, 200)
+        self.brush_strength_slider.setValue(50)
+        self.brush_strength_slider.setFixedWidth(60)
+        self.brush_strength_slider.valueChanged.connect(lambda v: self.brush_strength_label.setText(f"Str: {v}"))
+
+        brush_layout.addWidget(self.brush_size_label)
+        brush_layout.addWidget(self.brush_size_slider)
+        brush_layout.addWidget(self.brush_strength_label)
+        brush_layout.addWidget(self.brush_strength_slider)
+        self.brush_widget.setVisible(False)
+        self.tools_row.addWidget(self.brush_widget)
 
         self.tool_group.button(0).setChecked(True)
         self.current_mode = 0
@@ -314,7 +370,8 @@ class MapPreviewWidget(QWidget):
         self.history = []
         self.redo_history = []
 
-        layout.addLayout(self.tools_row)
+        toolbar_scroll.setWidget(toolbar_widget)
+        layout.addWidget(toolbar_scroll)
 
         # ── Graphics View ──
         class CustomGraphicsView(QGraphicsView):
@@ -326,21 +383,36 @@ class MapPreviewWidget(QWidget):
                 self.parent_widget.on_wheel_event(event)
 
             def mousePressEvent(self, event):
-                super().mousePressEvent(event)
-                self.parent_widget.on_mouse_press(event)
+                # Always handle middle-button panning in all modes
+                if event.button() == Qt.MiddleButton:
+                    self.parent_widget.on_mouse_press(event)
+                    return
+
+                mode = self.parent_widget.current_mode
+                if mode == 0:
+                    # Move tool: let Qt handle item selection & dragging
+                    super().mousePressEvent(event)
+                else:
+                    # Other tools: run custom logic, skip super()
+                    # so Qt doesn't grab items and steal the event
+                    self.parent_widget.on_mouse_press(event)
 
             def mouseMoveEvent(self, event):
-                super().mouseMoveEvent(event)
+                mode = self.parent_widget.current_mode
+                if mode == 0:
+                    super().mouseMoveEvent(event)
                 self.parent_widget.on_mouse_move(event)
 
             def mouseReleaseEvent(self, event):
-                super().mouseReleaseEvent(event)
+                mode = self.parent_widget.current_mode
+                if mode == 0:
+                    super().mouseReleaseEvent(event)
                 self.parent_widget.on_mouse_release(event)
 
         self.scene = QGraphicsScene()
         self.view = CustomGraphicsView(self.scene, self)
         self.view.setRenderHint(QPainter.Antialiasing)
-        self.view.setDragMode(QGraphicsView.RubberBandDrag)
+        self.view.setDragMode(QGraphicsView.NoDrag)
         self.view.setStyleSheet("background-color: #0d0d10; border: 1px solid #2e2e36;")
 
         layout.addWidget(self.view)
@@ -379,6 +451,11 @@ class MapPreviewWidget(QWidget):
         self.current_freehand_path = []
         self.current_freehand_item = None
         self.freehand_start_node = None
+
+        # Sculpting state
+        self._base_heights = None      # numpy float64 from pipeline
+        self._height_overlay = None    # numpy float64 additive delta
+        self._sculpting = False
 
     def draw_grid(self):
         for item in self.grid_items:
@@ -536,19 +613,95 @@ class MapPreviewWidget(QWidget):
             pixmap = QPixmap.fromImage(self.map_image)
             self.map_pixmap_item.setPixmap(pixmap)
 
-            # Scale item to map bounds rather than making a gigantic pixmap
+            # Scale pixmap to fill the map bounds using a non-uniform transform.
+            # Do NOT also call setScale() — it compounds with setTransform(),
+            # which would make the image ~scale² too large (showing <1 pixel).
             scale_x = self.map_size_x / max(1, pixmap.width())
             scale_y = self.map_size_y / max(1, pixmap.height())
 
-            self.map_pixmap_item.setScale(scale_x)
-            # Y scaling should also be scale_y but Qt scale acts uniformly or uses transform.
-            # QGraphicsItem setScale is uniform. We use setTransform for non-uniform.
             from PySide6.QtGui import QTransform
             self.map_pixmap_item.setTransform(QTransform.fromScale(scale_x, scale_y))
 
             self.map_pixmap_item.setPos(self.origin_x, self.origin_y)
         else:
             self.map_pixmap_item.setPixmap(QPixmap())
+
+    def set_raw_heights(self, heights: np.ndarray):
+        self._base_heights = heights.astype(np.float64).copy()
+        self._base_min = float(self._base_heights.min())
+        self._base_max = float(self._base_heights.max())
+        if self._height_overlay is None or self._height_overlay.shape != heights.shape:
+            self._height_overlay = np.zeros_like(self._base_heights)
+
+        # Re-render with overlay if sculpt edits exist
+        if self._height_overlay.any():
+            self._rerender_heightmap()
+
+    def _apply_brush(self, scene_x: float, scene_y: float, raise_terrain: bool):
+        if self._base_heights is None:
+            return
+
+        h, w = self._base_heights.shape
+        brush_radius = self.brush_size_slider.value()
+        strength = self.brush_strength_slider.value()
+
+        # Convert scene coords to grid indices
+        gx = (scene_x - self.origin_x) / self.map_size_x * w
+        gy = (scene_y - self.origin_y) / self.map_size_y * h
+
+        # Brush radius in grid units
+        brush_r_px = brush_radius / self.map_size_x * w
+
+        # Grid bounds for the brush
+        r_min = max(0, int(gy - brush_r_px))
+        r_max = min(h, int(gy + brush_r_px) + 1)
+        c_min = max(0, int(gx - brush_r_px))
+        c_max = min(w, int(gx + brush_r_px) + 1)
+
+        if r_min >= r_max or c_min >= c_max:
+            return
+
+        # Build gaussian falloff
+        rows = np.arange(r_min, r_max)
+        cols = np.arange(c_min, c_max)
+        cc, rr = np.meshgrid(cols, rows)
+        dist_sq = (cc - gx) ** 2 + (rr - gy) ** 2
+        radius_sq = brush_r_px ** 2
+        mask = dist_sq < radius_sq
+        falloff = np.exp(-dist_sq / (radius_sq * 0.3)) * mask
+
+        delta = falloff * strength * (1.0 if raise_terrain else -1.0)
+        self._height_overlay[r_min:r_max, c_min:c_max] += delta
+
+        self._rerender_heightmap()
+
+    def _rerender_heightmap(self):
+        if self._base_heights is None:
+            return
+
+        combined = self._base_heights + self._height_overlay
+
+        # Use the exact same min/max as the original preview rendering
+        # so unsculpted areas stay pixel-identical. Sculpted areas clamp.
+        min_h = self._base_min
+        max_h = self._base_max
+
+        if max_h > min_h:
+            normalized = (combined - min_h) / (max_h - min_h)
+        else:
+            normalized = np.zeros_like(combined)
+
+        img_data = (np.clip(normalized, 0, 1) * 255).astype(np.uint8)
+        h, w = img_data.shape
+
+        self._preview_img_data = img_data
+        qimg = QImage(
+            self._preview_img_data.data,
+            w, h, w,
+            QImage.Format_Grayscale8,
+        )
+        self.map_image = qimg
+        self.update_pixmap()
 
     def on_tool_changed(self, tid):
         self.current_mode = tid
@@ -557,22 +710,20 @@ class MapPreviewWidget(QWidget):
         # Show thickness slider only for Draw Lane mode (6) or Link Nodes (4)
         show_thickness = tid in [4, 6]
         self.thickness_widget.setVisible(show_thickness)
+        self.brush_widget.setVisible(tid in [8, 9])
 
         if tid == 0:
-            self.view.setDragMode(QGraphicsView.RubberBandDrag)
             for item in self.scene.items():
                 if isinstance(item, VisualNode) or hasattr(item, "is_fixed_entity"):
                     item.setFlag(QGraphicsItem.ItemIsMovable, True)
                     item.setFlag(QGraphicsItem.ItemIsSelectable, True)
         else:
-            self.view.setDragMode(QGraphicsView.NoDrag)
             for item in self.scene.items():
                 if isinstance(item, VisualNode) or hasattr(item, "is_fixed_entity"):
                     item.setFlag(QGraphicsItem.ItemIsMovable, False)
                     item.setFlag(QGraphicsItem.ItemIsSelectable, False)
 
     def clear_scene_nodes(self):
-        # Create an action for clear all
         items_to_remove = []
         for item in self.scene.items():
             if isinstance(item, VisualNode) or isinstance(item, VisualEdge) or isinstance(item, VisualFreehandEdge):
@@ -584,6 +735,17 @@ class MapPreviewWidget(QWidget):
                 self.scene.removeItem(item)
         self.link_start_node = None
 
+        self.imp_base = None
+        self.nf_base = None
+        self.resources = []
+        if self._height_overlay is not None:
+            self._height_overlay[:] = 0
+            self._rerender_heightmap()
+        self.redraw_fixed_entities()
+        self.base_moved.emit("imp", 0.0, 0.0)
+        self.base_moved.emit("nf", 0.0, 0.0)
+        self.layout_changed.emit()
+
     def record_action(self, action_type, item):
         self.history.append((action_type, item))
         self.redo_history.clear()
@@ -593,7 +755,16 @@ class MapPreviewWidget(QWidget):
         if not self.history: return
         action, item = self.history.pop()
 
-        if action == "add":
+        if action == "sculpt":
+            current = self._height_overlay.copy() if self._height_overlay is not None else None
+            self.redo_history.append(("sculpt", current))
+            if self._height_overlay is not None and item is not None:
+                self._height_overlay[:] = item
+            elif self._height_overlay is not None:
+                self._height_overlay[:] = 0
+            self._rerender_heightmap()
+            return
+        elif action == "add":
             self.scene.removeItem(item)
             self.redo_history.append(("add", item))
         elif action == "remove":
@@ -609,7 +780,16 @@ class MapPreviewWidget(QWidget):
         if not self.redo_history: return
         action, item = self.redo_history.pop()
 
-        if action == "add":
+        if action == "sculpt":
+            current = self._height_overlay.copy() if self._height_overlay is not None else None
+            self.history.append(("sculpt", current))
+            if self._height_overlay is not None and item is not None:
+                self._height_overlay[:] = item
+            elif self._height_overlay is not None:
+                self._height_overlay[:] = 0
+            self._rerender_heightmap()
+            return
+        elif action == "add":
             self.scene.addItem(item)
             self.history.append(("add", item))
         elif action == "remove":
@@ -642,16 +822,15 @@ class MapPreviewWidget(QWidget):
             self.record_action("add", node)
         elif self.current_mode == 2: # BE Base
             self.imp_base = (scene_pos.x(), scene_pos.y())
-            if isinstance(self.scene.views()[0].parent(), MapPreviewWidget):
-                self.scene.views()[0].parent().base_moved.emit("imp", scene_pos.x(), scene_pos.y())
+            self.redraw_fixed_entities()
+            self.base_moved.emit("imp", scene_pos.x(), scene_pos.y())
         elif self.current_mode == 7: # NF Base
             self.nf_base = (scene_pos.x(), scene_pos.y())
-            if isinstance(self.scene.views()[0].parent(), MapPreviewWidget):
-                self.scene.views()[0].parent().base_moved.emit("nf", scene_pos.x(), scene_pos.y())
+            self.redraw_fixed_entities()
+            self.base_moved.emit("nf", scene_pos.x(), scene_pos.y())
         elif self.current_mode == 5: # Remove
             item = self.scene.itemAt(scene_pos, self.view.transform())
             if isinstance(item, VisualNode) or isinstance(item, VisualEdge) or isinstance(item, VisualFreehandEdge):
-                # If we remove a node, we should remove its edges too
                 items_to_remove = [item]
                 if isinstance(item, VisualNode):
                     for edge in item.edges:
@@ -662,24 +841,29 @@ class MapPreviewWidget(QWidget):
                 for i in items_to_remove:
                     self.scene.removeItem(i)
             elif hasattr(item, "is_fixed_entity"):
-                # Handle base/resource removal via signals or state updates
-                # Fixed entities are tied to config state, so we update the parent state directly
-                # However, they might want to just move them out of bounds or clear them.
-                # Let's emit signals to clear them if clicked with remove tool.
-                # Just hide it for now visually, we can't emit None to float
                 if item.entity_type == "imp":
-                    self.imp_base = (0.0, 0.0) # Move to corner
-                    if isinstance(self.scene.views()[0].parent(), MapPreviewWidget):
-                        self.scene.views()[0].parent().base_moved.emit("imp", 0.0, 0.0)
+                    self.imp_base = (0.0, 0.0)
+                    self.redraw_fixed_entities()
+                    self.base_moved.emit("imp", 0.0, 0.0)
                 elif item.entity_type == "nf":
                     self.nf_base = (0.0, 0.0)
-                    if isinstance(self.scene.views()[0].parent(), MapPreviewWidget):
-                        self.scene.views()[0].parent().base_moved.emit("nf", 0.0, 0.0)
-                # Note: 'res' removal is not straightforward without passing the index correctly and modifying the list.
-                # It's better left handled by "Clear Resources" in the config panel for now, or we can send a None signal.
-        elif self.current_mode == 3:
-            # Emit resource added instead of VisualNode if they clicked on the preview
+                    self.redraw_fixed_entities()
+                    self.base_moved.emit("nf", 0.0, 0.0)
+        elif self.current_mode == 3: # Add Resource
+            # Deduplicate: don't add if a resource already exists at this exact spot
+            for rx, ry in self.resources:
+                if abs(rx - scene_pos.x()) < 1.0 and abs(ry - scene_pos.y()) < 1.0:
+                    return
+            self.resources.append((scene_pos.x(), scene_pos.y()))
+            self.redraw_fixed_entities()
             self.resource_added.emit(scene_pos.x(), scene_pos.y())
+        elif self.current_mode in (8, 9):  # Raise / Lower
+            self._sculpting = True
+            # Save overlay snapshot for undo
+            snapshot = self._height_overlay.copy() if self._height_overlay is not None else None
+            self.history.append(("sculpt", snapshot))
+            self.redo_history.clear()
+            self._apply_brush(scene_pos.x(), scene_pos.y(), self.current_mode == 8)
         elif self.current_mode == 6: # Draw Lane
             self.drawing_lane = True
             self.current_freehand_path = [scene_pos]
@@ -730,6 +914,11 @@ class MapPreviewWidget(QWidget):
                 self.current_freehand_item.update()
             return
 
+        if self._sculpting and self.current_mode in (8, 9):
+            scene_pos = self.view.mapToScene(event.pos())
+            self._apply_brush(scene_pos.x(), scene_pos.y(), self.current_mode == 8)
+            return
+
         if self.panning:
             delta = event.position() - self.pan_start_pos
             self.view.horizontalScrollBar().setValue(
@@ -744,6 +933,10 @@ class MapPreviewWidget(QWidget):
         pass
 
     def on_mouse_release(self, event):
+        if self._sculpting:
+            self._sculpting = False
+            return
+
         if self.drawing_lane:
             self.drawing_lane = False
             if len(self.current_freehand_path) > 1:

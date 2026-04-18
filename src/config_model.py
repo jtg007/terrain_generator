@@ -100,6 +100,34 @@ class GUIConfigModel:
         if self.custom_image_path and not Path(self.custom_image_path).is_file():
             return False, f"Custom heightmap not found: {self.custom_image_path}"
 
+        # Layout check
+        try:
+            # Hammer limit check: map centered at 0,0, limits are -16384 to +16384 -> max size = 32768
+            # (Done above)
+            
+            # Use minimal spec for layout validation
+            origin_x = int(-self.map_size_x / 2)
+            origin_y = int(-self.map_size_y / 2)
+            
+            spec = TerrainSpec(
+                origin_x=origin_x,
+                origin_y=origin_y,
+                size_x=self.map_size_x,
+                size_y=self.map_size_y,
+                base_clear_radius=self.base_clear_radius,
+                custom_imp_base_x=self.custom_imp_base_x,
+                custom_imp_base_y=self.custom_imp_base_y,
+                custom_nf_base_x=self.custom_nf_base_x,
+                custom_nf_base_y=self.custom_nf_base_y,
+                custom_resources=self.custom_resources,
+            )
+            val_result = spec.validate_layout()
+            if not val_result.valid:
+                return False, val_result.errors[0]
+        except Exception:
+            # Catch transient errors during sync
+            pass
+
         return True, "All validation checks passed."
 
     def auto_clamp(self):
@@ -123,13 +151,14 @@ class GUIConfigModel:
         self.roughness = max(0.0, min(self.roughness, 1.0))
         self.erosion_strength = max(0.0, min(self.erosion_strength, 1.0))
 
-    def make_spec(self) -> TerrainSpec:
+    def make_spec(self, validate: bool = True) -> TerrainSpec:
         """
         Transforms the GUI properties into the backend TerrainSpec, centered on origin.
         """
-        is_valid, msg = self.validate()
-        if not is_valid:
-            raise ValueError(f"Cannot generate TerrainSpec: {msg}")
+        if validate:
+            is_valid, msg = self.validate()
+            if not is_valid:
+                raise ValueError(f"Cannot generate TerrainSpec: {msg}")
 
         # Map generic 0.0-1.0 ranges to physical ranges
         # Octaves: 1 to 8 (use exponential for better distribution)

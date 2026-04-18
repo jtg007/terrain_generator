@@ -1407,7 +1407,7 @@ def export_minimap(spec: TerrainSpec, grid: HeightGrid, map_name: str, output_di
     print("Minimap generated. For your Empires map script, use Top-Left: (0, 0) and Bottom-Right: (1024, 1024).")
 
 
-def run_pipeline(spec: TerrainSpec, map_name: Optional[str] = None, output_dir: Optional[str] = None) -> dict:
+def run_pipeline(spec: TerrainSpec, map_name: Optional[str] = None, output_dir: Optional[str] = None, skip_layout_validation: bool = False) -> dict:
     """
     Run the complete terrain generation pipeline.
 
@@ -1420,7 +1420,7 @@ def run_pipeline(spec: TerrainSpec, map_name: Optional[str] = None, output_dir: 
     """
     # Validate layout before starting
     layout_result = spec.validate_layout()
-    if not layout_result.valid:
+    if not layout_result.valid and not skip_layout_validation:
         raise ValueError(
             "Invalid layout configuration:\n" + "\n".join(layout_result.errors)
         )

@@ -77,7 +77,8 @@ class PreviewWorker(QThread):
     def run(self):
         try:
             # We must not modify the original model's spec, but we can make a custom spec
-            spec = self.config_model.make_spec()
+            # Pass validate=False so we still get a preview even if nodes are being dragged
+            spec = self.config_model.make_spec(validate=False)
             spec.displacement_power = 2  # Force low power for speed
             spec.erosion_iterations = 0  # Disable erosion for instant preview
             spec.disable_commander = True
@@ -88,7 +89,8 @@ class PreviewWorker(QThread):
                 spec.custom_layout_nodes = self.custom_nodes
                 spec.custom_layout_connections = self.custom_connections
 
-            result = run_pipeline(spec)
+            # Skip layout validation during preview to prevent crashes while dragging
+            result = run_pipeline(spec, skip_layout_validation=True)
             self.finished.emit(result["grid"], result["spec"])
         except Exception:
             import traceback
@@ -812,13 +814,6 @@ class TerrainGeneratorGUI(QMainWindow):
         self.lbl_validation.setWordWrap(True)
         config_layout.addWidget(self.lbl_validation)
 
-        self.lbl_layout_validation = QLabel()
-        self.lbl_layout_validation.setObjectName("ValidationLabel")
-        self.lbl_layout_validation.setStyleSheet("color: #ff6b6b;")
-        self.lbl_layout_validation.setWordWrap(True)
-        self.lbl_layout_validation.hide()
-        config_layout.addWidget(self.lbl_layout_validation)
-
         config_layout.addStretch()
 
         # Wrap in scroll area
@@ -830,13 +825,14 @@ class TerrainGeneratorGUI(QMainWindow):
         scroll.setWidget(scroll_content)
         scroll.setFrameShape(QScrollArea.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll.setMinimumWidth(320)
+        scroll.setMinimumWidth(240)
 
         # ── Data & Tools Setup ──
 
 
 
         self.preview_widget = MapPreviewWidget()
+        self.preview_widget.setMinimumWidth(200)
 
 
 
@@ -845,10 +841,14 @@ class TerrainGeneratorGUI(QMainWindow):
         self._inner_splitter = QSplitter(Qt.Horizontal)
         self._inner_splitter.addWidget(scroll)
         self._inner_splitter.addWidget(self.preview_widget)
-        self._inner_splitter.setStretchFactor(0, 1)
+        self._inner_splitter.setStretchFactor(0, 0)
         self.preview_widget.layout_changed.connect(lambda: self.preview_timer.start(500))
+        self.preview_widget.base_moved.connect(self.on_base_moved)
+        self.preview_widget.resource_moved.connect(self.on_resource_moved)
+        self.preview_widget.resource_added.connect(self.on_resource_added)
         self._inner_splitter.setStretchFactor(1, 1)
-        self._inner_splitter.setSizes([480, 520])
+        self._inner_splitter.setSizes([380, 620])
+        self._inner_splitter.setChildrenCollapsible(False)
 
         main_area_layout.addWidget(self._inner_splitter)
 
@@ -863,19 +863,15 @@ class TerrainGeneratorGUI(QMainWindow):
         self._root_splitter.setSizes([220, 930])
 
     def validate_current_layout(self):
-        spec = self.config_model.make_spec()
-        layout_result = spec.validate_layout()
-
-        if not layout_result.valid:
-            self.lbl_layout_validation.setText("\n".join(layout_result.errors))
-            self.lbl_layout_validation.show()
-            self.btn_generate.setEnabled(False)
-        else:
-            self.lbl_layout_validation.setText("")
-            self.lbl_layout_validation.hide()
-            self.btn_generate.setEnabled(True)
-
-        return layout_result.invalid_entities
+        """Validates layout and returns set of invalid entity IDs for UI highlighting."""
+        try:
+            spec = self.config_model.make_spec()
+            layout_result = spec.validate_layout()
+            # We don't update lbl_validation here because sync_to_model handles it,
+            # but we return the invalid entities for the editor icons.
+            return layout_result.invalid_entities
+        except Exception:
+            return set()
 
     def clear_resources(self):
         reply = QMessageBox.question(
@@ -901,12 +897,17 @@ class TerrainGeneratorGUI(QMainWindow):
         pass # Tools are fully managed by preview_widget internally now
 
     def on_base_moved(self, faction, x, y):
-        if faction == "imp":
-            self.config_model.custom_imp_base_x = x
-            self.config_model.custom_imp_base_y = y
+        if x == 0.0 and y == 0.0:
+            val_x, val_y = None, None
         else:
-            self.config_model.custom_nf_base_x = x
-            self.config_model.custom_nf_base_y = y
+            val_x, val_y = x, y
+
+        if faction == "imp":
+            self.config_model.custom_imp_base_x = val_x
+            self.config_model.custom_imp_base_y = val_y
+        else:
+            self.config_model.custom_nf_base_x = val_x
+            self.config_model.custom_nf_base_y = val_y
         invalid_entities = self.validate_current_layout()
         self.preview_widget.set_entities(
             (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y),
@@ -936,6 +937,12 @@ class TerrainGeneratorGUI(QMainWindow):
     def on_resource_added(self, x, y):
         if self.config_model.custom_resources is None:
             self.config_model.custom_resources = []
+        
+        # Deduplicate: don't add if a resource already exists at this exact spot
+        for rx, ry in self.config_model.custom_resources:
+            if abs(rx - x) < 1.0 and abs(ry - y) < 1.0:
+                return
+
         self.config_model.custom_resources.append((x, y))
         invalid_entities = self.validate_current_layout()
         self.preview_widget.set_entities(
@@ -992,21 +999,10 @@ class TerrainGeneratorGUI(QMainWindow):
             self.preview_widget.set_map_image(
                 qimg, spec.origin_x, spec.origin_y, spec.size_x, spec.size_y
             )
+            self.preview_widget.set_raw_heights(heights)
 
-            # Setup initial bases if not set
-            if self.config_model.custom_imp_base_x is None:
-                imp_x = spec.origin_x + spec.size_x * 0.25
-                imp_y = spec.origin_y + spec.size_y * 0.25
-            else:
-                imp_x = self.config_model.custom_imp_base_x
-                imp_y = self.config_model.custom_imp_base_y
-
-            if self.config_model.custom_nf_base_x is None:
-                nf_x = spec.origin_x + spec.size_x * 0.75
-                nf_y = spec.origin_y + spec.size_y * 0.75
-            else:
-                nf_x = self.config_model.custom_nf_base_x
-                nf_y = self.config_model.custom_nf_base_y
+            imp_pos = (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y)
+            nf_pos = (self.config_model.custom_nf_base_x, self.config_model.custom_nf_base_y)
 
             res = (
                 self.config_model.custom_resources
@@ -1015,7 +1011,7 @@ class TerrainGeneratorGUI(QMainWindow):
             )
             invalid_entities = self.validate_current_layout()
             self.preview_widget.set_entities(
-                (imp_x, imp_y), (nf_x, nf_y), res, invalid_entities=invalid_entities
+                imp_pos, nf_pos, res, invalid_entities=invalid_entities
             )
 
     def apply_dark_theme(self):
@@ -1379,15 +1375,17 @@ class TerrainGeneratorGUI(QMainWindow):
 
         /* ── Tool Buttons (preview toolbar) ── */
         QPushButton#ToolButton, QPushButton#ToolButtonBlue,
-        QPushButton#ToolButtonRed, QPushButton#ToolButtonGreen {{
+        QPushButton#ToolButtonRed, QPushButton#ToolButtonGreen,
+        QPushButton#SmallButton {{
             background: {BG_WIDGET};
             border: 1px solid {BORDER};
             border-radius: 4px;
-            padding: 4px 10px;
-            font-size: 10px;
+            padding: 3px 6px;
+            font-size: 9px;
             color: {TEXT_SEC};
+            min-width: 38px;
         }}
-        QPushButton#ToolButton:checked {{
+        QPushButton#ToolButton:checked, QPushButton#SmallButton:active {{
             background: {ACCENT_ACTIVE};
             border: 1px solid {ACCENT};
             color: white;
@@ -1408,7 +1406,8 @@ class TerrainGeneratorGUI(QMainWindow):
             color: {GREEN};
         }}
         QPushButton#ToolButton:hover, QPushButton#ToolButtonBlue:hover,
-        QPushButton#ToolButtonRed:hover, QPushButton#ToolButtonGreen:hover {{
+        QPushButton#ToolButtonRed:hover, QPushButton#ToolButtonGreen:hover,
+        QPushButton#SmallButton:hover {{
             background: #2a2a34;
             border: 1px solid #44444e;
         }}
@@ -1753,6 +1752,34 @@ class TerrainGeneratorGUI(QMainWindow):
         w = tx * 512
         h = ty * 512
         self.lbl_map_info.setText(f"{w}×{h} units  ·  {tx}×{ty} tiles")
+
+        if is_valid:
+            # Check layout from editor
+            if hasattr(self, "preview_widget"):
+                try:
+                    nodes, _ = self.preview_widget.get_layout_from_editor()
+                    if nodes:
+                        temp_spec = self.config_model.make_spec()
+                        
+                        # Extract base and resource positions from editor nodes
+                        imp_pos = next(((n.x, n.y) for n in nodes if "imp" in n.type.lower() or (n.type == "base_zone" and nodes.index(n) == 0)), None)
+                        nf_pos = next(((n.x, n.y) for n in nodes if "nf" in n.type.lower() or (n.type == "base_zone" and nodes.index(n) == 1)), None)
+                        res_positions = [(n.x, n.y) for n in nodes if "resource" in n.type.lower()]
+                        
+                        if imp_pos:
+                            temp_spec.custom_imp_base_x, temp_spec.custom_imp_base_y = imp_pos
+                        if nf_pos:
+                            temp_spec.custom_nf_base_x, temp_spec.custom_nf_base_y = nf_pos
+                        if res_positions:
+                            temp_spec.custom_resources = res_positions
+                            
+                        val_result = temp_spec.validate_layout()
+                        if not val_result.valid:
+                            is_valid = False
+                            msg = val_result.errors[0]
+                except Exception:
+                    # Ignore errors during real-time validation to prevent UI hang
+                    pass
 
         if is_valid:
             self.lbl_validation.setText("✓  All checks passed")
