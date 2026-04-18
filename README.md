@@ -2,7 +2,8 @@
 
 An advanced **procedural terrain generator and graphical interface** designed specifically for creating compile-ready displacement maps for the Source Engine modification, **Empires Mod**.
 
-![Terrain Generator UI Screenshot](docs/screenshots/gui_preview.png)
+<img width="2553" height="1389" alt="Bildschirmfoto_20260418_134851" src="https://github.com/user-attachments/assets/a9d7a141-c62d-4084-9499-aef610c1f28b" />
+
 
 ## Overview
 
