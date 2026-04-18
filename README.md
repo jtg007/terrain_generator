@@ -50,7 +50,7 @@ The Terrain Generator bridges the gap between procedural noise generation and th
 
 1. **Configure Your Map:** Adjust basic parameters such as **Tiles X** / **Tiles Y** (map size), **Roughness**, **Erosion**, and **Height** in the sidebar. Optionally, choose a custom heightmap image.
 2. **Setup Map Strategy:** In the **STRATEGY PREVIEW** section, use the interactive canvas to:
-   * Select a tool (e.g., *Add Base*, *Add Resource*, *Add Node*) to set up spawns.
+   * Select a tool (e.g., *Add Base*, *Add Resource*) to set up spawns.
    * Draw structural paths or strategy lanes using the **Lane** tool with adjustable widths.
    * Manually sculpt terrain details using the **Raise** and **Lower** tools.
    * Review all elements mapped onto your heightmap with **Undo/Redo** support.
