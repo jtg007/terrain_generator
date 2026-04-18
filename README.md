@@ -18,7 +18,6 @@ The Terrain Generator bridges the gap between procedural noise generation and th
 *   **Real-time Layout Validation:** Immediate visual feedback on entity placement validity directly in the GUI status label.
 *   **Source Engine Compliance:** Generates 100% mathematically convex, correctly aligned, airtight displacement geometry designed for Empires Mod.
 *   **Automatic VBSP Compilation:** Detects your Empires Mod installation and compiles the generated VMF into a playable BSP format with one click.
-*   **Ready-to-Play Presets:** Select from pre-configured terrain styles like *Flat*, *Hills*, *Rugged*, *Competitive*, *Mountain Pass*, and *Open Valley*.
 
 ## Quick Start
 
@@ -42,14 +41,14 @@ The Terrain Generator bridges the gap between procedural noise generation and th
    *Alternative commands:*
    ```bash
    ./terrain.sh --gui                    # GUI mode (default)
-   ./terrain.sh --cli hills --seed 123  # CLI with preset
+   ./terrain.sh --cli --seed 123         # CLI with custom seed
    ./terrain.sh --compile               # Compile last VMF
    ./terrain.sh --help                  # Show all options
    ```
 
 ## Step-by-Step Guide
 
-1. **Configure Your Map:** Choose a baseline style under the **PRESETS** section on the left sidebar. Adjust basic parameters such as **Tiles X** / **Tiles Y** (map size), **Roughness**, **Erosion**, and **Height**. Optionally, choose a custom heightmap image.
+1. **Configure Your Map:** Adjust basic parameters such as **Tiles X** / **Tiles Y** (map size), **Roughness**, **Erosion**, and **Height** in the sidebar. Optionally, choose a custom heightmap image.
 2. **Setup Map Strategy:** In the **STRATEGY PREVIEW** section, use the interactive canvas to:
    * Select a tool (e.g., *Add Base*, *Add Resource*, *Add Node*) to set up spawns.
    * Draw structural paths or strategy lanes using the **Lane** tool with adjustable widths.

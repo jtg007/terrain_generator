@@ -42,13 +42,25 @@ class VisualFreehandEdge(QGraphicsItem):
         super().__init__(parent)
         self.points = points  # List of QPointF (in scene coords)
         self.base_points = [p for p in points] # Keep original points for offset calculation
-        self.logical_width = width
+        self.base_width = width
         self.start_node = start_node
         self.end_node = end_node
         self.setZValue(1)
         self.setFlags(QGraphicsItem.ItemIsSelectable)
+        self._update_pen()
 
-        pen_w = max(4, width / 25.0)
+    def _update_pen(self):
+        # Use the scale from the parent widget if possible
+        scale = 1.0
+        try:
+            if self.scene() and self.scene().views():
+                parent = self.scene().views()[0].parent()
+                if hasattr(parent, "global_lane_scale"):
+                    scale = parent.global_lane_scale
+        except (AttributeError, IndexError):
+            pass
+
+        pen_w = max(4, (self.base_width * scale) / 25.0)
         self.pen = QPen(QColor(255, 255, 255, 90), pen_w)
         self.pen.setCapStyle(Qt.RoundCap)
         self.pen.setJoinStyle(Qt.RoundJoin)
@@ -56,6 +68,14 @@ class VisualFreehandEdge(QGraphicsItem):
         self.outline_pen = QPen(QColor(200, 200, 255, 120), 2)
         self.outline_pen.setCapStyle(Qt.RoundCap)
         self.outline_pen.setJoinStyle(Qt.RoundJoin)
+        self.update()
+
+    @property
+    def logical_width(self):
+        scale = 1.0
+        if self.scene() and self.scene().views() and isinstance(self.scene().views()[0].parent(), MapPreviewWidget):
+            scale = self.scene().views()[0].parent().global_lane_scale
+        return self.base_width * scale
 
     def update_position(self):
         if not self.points or len(self.points) < 2:
@@ -134,12 +154,32 @@ class VisualEdge(QGraphicsLineItem):
         super().__init__(parent)
         self.start_node = start_node
         self.end_node = end_node
-        self.logical_width = 600.0
+        self.base_width = 600.0
         self.setZValue(1)
-        pen = QPen(QColor(255, 255, 255, 90), 12) # Thick but translucent base
+        self._update_pen()
+        self.update_position()
+
+    def _update_pen(self):
+        scale = 1.0
+        try:
+            if self.scene() and self.scene().views():
+                parent = self.scene().views()[0].parent()
+                if hasattr(parent, "global_lane_scale"):
+                    scale = parent.global_lane_scale
+        except (AttributeError, IndexError):
+            pass
+        
+        pen_w = max(4, (self.base_width * scale) / 25.0)
+        pen = QPen(QColor(255, 255, 255, 90), pen_w)
         pen.setCapStyle(Qt.RoundCap)
         self.setPen(pen)
-        self.update_position()
+
+    @property
+    def logical_width(self):
+        scale = 1.0
+        if self.scene() and self.scene().views() and isinstance(self.scene().views()[0].parent(), MapPreviewWidget):
+            scale = self.scene().views()[0].parent().global_lane_scale
+        return self.base_width * scale
 
     def update_position(self):
         self.setLine(
@@ -171,13 +211,26 @@ class VisualNode(QGraphicsEllipseItem):
         r = 84
         rect = QRectF(-r, -r, r * 2, r * 2)
         
-        if self.node_type == ZoneType.BASE:
-            SVG_RENDERERS["imp"].render(painter, rect)
+        if self.node_type == ZoneType.RESOURCE:
+            if not SVG_RENDERERS["res"].render(painter, rect):
+                # Fallback if SVG fails
+                painter.setPen(QPen(QColor(100, 255, 100), 2))
+                painter.setBrush(QBrush(QColor(0, 150, 0, 180)))
+                painter.drawEllipse(QRectF(-30, -30, 60, 60))
+        elif self.node_type == ZoneType.BASE:
+            if not SVG_RENDERERS["imp"].render(painter, rect):
+                painter.setPen(QPen(QColor(100, 100, 255), 2))
+                painter.setBrush(QBrush(QColor(0, 0, 150, 180)))
+                painter.drawEllipse(QRectF(-30, -30, 60, 60))
         else:
-            SVG_RENDERERS["res"].render(painter, rect)
+            # Wilderness node - simple dot
+            painter.setPen(QPen(QColor(150, 150, 180), 2))
+            painter.setBrush(QBrush(QColor(80, 80, 100, 150)))
+            painter.drawEllipse(QRectF(-20, -20, 40, 40))
             
-        painter.setPen(QPen(QColor(255, 255, 255, 50), 1, Qt.DashLine))
-        painter.setBrush(QBrush(QColor(255, 255, 255, 10)))
+        # Draw clearing radius
+        painter.setPen(QPen(QColor(255, 255, 255, 30), 1, Qt.DashLine))
+        painter.setBrush(QBrush(QColor(255, 255, 255, 5)))
         r_clear = self.clear_radius
         painter.drawEllipse(QRectF(-r_clear, -r_clear, r_clear * 2, r_clear * 2))
 
@@ -198,6 +251,7 @@ class MapPreviewWidget(QWidget):
     resource_moved = Signal(int, float, float)  # (index, x, y)
     resource_added = Signal(float, float)  # (x, y)
     layout_changed = Signal()  # emitted when nodes/links change to update preview
+    lane_width_changed = Signal(float) # Emits absolute width in units
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -244,11 +298,6 @@ class MapPreviewWidget(QWidget):
         # 2. Layout
         add_separator("LAYOUT")
 
-        btn_node = QPushButton("Add Node")
-        btn_node.setCheckable(True)
-        btn_node.setObjectName("ToolButton")
-        self.tool_group.addButton(btn_node, 1)
-        self.tools_row.addWidget(btn_node)
 
         btn_link = QPushButton("Link")
         btn_link.setCheckable(True)
@@ -273,10 +322,10 @@ class MapPreviewWidget(QWidget):
         self.thickness_label.setStyleSheet("color: #ccc; font-size: 11px;")
 
         self.thickness_slider = QSlider(Qt.Horizontal)
-        self.thickness_slider.setRange(100, 1500)
+        self.thickness_slider.setRange(0, 800)
         self.thickness_slider.setValue(600)
         self.thickness_slider.setFixedWidth(80)
-        self.thickness_slider.valueChanged.connect(lambda v: self.thickness_label.setText(f"Width: {v}"))
+        self.thickness_slider.valueChanged.connect(self._on_thickness_slider_changed)
 
         thick_layout.addWidget(self.thickness_label)
         thick_layout.addWidget(self.thickness_slider)
@@ -462,6 +511,8 @@ class MapPreviewWidget(QWidget):
         self.current_freehand_path = []
         self.current_freehand_item = None
         self.freehand_start_node = None
+        self.current_base_width = 600.0
+        self.global_lane_scale = 1.0
 
         # Sculpting state
         self._base_heights = None      # numpy float64 from pipeline
@@ -680,6 +731,23 @@ class MapPreviewWidget(QWidget):
         self.map_image = qimg
         self.update_pixmap()
 
+    def _on_thickness_slider_changed(self, value):
+        self.thickness_label.setText(f"Width: {value}")
+        self.current_base_width = float(value)
+        # Note: We do NOT update existing lanes here, as requested.
+        # This slider only affects NEWLY drawn lanes.
+
+    def set_lane_scale(self, scale: float):
+        """External entry point to sync from main GUI slider."""
+        self.global_lane_scale = scale
+        self._refresh_all_lane_visuals()
+
+    def _refresh_all_lane_visuals(self):
+        # Update existing edges visual representation based on global scale
+        for item in self.scene.items():
+            if hasattr(item, "_update_pen"):
+                item._update_pen()
+
     def on_tool_changed(self, tid):
         self.current_mode = tid
         self.link_start_node = None
@@ -701,16 +769,28 @@ class MapPreviewWidget(QWidget):
                     item.setFlag(QGraphicsItem.ItemIsSelectable, False)
 
     def clear_scene_nodes(self):
+        # 1. Collect all layout items (Nodes, Edges, Paths)
         items_to_remove = []
         for item in self.scene.items():
-            if isinstance(item, VisualNode) or isinstance(item, VisualEdge) or isinstance(item, VisualFreehandEdge):
+            if isinstance(item, (VisualNode, VisualEdge, VisualFreehandEdge)):
                 items_to_remove.append(item)
+            elif hasattr(item, "is_fixed_entity"):
+                items_to_remove.append(item)
+
         if items_to_remove:
             self.history.append(("remove_multiple", items_to_remove))
             self.redo_history.clear()
             for item in items_to_remove:
+                # Disconnect edges from nodes to avoid dangling references
+                if isinstance(item, VisualNode):
+                    item.edges.clear()
                 self.scene.removeItem(item)
+
+        # 2. Reset internal state
         self.link_start_node = None
+        self.drawing_lane = False
+        self.current_freehand_path = []
+        self.current_freehand_item = None
 
         self.imp_base = None
         self.nf_base = None
@@ -794,10 +874,7 @@ class MapPreviewWidget(QWidget):
 
         scene_pos = self.view.mapToScene(event.pos())
 
-        if self.current_mode == 1:
-            node = VisualNode(scene_pos.x(), scene_pos.y(), 256, ZoneType.WILDERNESS, self.scene)
-            self.record_action("add", node)
-        elif self.current_mode == 2: # BE Base
+        if self.current_mode == 2: # BE Base
             self.imp_base = (scene_pos.x(), scene_pos.y())
             self.redraw_fixed_entities()
             self.base_moved.emit("imp", scene_pos.x(), scene_pos.y())
@@ -827,12 +904,8 @@ class MapPreviewWidget(QWidget):
                     self.redraw_fixed_entities()
                     self.base_moved.emit("nf", 0.0, 0.0)
         elif self.current_mode == 3: # Add Resource
-            # Deduplicate: don't add if a resource already exists at this exact spot
-            for rx, ry in self.resources:
-                if abs(rx - scene_pos.x()) < 1.0 and abs(ry - scene_pos.y()) < 1.0:
-                    return
-            self.resources.append((scene_pos.x(), scene_pos.y()))
-            self.redraw_fixed_entities()
+            node = VisualNode(scene_pos.x(), scene_pos.y(), 256, ZoneType.RESOURCE, self.scene)
+            self.record_action("add", node)
             self.resource_added.emit(scene_pos.x(), scene_pos.y())
         elif self.current_mode in (8, 9):  # Raise / Lower
             self._sculpting = True
@@ -848,7 +921,7 @@ class MapPreviewWidget(QWidget):
             self.freehand_start_node = item if isinstance(item, VisualNode) else None
 
             # Temporary item to draw while dragging
-            self.current_freehand_item = VisualFreehandEdge(self.current_freehand_path, self.thickness_slider.value())
+            self.current_freehand_item = VisualFreehandEdge(self.current_freehand_path, self.current_base_width)
             self.scene.addItem(self.current_freehand_item)
 
         elif self.current_mode == 4:
@@ -865,13 +938,8 @@ class MapPreviewWidget(QWidget):
                         )
                         if not existing:
                             edge = VisualEdge(self.link_start_node, item)
-                            # Set explicit width based on slider
-                            # Visual mapping from logical to pixels roughly
-                            pen_w = max(4, self.thickness_slider.value() / 25.0)
-                            p = QPen(QColor(255, 255, 255, 90), pen_w)
-                            p.setCapStyle(Qt.RoundCap)
-                            edge.setPen(p)
-                            edge.logical_width = self.thickness_slider.value()
+                            edge.base_width = self.current_base_width
+                            edge._update_pen()
                             self.scene.addItem(edge)
                             self.link_start_node.edges.append(edge)
                             item.edges.append(edge)
@@ -926,7 +994,7 @@ class MapPreviewWidget(QWidget):
 
                 final_edge = VisualFreehandEdge(
                     list(self.current_freehand_path),
-                    self.thickness_slider.value(),
+                    self.current_base_width,
                     start_node=self.freehand_start_node,
                     end_node=end_node
                 )
@@ -1001,4 +1069,9 @@ class MapPreviewWidget(QWidget):
                 )
                 connections.append(conn)
 
-        return nodes, connections
+        resources = []
+        for item in self.scene.items():
+            if isinstance(item, VisualNode) and item.node_type == ZoneType.RESOURCE:
+                resources.append((item.scenePos().x(), item.scenePos().y()))
+
+        return nodes, connections, resources

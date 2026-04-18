@@ -165,7 +165,6 @@ def generate_strategic_layout(
 
     lane_width *= spec.lane_width_scale
     veh_radius *= spec.lane_width_scale
-    choke_length *= spec.chokepoint_size_scale
 
     nodes = [imp_base, nf_base]
     connections = []

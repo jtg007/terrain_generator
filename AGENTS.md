@@ -27,7 +27,6 @@ tools/
 map_dataset/                # Reference VMF files for analysis
 config/
   requirements.txt    # Python dependencies
-  presets.json        # Terrain presets with tile sizes
   textures.json       # Texture references
 output/              # Generated VMF, BSP, and resource files
 docs/                # Reference VMFs
@@ -88,8 +87,8 @@ venv/bin/python tools/compile_vmf.py output/terrain.vmf
 venv/bin/python tools/terrain_generator.py
 ```
 Features:
-- Interactive PySide6 GUI with preset selection (Flat, Hills, Rugged, Competitive)
-- Real-time configuration (seed, tiles, height scale, roughness, erosion)
+- Interactive PySide6 GUI for real-time terrain configuration
+- Real-time heightmap preview with seed, scale, and erosion controls
 - Generate VMF files saved to `output/` directory
 - Compile button to run VBSP and deploy to Empires directories
 
@@ -320,53 +319,6 @@ Pipeline steps return modified objects (functional style):
 - **max_slope_step**: Max height difference between adjacent vertices (recommended: 64)
 - **Map centering**: Always center around (0,0), not origin (0,0)
 
-## GUI Configuration
-
-### GUIConfigModel (src/config_model.py)
-The `GUIConfigModel` dataclass bridges GUI inputs to `TerrainSpec`:
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `seed` | int | 12345 | Random seed for noise generation |
-| `tiles_x` | int | 16 | Number of displacement tiles in X |
-| `tiles_y` | int | 16 | Number of displacement tiles in Y |
-| `cell_size` | int | 512 | World units per tile |
-| `displacement_power` | int | 3 | Vertices per tile edge (9x9 for power 3) |
-| `roughness` | float | 0.5 | Maps to noise octaves (1-8) |
-| `erosion_strength` | float | 0.5 | Maps to erosion iterations (0-100000) |
-| `height_scale` | int | 2048 | Maximum terrain height in world units |
-
-### Presets (config/presets.json)
-Each preset defines terrain characteristics and map size:
-
-```json
-{
-  "presets": {
-    "flat": {
-      "tiles_x": 16, "tiles_y": 16,
-      "roughness": 0.1, "erosion_strength": 0.05,
-      "height_scale": 512
-    },
-    "hills": {
-      "tiles_x": 20, "tiles_y": 20,
-      "roughness": 0.4, "erosion_strength": 0.3,
-      "height_scale": 1536
-    },
-    "rugged": {
-      "tiles_x": 20, "tiles_y": 20,
-      "roughness": 0.7, "erosion_strength": 0.6,
-      "height_scale": 2560
-    },
-    "competitive": {
-      "tiles_x": 16, "tiles_y": 16,
-      "roughness": 0.3, "erosion_strength": 0.2,
-      "height_scale": 1024
-    }
-  }
-}
-```
-
-**Important**: All presets MUST include `tiles_x` and `tiles_y` to produce properly-sized maps.
 
 ## VBSP Compiler Rules
 

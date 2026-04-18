@@ -574,42 +574,9 @@ show_cli_menu() {
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════╝${NC}"
     echo ""
     
-    echo -e "  ${WHITE}Terrain Presets:${NC}"
-    echo -e "  ${WHITE}[1]${NC}  ${BOLD}Flat${NC}           Mostly flat, vehicle combat"
-    echo -e "  ${WHITE}[2]${NC}  ${BOLD}Hills${NC}          Rolling hills, mixed infantry/vehicles"
-    echo -e "  ${WHITE}[3]${NC}  ${BOLD}Rugged${NC}         Deep valleys and mountains"
-    echo -e "  ${WHITE}[4]${NC}  ${BOLD}Competitive${NC}    Symmetrical balanced terrain"
-    echo -e "  ${WHITE}[5]${NC}  ${BOLD}Mountain Pass${NC}  Narrow valleys with high peaks"
-    echo -e "  ${WHITE}[6]${NC}  ${BOLD}Open Valley${NC}    Wide open battleground"
-    echo -e "  ${WHITE}[7]${NC}  ${BOLD}Island Hopping${NC} Central islands"
-    echo -e "  ${WHITE}[0]${NC}  ${BOLD}Custom${NC}         Full options"
+    echo -e "  Generating terrain with custom options..."
     echo ""
-    echo -e "  ${WHITE}[B]${NC}  ${BOLD}Back${NC} to main menu"
-    echo ""
-    
-    echo -ne "${CYAN}Select terrain type${NC}: "
-    read -r choice
-    echo ""
-    
-    local preset=""
-    case "$choice" in
-        1) preset="flat" ;;
-        2) preset="hills" ;;
-        3) preset="rugged" ;;
-        4) preset="competitive" ;;
-        5) preset="mountain_pass" ;;
-        6) preset="open_valley" ;;
-        7) preset="island_hopping" ;;
-        0) preset="custom" ;;
-        B|b) return 0 ;;
-        *) 
-            print_error "Invalid option: $choice"
-            wait_enter
-            return 0
-            ;;
-    esac
-    
-    run_cli "$preset"
+    run_cli
 }
 
 show_help() {
@@ -624,15 +591,12 @@ show_help() {
     
     echo -e "${BOLD}Options:${NC}"
     echo -e "  ${WHITE}--gui${NC}                 Launch GUI mode"
-    echo -e "  ${WHITE}--cli [PRESET] [ARGS]${NC}  CLI mode (preset + optional args)"
+    echo -e "  ${WHITE}--cli [ARGS]${NC}           CLI mode (optional args)"
     echo -e "  ${WHITE}--compile [VMF]${NC}        Compile VMF to BSP"
     echo -e "  ${WHITE}--setup${NC}                Reinstall dependencies"
     echo -e "  ${WHITE}--help${NC}                 Show this help"
     echo ""
     
-    echo -e "${BOLD}CLI Presets:${NC}"
-    echo -e "  ${WHITE}flat${NC} ${WHITE}hills${NC} ${WHITE}rugged${NC} ${WHITE}competitive${NC}"
-    echo -e "  ${WHITE}mountain_pass${NC} ${WHITE}open_valley${NC} ${WHITE}island_hopping${NC}"
     echo ""
     
     echo -e "${BOLD}CLI Arguments (passed to Python script):${NC}"
@@ -645,8 +609,8 @@ show_help() {
     
     echo -e "${BOLD}CLI Examples:${NC}"
     echo -e "  ${DIM}./terrain.sh --cli${NC}                     Interactive CLI"
-    echo -e "  ${DIM}./terrain.sh --cli hills --seed 42${NC}      Hills terrain, seed 42"
-    echo -e "  ${DIM}./terrain.sh --cli custom --tiles-x 24 --tiles-y 20${NC}"
+    echo -e "  ${DIM}./terrain.sh --cli --seed 42${NC}           Terrain with seed 42"
+    echo -e "  ${DIM}./terrain.sh --cli --tiles-x 24 --tiles-y 20${NC}"
     echo ""
     
     echo -e "${BOLD}Requirements:${NC}"
@@ -695,14 +659,9 @@ run_gui() {
 }
 
 run_cli() {
-    local preset=""
     local extra_args=()
     while [ $# -gt 0 ]; do
-        if [ -z "$preset" ] && [[ ! "$1" =~ ^-- ]]; then
-            preset="$1"
-        else
-            extra_args+=("$1")
-        fi
+        extra_args+=("$1")
         shift
     done
     
@@ -723,12 +682,7 @@ run_cli() {
     
     local cmd=("$VENV_PYTHON" tools/generate_organic_vmf.py)
     
-    if [ -n "$preset" ] && [ "$preset" != "custom" ]; then
-        echo -e "${GREEN}Generating ${BOLD}$preset${NC}${GREEN} terrain...${NC}"
-        cmd+=("--preset" "$preset")
-    else
-        echo -e "${GREEN}Generating terrain with custom options...${NC}"
-    fi
+    echo -e "${GREEN}Generating terrain with custom options...${NC}"
     
     if [ ${#extra_args[@]} -gt 0 ]; then
         cmd+=("${extra_args[@]}")

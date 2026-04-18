@@ -40,7 +40,7 @@ from PySide6.QtWidgets import (
     QTabWidget,
 )
 from PySide6.QtCore import Qt, QThread, Signal, QTimer
-from PySide6.QtGui import QImage, QKeySequence, QShortcut
+from PySide6.QtGui import QIcon, QImage, QColor, QPainter, QPixmap, QShortcut, QKeySequence
 from tools.preview_widget import MapPreviewWidget
 
 
@@ -68,19 +68,22 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 class PreviewWorker(QThread):
     finished = Signal(object, object)  # grid, spec
 
-    def __init__(self, config_model, custom_nodes=None, custom_connections=None):
+    def __init__(self, config_model, custom_nodes=None, custom_connections=None, custom_resources=None):
         super().__init__()
         self.config_model = config_model
         self.custom_nodes = custom_nodes
         self.custom_connections = custom_connections
+        self.custom_resources = custom_resources
 
     def run(self):
         try:
             # We must not modify the original model's spec, but we can make a custom spec
             # Pass validate=False so we still get a preview even if nodes are being dragged
             spec = self.config_model.make_spec(validate=False)
-            spec.displacement_power = 2  # Force low power for speed
-            spec.erosion_iterations = 0  # Disable erosion for instant preview
+            spec.displacement_power = 3  # Power 3 is still fast but shows much more detail
+            # Enable scaled-down erosion for preview (max 20000 iterations)
+            # Use 50% scaling because the preview grid is faster than the full VMF one
+            spec.erosion_iterations = min(int(spec.erosion_iterations * 0.5), 20000)
             spec.disable_commander = True
             spec.disable_buildings = True
             spec.disable_resource_nodes = True
@@ -88,6 +91,9 @@ class PreviewWorker(QThread):
             if self.custom_nodes and self.custom_connections:
                 spec.custom_layout_nodes = self.custom_nodes
                 spec.custom_layout_connections = self.custom_connections
+            
+            if self.custom_resources is not None:
+                spec.resource_points = self.custom_resources
 
             # Skip layout validation during preview to prevent crashes while dragging
             result = run_pipeline(spec, skip_layout_validation=True)
@@ -107,11 +113,12 @@ class PreviewWorker(QThread):
 class GenerationWorker(QThread):
     finished = Signal(bool, str)
 
-    def __init__(self, config_model, custom_nodes=None, custom_connections=None, output_filename="gui_terrain"):
+    def __init__(self, config_model, custom_nodes=None, custom_connections=None, custom_resources=None, output_filename="gui_terrain"):
         super().__init__()
         self.config_model = config_model
         self.custom_nodes = custom_nodes
         self.custom_connections = custom_connections
+        self.custom_resources = custom_resources
         self.output_filename = output_filename
 
     def run(self):
@@ -121,6 +128,10 @@ class GenerationWorker(QThread):
                 spec.custom_layout_nodes = self.custom_nodes
                 spec.custom_layout_connections = self.custom_connections
                 
+            if self.custom_resources is not None:
+                spec.resource_points = self.custom_resources
+
+            # Run pipeline
             result = run_pipeline(spec, map_name=self.output_filename, output_dir=str(OUTPUT_DIR))
             if result["errors"]:
                 raise Exception(f"Pipeline errors: {result['errors']}")
@@ -156,12 +167,12 @@ class TerrainGeneratorGUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Terrain Generator — Source Engine VMF Builder")
+        self.setWindowIcon(QIcon(str(PROJECT_ROOT / "icons" / "app_icon.svg")))
         self.resize(1200, 780)
         self.setMinimumSize(820, 560)
 
         self.config_model = GUIConfigModel()
         self.config = Config()
-        self.presets = self.load_presets()
         self.terrain_materials, self.skyboxes = self.load_textures()
 
         self.setup_ui()
@@ -172,11 +183,9 @@ class TerrainGeneratorGUI(QMainWindow):
         self.edit_empires_path.setText(empires_path)
         self.update_empires_status()
 
-        # Load default preset
-        self.apply_preset("mixed") if "mixed" in self.presets else self.apply_preset(
-            "hills"
-        )
-        self.update_validation_status()
+        # Initial sync and validation
+        self.sync_to_ui()
+        self.sync_to_model()
 
         # F12 screenshot
         sc = QShortcut(QKeySequence("F12"), self)
@@ -222,13 +231,6 @@ class TerrainGeneratorGUI(QMainWindow):
         except Exception as e:
             QMessageBox.warning(self, "Screenshot failed", str(e))
 
-    def load_presets(self):
-        presets_path = PROJECT_ROOT / "config" / "presets.json"
-        if presets_path.exists():
-            with open(presets_path, "r") as f:
-                data = json.load(f)
-                return data.get("presets", {})
-        return {}
 
     def load_textures(self):
         textures_path = PROJECT_ROOT / "config" / "textures.json"
@@ -279,54 +281,6 @@ class TerrainGeneratorGUI(QMainWindow):
         div1.setObjectName("Divider")
         sidebar_layout.addWidget(div1)
 
-        # Presets — checkable to show active
-        preset_label = QLabel("PRESETS")
-        preset_label.setObjectName("SectionLabel")
-        sidebar_layout.addWidget(preset_label)
-
-        self._preset_group = QButtonGroup(self)
-        self._preset_group.setExclusive(True)
-        preset_grid = QGridLayout()
-        preset_grid.setSpacing(4)
-        self.btn_flat = QPushButton("Flat")
-        self.btn_hills = QPushButton("Hills")
-        self.btn_rugged = QPushButton("Rugged")
-        self.btn_comp = QPushButton("Competitive")
-        self.btn_mountain = QPushButton("Mountain Pass")
-        self.btn_valley = QPushButton("Open Valley")
-        self.btn_island = QPushButton("Island Hopping")
-
-        buttons = (
-            self.btn_flat,
-            self.btn_hills,
-            self.btn_rugged,
-            self.btn_comp,
-            self.btn_mountain,
-            self.btn_valley,
-            self.btn_island,
-        )
-        for btn in buttons:
-            btn.setObjectName("PresetButton")
-            btn.setCheckable(True)
-            btn.setMinimumHeight(30)
-            self._preset_group.addButton(btn)
-
-        self.btn_flat.clicked.connect(lambda: self.apply_preset("flat"))
-        self.btn_hills.clicked.connect(lambda: self.apply_preset("hills"))
-        self.btn_rugged.clicked.connect(lambda: self.apply_preset("rugged"))
-        self.btn_comp.clicked.connect(lambda: self.apply_preset("competitive"))
-        self.btn_mountain.clicked.connect(lambda: self.apply_preset("mountain_pass"))
-        self.btn_valley.clicked.connect(lambda: self.apply_preset("open_valley"))
-        self.btn_island.clicked.connect(lambda: self.apply_preset("island_hopping"))
-
-        preset_grid.addWidget(self.btn_flat, 0, 0)
-        preset_grid.addWidget(self.btn_hills, 0, 1)
-        preset_grid.addWidget(self.btn_rugged, 1, 0)
-        preset_grid.addWidget(self.btn_comp, 1, 1)
-        preset_grid.addWidget(self.btn_mountain, 2, 0)
-        preset_grid.addWidget(self.btn_valley, 2, 1)
-        preset_grid.addWidget(self.btn_island, 3, 0, 1, 2)
-        sidebar_layout.addLayout(preset_grid)
 
         # Divider
         div2 = QWidget()
@@ -556,23 +510,6 @@ class TerrainGeneratorGUI(QMainWindow):
         )
         config_layout.addLayout(lw_row)
 
-        # Chokepoint Size
-        cs_row = QHBoxLayout()
-        cs_row.setSpacing(8)
-        lbl_cs = QLabel("Chokepoint Size")
-        lbl_cs.setObjectName("FieldLabel")
-        lbl_cs.setToolTip(
-            "Scale for the size of chokepoints and narrow passages (100% = default)"
-        )
-        cs_row.addWidget(lbl_cs)
-        self.slider_choke_size = QSlider(Qt.Horizontal)
-        self.slider_choke_size.setRange(0, 200)
-        self.slider_choke_size.setValue(100)
-        self.lbl_choke_size_val = QLabel("100%")
-        cs_row.addWidget(
-            make_slider_row(self.slider_choke_size, self.lbl_choke_size_val, "%"), 1
-        )
-        config_layout.addLayout(cs_row)
 
         # Mountain Height
         mh_row = QHBoxLayout()
@@ -629,9 +566,6 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_lane_width.valueChanged.connect(
             lambda v: self.lbl_lane_width_val.setText(f"{v}%")
         )
-        self.slider_choke_size.valueChanged.connect(
-            lambda v: self.lbl_choke_size_val.setText(f"{v}%")
-        )
         self.slider_mountain_height.valueChanged.connect(
             lambda v: self.lbl_mountain_height_val.setText(f"{v}%")
         )
@@ -643,7 +577,6 @@ class TerrainGeneratorGUI(QMainWindow):
         )
         self.combo_topology.currentIndexChanged.connect(self.sync_to_model)
         self.slider_lane_width.valueChanged.connect(self.sync_to_model)
-        self.slider_choke_size.valueChanged.connect(self.sync_to_model)
         self.slider_mountain_height.valueChanged.connect(self.sync_to_model)
         self.slider_rough.valueChanged.connect(self.sync_to_model)
         self.slider_erosion.valueChanged.connect(self.sync_to_model)
@@ -955,11 +888,12 @@ class TerrainGeneratorGUI(QMainWindow):
 
     def run_preview(self):
         if not hasattr(self, "preview_worker") or not self.preview_worker.isRunning():
-            nodes, connections = self.preview_widget.get_layout_from_editor()
+            nodes, connections, resources = self.preview_widget.get_layout_from_editor()
             self.preview_worker = PreviewWorker(
                 self.config_model,
                 custom_nodes=nodes if nodes else None,
-                custom_connections=connections if connections else None
+                custom_connections=connections if connections else None,
+                custom_resources=resources
             )
             self.preview_worker.finished.connect(self.on_preview_finished)
             self.preview_worker.start()
@@ -1232,32 +1166,37 @@ class TerrainGeneratorGUI(QMainWindow):
 
         /* ── Sliders ── */
         QSlider {{
-            height: 20px;
+            height: 24px;
         }}
         QSlider::groove:horizontal {{
             border: none;
-            height: 3px;
+            height: 6px;
             background: #252832;
-            border-radius: 2px;
-            margin: 0 2px;
+            border-radius: 3px;
         }}
         QSlider::sub-page:horizontal {{
             background: {ACCENT};
-            border-radius: 2px;
+            border-radius: 3px;
         }}
         QSlider::handle:horizontal {{
-            background: {ACCENT};
-            border: none;
-            width: 3px;
+            background: #ffffff;
+            border: 2px solid {ACCENT};
+            width: 14px;
             height: 14px;
             margin: -6px 0;
-            border-radius: 2px;
+            border-radius: 8px;
         }}
         QSlider::handle:horizontal:hover {{
-            background: {ACCENT_HOVER};
-            width: 3px;
+            background: #ffffff;
+            border: 2px solid {ACCENT_HOVER};
+            width: 16px;
             height: 16px;
             margin: -7px 0;
+            border-radius: 10px;
+        }}
+        QSlider::handle:horizontal:pressed {{
+            background: {ACCENT};
+            border: 2px solid #ffffff;
         }}
 
         /* ── Checkboxes ── */
@@ -1414,126 +1353,6 @@ class TerrainGeneratorGUI(QMainWindow):
         """
         self.setStyleSheet(style)
 
-    def apply_preset(self, preset_name):
-        if preset_name not in self.presets:
-            preset_name = (
-                "hills"
-                if "hills" in self.presets
-                else list(self.presets.keys())[0]
-                if self.presets
-                else None
-            )
-            if not preset_name:
-                return
-
-        preset = self.presets[preset_name]
-
-        # Block signals briefly to prevent firing multiple sync events
-        with self._block_signals(
-            self.spin_seed,
-            self.spin_tiles_x,
-            self.spin_tiles_y,
-            self.spin_height,
-            self.combo_topology,
-            self.slider_lane_width,
-            self.slider_choke_size,
-            self.slider_mountain_height,
-            self.slider_rough,
-            self.slider_erosion,
-            self.slider_base_radius,
-            self.slider_base_flatness,
-            self.slider_center_flatten,
-            self.slider_center_radius,
-            self.combo_power,
-            self.combo_material,
-            self.combo_skybox,
-            self.chk_disable_commander,
-            self.chk_disable_buildings,
-            self.chk_disable_resources,
-            self.chk_minimal_map,
-            self.chk_terrain_only,
-        ):
-            self.spin_seed.setValue(preset.get("seed", random.randint(0, 999999999)))
-            if "tiles_x" in preset:
-                self.spin_tiles_x.setValue(preset["tiles_x"])
-            if "tiles_y" in preset:
-                self.spin_tiles_y.setValue(preset["tiles_y"])
-            self.spin_height.setValue(preset.get("height_scale", 1024))
-
-            topology_map = {
-                "random": 0,
-                "central_gorge": 1,
-                "valley": 2,
-                "two_lane": 3,
-                "island": 4,
-                "classic_cross": 5,
-            }
-            self.combo_topology.setCurrentIndex(
-                topology_map.get(preset.get("topology", "random"), 0)
-            )
-            self.slider_lane_width.setValue(
-                int(preset.get("lane_width_scale", 1.0) * 100)
-            )
-            self.slider_choke_size.setValue(
-                int(preset.get("chokepoint_size_scale", 1.0) * 100)
-            )
-            self.slider_mountain_height.setValue(
-                int(min(1.0, preset.get("mountain_height_scale", 0.5)) * 100)
-            )
-
-            self.slider_rough.setValue(int(preset.get("roughness", 0.5) * 100))
-            self.slider_erosion.setValue(int(preset.get("erosion_strength", 0.5) * 100))
-            self.slider_base_radius.setValue(
-                preset.get("base_clear_radius", self.config_model.base_clear_radius)
-            )
-            self.slider_base_flatness.setValue(
-                int(preset.get("base_flatness", self.config_model.base_flatness) * 100)
-            )
-            self.slider_center_flatten.setValue(
-                int(preset.get("center_flatten", 0.0) * 100)
-            )
-            self.slider_center_radius.setValue(
-                int(preset.get("center_flatten_radius", 0.5) * 100)
-            )
-
-            p = preset.get("displacement_power", 3)
-            if p == 2:
-                self.combo_power.setCurrentIndex(0)
-            elif p == 3:
-                self.combo_power.setCurrentIndex(1)
-
-        # Apply preset texture/skybox if specified
-        if "terrain_material" in preset:
-            self.combo_material.setCurrentText(preset["terrain_material"])
-        if "skybox" in preset:
-            self.combo_skybox.setCurrentText(preset["skybox"])
-
-        # Highlight active preset button
-        preset_map = {
-            "flat": self.btn_flat,
-            "hills": self.btn_hills,
-            "rugged": self.btn_rugged,
-            "competitive": self.btn_comp,
-            "mountain_pass": self.btn_mountain,
-            "open_valley": self.btn_valley,
-            "island_hopping": self.btn_island,
-        }
-        btn = preset_map.get(preset_name)
-        if btn:
-            btn.setChecked(True)
-
-        # Update slider value labels
-        self.lbl_lane_width_val.setText(f"{self.slider_lane_width.value()}%")
-        self.lbl_choke_size_val.setText(f"{self.slider_choke_size.value()}%")
-        self.lbl_mountain_height_val.setText(f"{self.slider_mountain_height.value()}%")
-        self.lbl_rough_val.setText(f"{self.slider_rough.value()}%")
-        self.lbl_erosion_val.setText(f"{self.slider_erosion.value()}%")
-        self.lbl_base_radius_val.setText(str(self.slider_base_radius.value()))
-        self.lbl_base_flat_val.setText(f"{self.slider_base_flatness.value()}%")
-        self.lbl_cf_val.setText(f"{self.slider_center_flatten.value()}%")
-        self.lbl_cr_val.setText(f"{self.slider_center_radius.value()}%")
-
-        self.sync_to_model()
 
     def reset_to_safe(self):
         self.config_model.auto_clamp()
@@ -1609,7 +1428,6 @@ class TerrainGeneratorGUI(QMainWindow):
             self.spin_height,
             self.combo_topology,
             self.slider_lane_width,
-            self.slider_choke_size,
             self.slider_mountain_height,
             self.slider_rough,
             self.slider_erosion,
@@ -1643,9 +1461,6 @@ class TerrainGeneratorGUI(QMainWindow):
             )
             self.slider_lane_width.setValue(
                 int(self.config_model.lane_width_scale * 100)
-            )
-            self.slider_choke_size.setValue(
-                int(self.config_model.chokepoint_size_scale * 100)
             )
             self.slider_mountain_height.setValue(
                 int(min(1.0, self.config_model.mountain_height_scale) * 100)
@@ -1708,7 +1523,8 @@ class TerrainGeneratorGUI(QMainWindow):
             self.combo_topology.currentIndex(), "random"
         )
         self.config_model.lane_width_scale = self.slider_lane_width.value() / 100.0
-        self.config_model.chokepoint_size_scale = self.slider_choke_size.value() / 100.0
+        if hasattr(self, "preview_widget"):
+            self.preview_widget.set_lane_scale(self.config_model.lane_width_scale)
         self.config_model.mountain_height_scale = (
             self.slider_mountain_height.value() / 100.0
         )
@@ -1742,6 +1558,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.update_validation_status()
         if hasattr(self, "preview_timer"):
             self.preview_timer.start(500)
+
 
     def update_validation_status(self):
         is_valid, msg = self.config_model.validate()
@@ -1806,11 +1623,13 @@ class TerrainGeneratorGUI(QMainWindow):
 
         # Run generation in background
         map_name = self.txt_map_name.text().strip() or "gui_terrain"
-        nodes, connections = self.preview_widget.get_layout_from_editor()
+        layout_nodes, layout_conns, layout_res = self.preview_widget.get_layout_from_editor()
+        
         self.worker = GenerationWorker(
             self.config_model,
-            custom_nodes=nodes if nodes else None,
-            custom_connections=connections if connections else None,
+            custom_nodes=layout_nodes if layout_nodes else None,
+            custom_connections=layout_conns if layout_conns else None,
+            custom_resources=layout_res,
             output_filename=map_name
         )
         self.worker.finished.connect(self.on_generation_finished)

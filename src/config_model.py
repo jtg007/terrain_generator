@@ -29,7 +29,6 @@ class GUIConfigModel:
 
     topology: str = "random"
     lane_width_scale: float = 1.0
-    chokepoint_size_scale: float = 1.0
     mountain_height_scale: float = 1.0
 
     # Selected preset for UI tracking
@@ -191,7 +190,6 @@ class GUIConfigModel:
             roughness=self.roughness,
             topology=self.topology,
             lane_width_scale=self.lane_width_scale,
-            chokepoint_size_scale=self.chokepoint_size_scale,
             mountain_height_scale=effective_mountain_height_scale,
             custom_image_path=self.custom_image_path,
             base_clear_radius=self.base_clear_radius,

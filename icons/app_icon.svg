@@ -1,0 +1,20 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Rounded Background Container -->
+  <rect x="20" y="20" width="216" height="216" rx="40" fill="#14161d"/>
+  <rect x="20" y="20" width="216" height="216" rx="40" stroke="#1d6feb" stroke-width="4"/>
+  
+  <!-- Mountain Peaks -->
+  <path d="M40 180L90 80L130 140L170 100L216 180H40Z" fill="#1d6feb" fill-opacity="0.2"/>
+  <path d="M40 180L90 80L130 140L170 100L216 180" stroke="#1d6feb" stroke-width="8" stroke-linejoin="round"/>
+  
+  <!-- Grid Lines -->
+  <path d="M60 180V140" stroke="#1d6feb" stroke-width="2" stroke-linecap="round"/>
+  <path d="M90 180V80" stroke="#1d6feb" stroke-width="2" stroke-linecap="round"/>
+  <path d="M120 180V125" stroke="#1d6feb" stroke-width="2" stroke-linecap="round"/>
+  <path d="M150 180V120" stroke="#1d6feb" stroke-width="2" stroke-linecap="round"/>
+  <path d="M180 180V115" stroke="#1d6feb" stroke-width="2" stroke-linecap="round"/>
+  
+  <path d="M40 160H216" stroke="#1d6feb" stroke-width="2" stroke-opacity="0.3"/>
+  <path d="M60 140H200" stroke="#1d6feb" stroke-width="2" stroke-opacity="0.3"/>
+  <path d="M80 120H180" stroke="#1d6feb" stroke-width="2" stroke-opacity="0.3"/>
+</svg>
