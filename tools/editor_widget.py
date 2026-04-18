@@ -12,8 +12,19 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QPointF, QRectF
 from PySide6.QtGui import QPen, QBrush, QColor, QPainter
+from PySide6.QtSvg import QSvgRenderer
+from pathlib import Path
 
 from src.terrain_spec import ZoneType, LayoutNode, LayoutConnection
+
+
+# Global SVG Renderers
+ICONS_DIR = Path(__file__).parent.parent / "icons"
+SVG_RENDERERS = {
+    "imp": QSvgRenderer(str(ICONS_DIR / "be base.svg")),
+    "nf": QSvgRenderer(str(ICONS_DIR / "nf base.svg")),
+    "res": QSvgRenderer(str(ICONS_DIR / "resource_node.svg")),
+}
 
 
 class VisualEdge(QGraphicsLineItem):
@@ -40,6 +51,10 @@ class VisualNode(QGraphicsEllipseItem):
         self.node_type = node_type
         self.clear_radius = radius
         self.edges = []
+        
+    def boundingRect(self):
+        r = max(84, self.clear_radius)
+        return QRectF(-r - 10, -r - 10, r * 2 + 20, r * 2 + 20)
 
         self.setPos(x, y)
         self.setFlags(
@@ -49,21 +64,21 @@ class VisualNode(QGraphicsEllipseItem):
         )
         self.setZValue(1)
 
-        if node_type == ZoneType.BASE:
-            self.setBrush(QBrush(QColor(52, 152, 219)))
-            self.setPen(QPen(QColor(41, 128, 185), 2))
-        else:
-            self.setBrush(QBrush(QColor(46, 204, 113)))
-            self.setPen(QPen(QColor(39, 174, 96), 2))
-
         scene.addItem(self)
 
     def paint(self, painter, option, widget):
-        super().paint(painter, option, widget)
+        r = 84
+        rect = QRectF(-r, -r, r * 2, r * 2)
+        
+        if self.node_type == ZoneType.BASE:
+            SVG_RENDERERS["imp"].render(painter, rect)
+        else:
+            SVG_RENDERERS["res"].render(painter, rect)
+            
         painter.setPen(QPen(QColor(255, 255, 255, 50), 1, Qt.DashLine))
         painter.setBrush(QBrush(QColor(255, 255, 255, 10)))
-        r = self.clear_radius
-        painter.drawEllipse(QRectF(-r, -r, r * 2, r * 2))
+        r_clear = self.clear_radius
+        painter.drawEllipse(QRectF(-r_clear, -r_clear, r_clear * 2, r_clear * 2))
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.ItemPositionHasChanged:

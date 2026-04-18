@@ -1,4 +1,5 @@
 import math
+from pathlib import Path
 from typing import List, Optional, Tuple, Set
 
 import numpy as np
@@ -22,8 +23,18 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, QPoint, QRectF, QPointF
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QImage, QPixmap, QPolygon
+from PySide6.QtSvg import QSvgRenderer
 
 from src.terrain_spec import ZoneType, LayoutNode, LayoutConnection
+
+
+# Global SVG Renderers
+ICONS_DIR = Path(__file__).parent.parent / "icons"
+SVG_RENDERERS = {
+    "imp": QSvgRenderer(str(ICONS_DIR / "be base.svg")),
+    "nf": QSvgRenderer(str(ICONS_DIR / "nf base.svg")),
+    "res": QSvgRenderer(str(ICONS_DIR / "resource_node.svg")),
+}
 
 
 class VisualFreehandEdge(QGraphicsItem):
@@ -154,25 +165,25 @@ class VisualNode(QGraphicsEllipseItem):
         )
         self.setZValue(2)
 
-        if node_type == ZoneType.BASE:
-            self.setBrush(QBrush(QColor(52, 152, 219)))
-            self.setPen(QPen(QColor(41, 128, 185), 2))
-        else:
-            self.setBrush(QBrush(QColor(46, 204, 113)))
-            self.setPen(QPen(QColor(39, 174, 96), 2))
-
         scene.addItem(self)
 
-    def boundingRect(self):
-        r = self.clear_radius
-        return QRectF(-r - 10, -r - 10, r * 2 + 20, r * 2 + 20)
-
     def paint(self, painter, option, widget):
-        super().paint(painter, option, widget)
+        r = 84
+        rect = QRectF(-r, -r, r * 2, r * 2)
+        
+        if self.node_type == ZoneType.BASE:
+            SVG_RENDERERS["imp"].render(painter, rect)
+        else:
+            SVG_RENDERERS["res"].render(painter, rect)
+            
         painter.setPen(QPen(QColor(255, 255, 255, 50), 1, Qt.DashLine))
         painter.setBrush(QBrush(QColor(255, 255, 255, 10)))
-        r = self.clear_radius
-        painter.drawEllipse(QRectF(-r, -r, r * 2, r * 2))
+        r_clear = self.clear_radius
+        painter.drawEllipse(QRectF(-r_clear, -r_clear, r_clear * 2, r_clear * 2))
+
+    def boundingRect(self):
+        r = max(84, self.clear_radius)
+        return QRectF(-r - 10, -r - 10, r * 2 + 20, r * 2 + 20)
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.ItemPositionHasChanged:
@@ -526,7 +537,7 @@ class MapPreviewWidget(QWidget):
                 self.setFlags(QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemSendsGeometryChanges)
 
             def boundingRect(self):
-                return QRectF(-15, -15, 30, 30)
+                return QRectF(-90, -90, 180, 180)
 
             def itemChange(self, change, value):
                 return super().itemChange(change, value)
@@ -545,55 +556,21 @@ class MapPreviewWidget(QWidget):
                         self.scene().views()[0].parent().resource_moved.emit(self.index, self.x(), self.y())
 
             def paint(self, painter, option, widget):
-                error_pen = QPen(QColor(255, 50, 50), 3)
-
+                rect = QRectF(-84, -84, 168, 168)
+                
                 if self.entity_type == "res":
-                    painter.setBrush(QBrush(QColor(46, 204, 113, 200)))
-                    painter.setPen(error_pen if self.invalid else QPen(QColor(39, 174, 96), 2))
-                    poly = QPolygon([QPoint(0, -10), QPoint(10, 0), QPoint(0, 10), QPoint(-10, 0)])
-                    painter.drawPolygon(poly)
-                    painter.setBrush(QBrush(QColor(110, 235, 150, 200)))
-                    painter.setPen(Qt.NoPen)
-                    inner = QPolygon([QPoint(0, -5), QPoint(5, 0), QPoint(0, 5), QPoint(-5, 0)])
-                    painter.drawPolygon(inner)
-                    painter.setPen(QColor(255, 255, 255))
-                    painter.drawText(-10, -14, "Res")
-                    if self.invalid:
-                        painter.setPen(QColor(255, 50, 50))
-                        painter.drawText(-5, -25, "⚠")
-
+                    SVG_RENDERERS["res"].render(painter, rect)
                 elif self.entity_type == "imp":
-                    painter.setBrush(QBrush(QColor(41, 128, 185, 220)))
-                    painter.setPen(error_pen if self.invalid else QPen(QColor(52, 152, 219), 2))
-                    painter.drawRoundedRect(-12, -12, 24, 24, 4, 4)
-                    painter.setBrush(QBrush(QColor(255, 255, 255)))
-                    painter.setPen(Qt.NoPen)
-                    painter.drawRect(-3, -9, 6, 18)
-                    painter.drawRect(-9, -3, 18, 6)
-                    painter.setPen(QColor(255, 255, 255))
-                    painter.drawText(-12, -16, "BE")
-                    if self.invalid:
-                        painter.setPen(QColor(255, 50, 50))
-                        painter.drawText(-5, -28, "⚠")
-
+                    SVG_RENDERERS["imp"].render(painter, rect)
                 elif self.entity_type == "nf":
-                    painter.setBrush(QBrush(QColor(192, 57, 43, 220)))
-                    painter.setPen(error_pen if self.invalid else QPen(QColor(231, 76, 60), 2))
-                    poly = QPolygon()
-                    for i in range(6):
-                        angle_deg = 60 * i - 30
-                        angle_rad = math.pi / 180 * angle_deg
-                        poly.append(QPoint(int(14 * math.cos(angle_rad)), int(14 * math.sin(angle_rad))))
-                    painter.drawPolygon(poly)
-                    painter.setBrush(QBrush(QColor(255, 255, 255)))
-                    painter.setPen(Qt.NoPen)
-                    tri = QPolygon([QPoint(0, -7), QPoint(7, 5), QPoint(-7, 5)])
-                    painter.drawPolygon(tri)
-                    painter.setPen(QColor(255, 255, 255))
-                    painter.drawText(-10, -16, "NF")
-                    if self.invalid:
-                        painter.setPen(QColor(255, 50, 50))
-                        painter.drawText(-5, -28, "⚠")
+                    SVG_RENDERERS["nf"].render(painter, rect)
+                
+                if self.invalid:
+                    painter.setPen(QPen(QColor(255, 50, 50), 3))
+                    painter.setBrush(Qt.NoBrush)
+                    painter.drawRect(rect.adjusted(-4, -4, 4, 4))
+                    painter.setPen(QColor(255, 50, 50))
+                    painter.drawText(0, -95, "⚠")
 
         if self.imp_base and self.imp_base[0] is not None and self.imp_base[1] is not None:
             invalid = "imp" in self.invalid_entities
