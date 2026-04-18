@@ -12,7 +12,6 @@ The Terrain Generator bridges the gap between procedural noise generation and th
 ## Features
 
 *   **Interactive Strategy Canvas:** A dedicated editor tab with a professional canvas for visually planning your map. Place bases, resource nodes, and connect them with lanes.
-*   **SVG Strategy Markers:** High-visibility SVG markers for Imperial (BE), Northern Faction (NF), and Resource nodes for clear tactical planning.
 *   **Interactive Terrain Sculpting:** Real-time terrain manipulation tools. Use the **Raise** and **Lower** brushes with smooth Gaussian falloff to manually sculpt tactical features.
 *   **Procedural Landscape Engine:** Combines rolling hills, sharp mountain ridges, and hydraulic erosion to create natural-looking, continuous terrain grids.
 *   **Intelligent Auto-Balancing:** Built-in algorithms flatten the terrain gently at base locations to ensure builders have a level playing field.
@@ -57,4 +56,3 @@ The Terrain Generator bridges the gap between procedural noise generation and th
    * Review all elements mapped onto your heightmap with **Undo/Redo** support.
 3. **Generate VMF:** Ensure your **COMPILE PATH** is correct, then click **Generate VMF**.
 4. **Compile Map:** Click **Compile (VBSP)** to process and deploy the map to your game directories.
-5. **Play:** Launch Empires Mod and load your map using `map gui_terrain`.
