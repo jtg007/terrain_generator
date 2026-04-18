@@ -93,7 +93,7 @@ class PreviewWorker(QThread):
                 spec.custom_layout_connections = self.custom_connections
             
             if self.custom_resources is not None:
-                spec.resource_points = self.custom_resources
+                spec.custom_resources = self.custom_resources
 
             # Skip layout validation during preview to prevent crashes while dragging
             result = run_pipeline(spec, skip_layout_validation=True)
@@ -129,7 +129,7 @@ class GenerationWorker(QThread):
                 spec.custom_layout_connections = self.custom_connections
                 
             if self.custom_resources is not None:
-                spec.resource_points = self.custom_resources
+                spec.custom_resources = self.custom_resources
 
             # Run pipeline
             result = run_pipeline(spec, map_name=self.output_filename, output_dir=str(OUTPUT_DIR))

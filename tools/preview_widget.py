@@ -1,4 +1,5 @@
 import math
+import sys
 from pathlib import Path
 from typing import List, Optional, Tuple, Set
 
@@ -29,7 +30,12 @@ from src.terrain_spec import ZoneType, LayoutNode, LayoutConnection
 
 
 # Global SVG Renderers
-ICONS_DIR = Path(__file__).parent.parent / "icons"
+if getattr(sys, "frozen", False):
+    PROJECT_ROOT = Path(sys._MEIPASS)
+else:
+    PROJECT_ROOT = Path(__file__).parent.parent
+
+ICONS_DIR = PROJECT_ROOT / "icons"
 SVG_RENDERERS = {
     "imp": QSvgRenderer(str(ICONS_DIR / "be base.svg")),
     "nf": QSvgRenderer(str(ICONS_DIR / "nf base.svg")),
@@ -604,7 +610,14 @@ class MapPreviewWidget(QWidget):
                         self.scene().views()[0].parent().base_moved.emit("nf", self.x(), self.y())
                 elif self.entity_type == "res":
                     if isinstance(self.scene().views()[0].parent(), MapPreviewWidget):
-                        self.scene().views()[0].parent().resource_moved.emit(self.index, self.x(), self.y())
+                        pw = self.scene().views()[0].parent()
+                        old_res_list = list(pw.resources)
+                        new_res_list = list(pw.resources)
+                        if self.index is not None and 0 <= self.index < len(new_res_list):
+                            new_res_list[self.index] = (self.x(), self.y())
+                        pw.record_action("set_res", (old_res_list, new_res_list))
+                        pw.resources = new_res_list
+                        pw.resource_moved.emit(self.index, self.x(), self.y())
 
             def paint(self, painter, option, widget):
                 rect = QRectF(-84, -84, 168, 168)
@@ -777,9 +790,18 @@ class MapPreviewWidget(QWidget):
             elif hasattr(item, "is_fixed_entity"):
                 items_to_remove.append(item)
 
+        old_state = {
+            "imp": self.imp_base,
+            "nf": self.nf_base,
+            "res": list(self.resources),
+            "scene_items": list(items_to_remove),
+            "overlay": self._height_overlay.copy() if self._height_overlay is not None else None
+        }
+
+        self.history.append(("clear_all", old_state))
+        self.redo_history.clear()
+
         if items_to_remove:
-            self.history.append(("remove_multiple", items_to_remove))
-            self.redo_history.clear()
             for item in items_to_remove:
                 # Disconnect edges from nodes to avoid dangling references
                 if isinstance(item, VisualNode):
@@ -831,6 +853,41 @@ class MapPreviewWidget(QWidget):
             for i in item:
                 self.scene.addItem(i)
             self.redo_history.append(("remove_multiple", item))
+        elif action == "set_imp":
+            old_val, new_val = item
+            self.imp_base = old_val
+            self.redo_history.append(("set_imp", item))
+            self.redraw_fixed_entities()
+            val_to_emit = old_val if old_val and old_val[0] is not None else (0.0, 0.0)
+            self.base_moved.emit("imp", val_to_emit[0], val_to_emit[1])
+        elif action == "set_nf":
+            old_val, new_val = item
+            self.nf_base = old_val
+            self.redo_history.append(("set_nf", item))
+            self.redraw_fixed_entities()
+            val_to_emit = old_val if old_val and old_val[0] is not None else (0.0, 0.0)
+            self.base_moved.emit("nf", val_to_emit[0], val_to_emit[1])
+        elif action == "set_res":
+            old_val, new_val = item
+            self.resources = old_val
+            self.redo_history.append(("set_res", item))
+            self.redraw_fixed_entities()
+        elif action == "clear_all":
+            old_state = item
+            self.imp_base = old_state["imp"]
+            self.nf_base = old_state["nf"]
+            self.resources = old_state["res"]
+            for scene_item in old_state["scene_items"]:
+                self.scene.addItem(scene_item)
+            if old_state["overlay"] is not None:
+                self._height_overlay[:] = old_state["overlay"]
+                self._rerender_heightmap()
+            self.redo_history.append(("clear_all", old_state))
+            self.redraw_fixed_entities()
+            imp_emit = self.imp_base if self.imp_base and self.imp_base[0] is not None else (0.0, 0.0)
+            nf_emit = self.nf_base if self.nf_base and self.nf_base[0] is not None else (0.0, 0.0)
+            self.base_moved.emit("imp", imp_emit[0], imp_emit[1])
+            self.base_moved.emit("nf", nf_emit[0], nf_emit[1])
         self.layout_changed.emit()
 
     def redo(self):
@@ -856,6 +913,39 @@ class MapPreviewWidget(QWidget):
             for i in item:
                 self.scene.removeItem(i)
             self.history.append(("remove_multiple", item))
+        elif action == "set_imp":
+            old_val, new_val = item
+            self.imp_base = new_val
+            self.history.append(("set_imp", item))
+            self.redraw_fixed_entities()
+            val_to_emit = new_val if new_val and new_val[0] is not None else (0.0, 0.0)
+            self.base_moved.emit("imp", val_to_emit[0], val_to_emit[1])
+        elif action == "set_nf":
+            old_val, new_val = item
+            self.nf_base = new_val
+            self.history.append(("set_nf", item))
+            self.redraw_fixed_entities()
+            val_to_emit = new_val if new_val and new_val[0] is not None else (0.0, 0.0)
+            self.base_moved.emit("nf", val_to_emit[0], val_to_emit[1])
+        elif action == "set_res":
+            old_val, new_val = item
+            self.resources = new_val
+            self.history.append(("set_res", item))
+            self.redraw_fixed_entities()
+        elif action == "clear_all":
+            old_state = item
+            self.imp_base = None
+            self.nf_base = None
+            self.resources = []
+            for scene_item in old_state["scene_items"]:
+                self.scene.removeItem(scene_item)
+            if self._height_overlay is not None:
+                self._height_overlay[:] = 0
+                self._rerender_heightmap()
+            self.history.append(("clear_all", old_state))
+            self.redraw_fixed_entities()
+            self.base_moved.emit("imp", 0.0, 0.0)
+            self.base_moved.emit("nf", 0.0, 0.0)
         self.layout_changed.emit()
 
     def on_wheel_event(self, event):
@@ -875,11 +965,17 @@ class MapPreviewWidget(QWidget):
         scene_pos = self.view.mapToScene(event.pos())
 
         if self.current_mode == 2: # BE Base
-            self.imp_base = (scene_pos.x(), scene_pos.y())
+            old_val = self.imp_base
+            new_val = (scene_pos.x(), scene_pos.y())
+            self.record_action("set_imp", (old_val, new_val))
+            self.imp_base = new_val
             self.redraw_fixed_entities()
             self.base_moved.emit("imp", scene_pos.x(), scene_pos.y())
         elif self.current_mode == 7: # NF Base
-            self.nf_base = (scene_pos.x(), scene_pos.y())
+            old_val = self.nf_base
+            new_val = (scene_pos.x(), scene_pos.y())
+            self.record_action("set_nf", (old_val, new_val))
+            self.nf_base = new_val
             self.redraw_fixed_entities()
             self.base_moved.emit("nf", scene_pos.x(), scene_pos.y())
         elif self.current_mode == 5: # Remove
@@ -896,14 +992,34 @@ class MapPreviewWidget(QWidget):
                     self.scene.removeItem(i)
             elif hasattr(item, "is_fixed_entity"):
                 if item.entity_type == "imp":
+                    old_val = self.imp_base
+                    self.record_action("set_imp", (old_val, (0.0, 0.0)))
                     self.imp_base = (0.0, 0.0)
                     self.redraw_fixed_entities()
                     self.base_moved.emit("imp", 0.0, 0.0)
                 elif item.entity_type == "nf":
+                    old_val = self.nf_base
+                    self.record_action("set_nf", (old_val, (0.0, 0.0)))
                     self.nf_base = (0.0, 0.0)
                     self.redraw_fixed_entities()
                     self.base_moved.emit("nf", 0.0, 0.0)
+                elif item.entity_type == "res":
+                    old_val = list(self.resources)
+                    new_val = list(self.resources)
+                    if 0 <= item.index < len(new_val):
+                        new_val.pop(item.index)
+                    self.record_action("set_res", (old_val, new_val))
+                    self.resources = new_val
+                    self.redraw_fixed_entities()
+                    # Trigger an update by emitting something generic, or just rely on layout_changed
+                    self.layout_changed.emit()
         elif self.current_mode == 3: # Add Resource
+            # Wait, resources are typically handled via FixedEntityItem in new code?
+            # No, 'Add Resource' adds a node if mode=3.
+            # But wait, in the redraw_fixed_entities they are created from self.resources.
+            # The current Add Resource creates a VisualNode which is NOT added to self.resources until get_layout_from_editor.
+            # BUT the bug might be that 'Add Res' adds a VisualNode instead of a fixed resource?
+            # Yes, earlier in MapEditorWidget it added VisualNode.
             node = VisualNode(scene_pos.x(), scene_pos.y(), 256, ZoneType.RESOURCE, self.scene)
             self.record_action("add", node)
             self.resource_added.emit(scene_pos.x(), scene_pos.y())

@@ -14,12 +14,18 @@ from PySide6.QtCore import Qt, QPointF, QRectF
 from PySide6.QtGui import QPen, QBrush, QColor, QPainter
 from PySide6.QtSvg import QSvgRenderer
 from pathlib import Path
+import sys
 
 from src.terrain_spec import ZoneType, LayoutNode, LayoutConnection
 
 
 # Global SVG Renderers
-ICONS_DIR = Path(__file__).parent.parent / "icons"
+if getattr(sys, "frozen", False):
+    PROJECT_ROOT = Path(sys._MEIPASS)
+else:
+    PROJECT_ROOT = Path(__file__).parent.parent
+
+ICONS_DIR = PROJECT_ROOT / "icons"
 SVG_RENDERERS = {
     "imp": QSvgRenderer(str(ICONS_DIR / "be base.svg")),
     "nf": QSvgRenderer(str(ICONS_DIR / "nf base.svg")),
