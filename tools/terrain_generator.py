@@ -841,13 +841,12 @@ class TerrainGeneratorGUI(QMainWindow):
         else:
             self.config_model.custom_nf_base_x = val_x
             self.config_model.custom_nf_base_y = val_y
+
         invalid_entities = self.validate_current_layout()
-        self.preview_widget.set_entities(
-            (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y),
-            (self.config_model.custom_nf_base_x, self.config_model.custom_nf_base_y),
-            self.config_model.custom_resources,
-            invalid_entities=invalid_entities,
-        )
+        # Ensure we sync invalid entities to canvas without wiping it out completely via set_entities
+        # which creates a feedback loop with base_moved / layout_changed
+        self.preview_widget.invalid_entities = invalid_entities
+        self.preview_widget.redraw_fixed_entities()
         self.preview_timer.start(500)
 
     def on_resource_moved(self, index, x, y):
@@ -856,12 +855,8 @@ class TerrainGeneratorGUI(QMainWindow):
         ):
             self.config_model.custom_resources[index] = (x, y)
         invalid_entities = self.validate_current_layout()
-        self.preview_widget.set_entities(
-            (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y),
-            (self.config_model.custom_nf_base_x, self.config_model.custom_nf_base_y),
-            self.config_model.custom_resources,
-            invalid_entities=invalid_entities,
-        )
+        self.preview_widget.invalid_entities = invalid_entities
+        self.preview_widget.redraw_fixed_entities()
         # Resource positions do not affect the terrain heightmap itself,
         # so we don't necessarily need to re-run the pipeline on move,
         # but we can do it if desired.
@@ -869,19 +864,31 @@ class TerrainGeneratorGUI(QMainWindow):
 
 
     def on_layout_changed(self):
-        nodes, connections, resources = self.preview_widget.get_layout_from_editor()
-
-        # We need to extract the base positions correctly here too just like we do in validation
-        imp_pos = next(((n.x, n.y) for n in nodes if "imp" in n.type.lower() or (n.type == "base_zone" and nodes.index(n) == 0)), None)
-        nf_pos = next(((n.x, n.y) for n in nodes if "nf" in n.type.lower() or (n.type == "base_zone" and nodes.index(n) == 1)), None)
-
         # When clear all is called it doesn't emit resource removed signals, just layout changed.
-        # We must sync everything from the preview widget.
-        self.config_model.custom_imp_base_x = imp_pos[0] if imp_pos else None
-        self.config_model.custom_imp_base_y = imp_pos[1] if imp_pos else None
-        self.config_model.custom_nf_base_x = nf_pos[0] if nf_pos else None
-        self.config_model.custom_nf_base_y = nf_pos[1] if nf_pos else None
-        self.config_model.custom_resources = list(resources)
+        # We must sync everything from the preview widget's internal state.
+
+        imp_pos = self.preview_widget.imp_base
+        if imp_pos and imp_pos[0] is not None and imp_pos[1] is not None:
+            self.config_model.custom_imp_base_x = imp_pos[0]
+            self.config_model.custom_imp_base_y = imp_pos[1]
+        else:
+            self.config_model.custom_imp_base_x = None
+            self.config_model.custom_imp_base_y = None
+
+        nf_pos = self.preview_widget.nf_base
+        if nf_pos and nf_pos[0] is not None and nf_pos[1] is not None:
+            self.config_model.custom_nf_base_x = nf_pos[0]
+            self.config_model.custom_nf_base_y = nf_pos[1]
+        else:
+            self.config_model.custom_nf_base_x = None
+            self.config_model.custom_nf_base_y = None
+
+        self.config_model.custom_resources = list(self.preview_widget.resources)
+
+        # Sync the invalid entities back
+        invalid_entities = self.validate_current_layout()
+        self.preview_widget.invalid_entities = invalid_entities
+        self.preview_widget.redraw_fixed_entities()
 
         self.update_validation_status()
         self.preview_timer.start(500)
@@ -897,12 +904,8 @@ class TerrainGeneratorGUI(QMainWindow):
 
         self.config_model.custom_resources.append((x, y))
         invalid_entities = self.validate_current_layout()
-        self.preview_widget.set_entities(
-            (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y),
-            (self.config_model.custom_nf_base_x, self.config_model.custom_nf_base_y),
-            self.config_model.custom_resources,
-            invalid_entities=invalid_entities,
-        )
+        self.preview_widget.invalid_entities = invalid_entities
+        self.preview_widget.redraw_fixed_entities()
         self.preview_timer.start(500)
 
     def run_preview(self):

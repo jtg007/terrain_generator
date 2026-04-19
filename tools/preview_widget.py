@@ -821,8 +821,8 @@ class MapPreviewWidget(QWidget):
         self.current_freehand_path = []
         self.current_freehand_item = None
 
-        self.imp_base = None
-        self.nf_base = None
+        self.imp_base = (None, None)
+        self.nf_base = (None, None)
         self.resources = []
         if self._height_overlay is not None:
             self._height_overlay[:] = 0
