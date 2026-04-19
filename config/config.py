@@ -3,58 +3,13 @@
 Config Manager - Saves and loads user settings
 """
 
-import json
-import os
-import platform
+import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+from steam_paths import find_empires_path as _find_empires_path
 
-def find_empires_path_linux():
-    """Find Empires path on Linux (Steam Proton)"""
-    steam_common = Path.home() / ".local/share/Steam/steamapps/common"
-    proton_paths = [
-        steam_common / "Empires",
-        Path("/run/media")
-        / os.listdir("/run/media")
-        / "SteamLibrary/steamapps/common/Empires"
-        if os.path.exists("/run/media")
-        else None,
-    ]
-    for path in proton_paths:
-        if path and path.exists():
-            return str(path)
-    return None
-
-
-def find_empires_path_windows():
-    """Find Empires path on Windows (Registry)"""
-    try:
-        import winreg
-
-        for hive in [winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER]:
-            for key in [
-                r"SOFTWARE\Valve\Steam",
-                r"SOFTWARE\WOW6432Node\Valve\Steam",
-            ]:
-                try:
-                    with winreg.OpenKey(hive, key) as steam_key:
-                        steam_path, _ = winreg.QueryValueEx(steam_key, "InstallPath")
-                        empires_path = Path(steam_path) / "steamapps/common/Empires"
-                        if empires_path.exists():
-                            return str(empires_path)
-                except (OSError, FileNotFoundError, PermissionError):
-                    pass
-    except Exception:
-        pass
-    return None
-
-
-def find_empires_path():
-    """Auto-detect Empires installation path"""
-    if platform.system() == "Windows":
-        return find_empires_path_windows()
-    else:
-        return find_empires_path_linux()
+import json
 
 
 class Config:
@@ -135,7 +90,7 @@ class Config:
         """Setup for first run - try to find Empires automatically"""
         self.config["first_run"] = True
 
-        detected_path = find_empires_path()
+        detected_path = _find_empires_path()
         if detected_path:
             self.config["empires_path"] = detected_path
             self.config["first_run"] = False
