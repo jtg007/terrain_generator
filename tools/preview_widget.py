@@ -993,14 +993,14 @@ class MapPreviewWidget(QWidget):
             elif hasattr(item, "is_fixed_entity"):
                 if item.entity_type == "imp":
                     old_val = self.imp_base
-                    self.record_action("set_imp", (old_val, (0.0, 0.0)))
-                    self.imp_base = (0.0, 0.0)
+                    self.record_action("set_imp", (old_val, (None, None)))
+                    self.imp_base = (None, None)
                     self.redraw_fixed_entities()
                     self.base_moved.emit("imp", 0.0, 0.0)
                 elif item.entity_type == "nf":
                     old_val = self.nf_base
-                    self.record_action("set_nf", (old_val, (0.0, 0.0)))
-                    self.nf_base = (0.0, 0.0)
+                    self.record_action("set_nf", (old_val, (None, None)))
+                    self.nf_base = (None, None)
                     self.redraw_fixed_entities()
                     self.base_moved.emit("nf", 0.0, 0.0)
                 elif item.entity_type == "res":
@@ -1014,14 +1014,12 @@ class MapPreviewWidget(QWidget):
                     # Trigger an update by emitting something generic, or just rely on layout_changed
                     self.layout_changed.emit()
         elif self.current_mode == 3: # Add Resource
-            # Wait, resources are typically handled via FixedEntityItem in new code?
-            # No, 'Add Resource' adds a node if mode=3.
-            # But wait, in the redraw_fixed_entities they are created from self.resources.
-            # The current Add Resource creates a VisualNode which is NOT added to self.resources until get_layout_from_editor.
-            # BUT the bug might be that 'Add Res' adds a VisualNode instead of a fixed resource?
-            # Yes, earlier in MapEditorWidget it added VisualNode.
-            node = VisualNode(scene_pos.x(), scene_pos.y(), 256, ZoneType.RESOURCE, self.scene)
-            self.record_action("add", node)
+            old_res_list = list(self.resources)
+            new_res_list = list(self.resources)
+            new_res_list.append((scene_pos.x(), scene_pos.y()))
+            self.record_action("set_res", (old_res_list, new_res_list))
+            self.resources = new_res_list
+            self.redraw_fixed_entities()
             self.resource_added.emit(scene_pos.x(), scene_pos.y())
         elif self.current_mode in (8, 9):  # Raise / Lower
             self._sculpting = True
@@ -1185,9 +1183,5 @@ class MapPreviewWidget(QWidget):
                 )
                 connections.append(conn)
 
-        resources = []
-        for item in self.scene.items():
-            if isinstance(item, VisualNode) and item.node_type == ZoneType.RESOURCE:
-                resources.append((item.scenePos().x(), item.scenePos().y()))
-
-        return nodes, connections, resources
+        # Resources are now exclusively tracked by self.resources, not VisualNodes
+        return nodes, connections, list(self.resources)
