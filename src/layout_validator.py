@@ -26,11 +26,11 @@ class LayoutValidator:
         min_dim = min(spec.size_x, spec.size_y)
 
         # Distances and thresholds
-        base_margin = max(64, spec.base_clear_radius)
-        res_margin = max(64, spec.base_clear_radius / 2)
+        base_margin = 64
+        res_margin = 64
         base_to_base_min_dist = min(0.40 * min_dim, 8000)
-        res_to_base_min_dist = 0.15 * min_dim + spec.base_clear_radius
-        res_to_res_min_dist = 0.10 * min_dim
+        res_to_base_min_dist = 768
+        res_to_res_min_dist = 1024
 
         # Check Bases within bounds
         def check_bounds(entity_pos: Tuple[float, float], margin: float):

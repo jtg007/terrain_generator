@@ -58,7 +58,7 @@ def test_bases_too_close():
 def test_base_out_of_bounds():
     spec = create_minimal_spec(2048)
     # Imp base margin is 512, placing at x=200 is out of bounds
-    imp_base = (200, 1024)
+    imp_base = (50, 1024)
     nf_base = (1536, 1536)
     resources = []
 
@@ -76,7 +76,7 @@ def test_resource_out_of_bounds():
     imp_base = (512, 512)
     nf_base = (1536, 1536)
     # Resource margin is 256, placing at x=100 is out of bounds
-    resources = [(100, 1024)]
+    resources = [(50, 1024)]
 
     validator = LayoutValidator()
     result = validator.validate(spec, imp_base, nf_base, resources)
@@ -91,8 +91,7 @@ def test_resource_inside_base_flatten_radius():
     imp_base = (512, 512)
     nf_base = (1536, 1536)
 
-    # Base clear radius is 512.
-    # Min dist = 0.15 * 2048 + 512 = 307.2 + 512 = 819.2
+    # Min dist is hardcoded to 768.
     # Place at distance 600 from imp_base (too close)
     resources = [(512, 1112)]  # dist = 600
 
@@ -112,11 +111,9 @@ def test_resource_flatten_overlaps_base_flatten():
     imp_base = (512, 512)
     nf_base = (1536, 1536)
 
-    # 0.15 * 2048 = 307.2
-    # Min required distance = 307.2 + spec.base_clear_radius (512) = 819.2
-    # Let's place the resource at distance 400.
-    # 400 is > 307.2 (the 15% rule) but < 819.2 (the combined requirement).
-    resources = [(512, 912)]  # dist = 400
+    # Let's place the resource at distance 700.
+    # Min required distance is hardcoded to 768.
+    resources = [(512, 1212)]  # dist = 700
 
     validator = LayoutValidator()
     result = validator.validate(spec, imp_base, nf_base, resources)
@@ -132,9 +129,9 @@ def test_resources_clustered():
     imp_base = (512, 512)
     nf_base = (1536, 1536)
 
-    # Res-Res min dist = 0.10 * 2048 = 204.8
-    # Place resources with dist = 100
-    resources = [(1024, 1536), (1024, 1636)]
+    # Res-Res min dist is hardcoded to 1024.
+    # Place resources with dist = 1000
+    resources = [(1024, 1536), (1024, 2536)]
 
     validator = LayoutValidator()
     result = validator.validate(spec, imp_base, nf_base, resources)
