@@ -1,7 +1,5 @@
-import math
 import sys
 from pathlib import Path
-from typing import List, Optional, Tuple, Set
 
 import numpy as np
 
@@ -19,11 +17,10 @@ from PySide6.QtWidgets import (
     QGraphicsPixmapItem,
     QLabel,
     QSlider,
-    QSizePolicy,
     QScrollArea,
 )
-from PySide6.QtCore import Qt, Signal, QPoint, QRectF, QPointF
-from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QImage, QPixmap, QPolygon
+from PySide6.QtCore import Qt, Signal, QRectF, QPointF
+from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QImage, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
 from src.terrain_spec import ZoneType, LayoutNode, LayoutConnection

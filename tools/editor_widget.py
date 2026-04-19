@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QGraphicsEllipseItem,
     QGraphicsLineItem,
     QGraphicsItem,
+    QMessageBox,
 )
 from PySide6.QtCore import Qt, QPointF, QRectF
 from PySide6.QtGui import QPen, QBrush, QColor, QPainter
@@ -58,10 +59,6 @@ class VisualNode(QGraphicsEllipseItem):
         self.clear_radius = radius
         self.edges = []
         
-    def boundingRect(self):
-        r = max(84, self.clear_radius)
-        return QRectF(-r - 10, -r - 10, r * 2 + 20, r * 2 + 20)
-
         self.setPos(x, y)
         self.setFlags(
             QGraphicsItem.ItemIsMovable
@@ -71,6 +68,10 @@ class VisualNode(QGraphicsEllipseItem):
         self.setZValue(1)
 
         scene.addItem(self)
+
+    def boundingRect(self):
+        r = max(84, self.clear_radius)
+        return QRectF(-r - 10, -r - 10, r * 2 + 20, r * 2 + 20)
 
     def paint(self, painter, option, widget):
         r = 84
@@ -190,6 +191,15 @@ class MapEditorWidget(QWidget):
                     item.setFlag(QGraphicsItem.ItemIsSelectable, False)
 
     def clear_scene(self):
+        reply = QMessageBox.question(
+            self,
+            "Confirm Clear",
+            "Are you sure you want to clear the entire scene?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply == QMessageBox.No:
+            return
+
         self.scene.clear()
         self.draw_grid()
         self.link_start_node = None

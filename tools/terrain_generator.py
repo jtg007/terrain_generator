@@ -20,7 +20,6 @@ if not getattr(sys, "frozen", False):
 
 from PySide6.QtWidgets import (
     QApplication,
-    QButtonGroup,
     QMainWindow,
     QWidget,
     QVBoxLayout,
@@ -37,10 +36,9 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QSplitter,
     QScrollArea,
-    QTabWidget,
 )
 from PySide6.QtCore import Qt, QThread, Signal, QTimer
-from PySide6.QtGui import QIcon, QImage, QColor, QPainter, QPixmap, QShortcut, QKeySequence
+from PySide6.QtGui import QIcon, QImage, QShortcut, QKeySequence
 from tools.preview_widget import MapPreviewWidget
 
 

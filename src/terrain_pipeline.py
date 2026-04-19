@@ -20,15 +20,12 @@ All coordinate calculations use integer grid positions to prevent T-junctions.
 import math
 import random
 import sys
-from dataclasses import dataclass
 from typing import List, Tuple, Optional
 
 if getattr(sys, "frozen", False):
     from terrain_spec import TerrainSpec, HeightGrid, TerrainCell, UnderlayBrush, ZoneType, LayoutNode, LayoutConnection
-    from noise import NoiseGenerator
 else:
     from src.terrain_spec import TerrainSpec, HeightGrid, TerrainCell, UnderlayBrush, ZoneType, LayoutNode, LayoutConnection
-    from src.noise import NoiseGenerator
 
 from PIL import Image, ImageOps
 
