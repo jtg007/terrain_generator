@@ -775,7 +775,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self._inner_splitter.addWidget(scroll)
         self._inner_splitter.addWidget(self.preview_widget)
         self._inner_splitter.setStretchFactor(0, 0)
-        self.preview_widget.layout_changed.connect(lambda: self.preview_timer.start(500))
+        self.preview_widget.layout_changed.connect(self.on_layout_changed)
         self.preview_widget.base_moved.connect(self.on_base_moved)
         self.preview_widget.resource_moved.connect(self.on_resource_moved)
         self.preview_widget.resource_added.connect(self.on_resource_added)
@@ -865,6 +865,25 @@ class TerrainGeneratorGUI(QMainWindow):
         # Resource positions do not affect the terrain heightmap itself,
         # so we don't necessarily need to re-run the pipeline on move,
         # but we can do it if desired.
+        self.preview_timer.start(500)
+
+
+    def on_layout_changed(self):
+        nodes, connections, resources = self.preview_widget.get_layout_from_editor()
+
+        # We need to extract the base positions correctly here too just like we do in validation
+        imp_pos = next(((n.x, n.y) for n in nodes if "imp" in n.type.lower() or (n.type == "base_zone" and nodes.index(n) == 0)), None)
+        nf_pos = next(((n.x, n.y) for n in nodes if "nf" in n.type.lower() or (n.type == "base_zone" and nodes.index(n) == 1)), None)
+
+        # When clear all is called it doesn't emit resource removed signals, just layout changed.
+        # We must sync everything from the preview widget.
+        self.config_model.custom_imp_base_x = imp_pos[0] if imp_pos else None
+        self.config_model.custom_imp_base_y = imp_pos[1] if imp_pos else None
+        self.config_model.custom_nf_base_x = nf_pos[0] if nf_pos else None
+        self.config_model.custom_nf_base_y = nf_pos[1] if nf_pos else None
+        self.config_model.custom_resources = list(resources)
+
+        self.update_validation_status()
         self.preview_timer.start(500)
 
     def on_resource_added(self, x, y):
@@ -1574,7 +1593,7 @@ class TerrainGeneratorGUI(QMainWindow):
             # Check layout from editor
             if hasattr(self, "preview_widget"):
                 try:
-                    nodes, _ = self.preview_widget.get_layout_from_editor()
+                    nodes, _, _ = self.preview_widget.get_layout_from_editor()
                     if nodes:
                         temp_spec = self.config_model.make_spec()
                         

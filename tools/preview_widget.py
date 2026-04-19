@@ -36,10 +36,17 @@ else:
     PROJECT_ROOT = Path(__file__).parent.parent
 
 ICONS_DIR = PROJECT_ROOT / "icons"
+from PySide6.QtCore import QByteArray
+
+def _load_svg(path):
+    with open(path, "rb") as f:
+        data = f.read()
+    return QSvgRenderer(QByteArray(data))
+
 SVG_RENDERERS = {
-    "imp": QSvgRenderer(str(ICONS_DIR / "be base.svg")),
-    "nf": QSvgRenderer(str(ICONS_DIR / "nf base.svg")),
-    "res": QSvgRenderer(str(ICONS_DIR / "resource_node.svg")),
+    "imp": _load_svg(ICONS_DIR / "be base.svg"),
+    "nf": _load_svg(ICONS_DIR / "nf base.svg"),
+    "res": _load_svg(ICONS_DIR / "resource_node.svg"),
 }
 
 
