@@ -792,9 +792,16 @@ class MapPreviewWidget(QWidget):
         # 1. Collect all layout items (Nodes, Edges, Paths)
         items_to_remove = []
         for item in self.scene.items():
-            if isinstance(item, (VisualNode, VisualEdge, VisualFreehandEdge)):
+            # If it's the map background, skip
+            if item == self.map_pixmap_item:
+                continue
+            # If it's a grid line (usually QGraphicsLineItem but not VisualEdge)
+            if hasattr(self, 'grid_items') and item in self.grid_items:
+                continue
+
+            if isinstance(item, (VisualNode, VisualEdge, VisualFreehandEdge)) or hasattr(item, "is_fixed_entity"):
                 items_to_remove.append(item)
-            elif hasattr(item, "is_fixed_entity"):
+            elif type(item).__name__ in ["VisualNode", "VisualEdge", "VisualFreehandEdge", "FixedEntityItem"]:
                 items_to_remove.append(item)
 
         old_state = {
@@ -941,8 +948,8 @@ class MapPreviewWidget(QWidget):
             self.redraw_fixed_entities()
         elif action == "clear_all":
             old_state = item
-            self.imp_base = None
-            self.nf_base = None
+            self.imp_base = (None, None)
+            self.nf_base = (None, None)
             self.resources = []
             for scene_item in old_state["scene_items"]:
                 self.scene.removeItem(scene_item)
@@ -987,10 +994,10 @@ class MapPreviewWidget(QWidget):
             self.base_moved.emit("nf", scene_pos.x(), scene_pos.y())
         elif self.current_mode == 5: # Remove
             item = self.scene.itemAt(scene_pos, self.view.transform())
-            if isinstance(item, VisualNode) or isinstance(item, VisualEdge) or isinstance(item, VisualFreehandEdge):
+            if isinstance(item, (VisualNode, VisualEdge, VisualFreehandEdge)) or type(item).__name__ in ["VisualNode", "VisualEdge", "VisualFreehandEdge"]:
                 items_to_remove = [item]
-                if isinstance(item, VisualNode):
-                    for edge in item.edges:
+                if isinstance(item, VisualNode) or type(item).__name__ == "VisualNode":
+                    for edge in getattr(item, "edges", []):
                         if edge in self.scene.items() and edge not in items_to_remove:
                             items_to_remove.append(edge)
 
