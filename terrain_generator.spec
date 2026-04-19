@@ -69,11 +69,6 @@ rules_file = PROJECT_ROOT / 'map_rules.json'
 if rules_file.exists():
     datas.append((str(rules_file), '.'))
 
-# Include icons folder
-icons_dir = PROJECT_ROOT / 'icons'
-if icons_dir.exists():
-    datas.append((str(icons_dir), 'icons'))
-
 
 a = Analysis(
     [str(PROJECT_ROOT / 'tools' / 'terrain_generator.py')],

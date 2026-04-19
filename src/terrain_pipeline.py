@@ -1437,11 +1437,10 @@ def run_pipeline(spec: TerrainSpec, map_name: Optional[str] = None, output_dir: 
         grid = load_custom_heights(spec, grid)
     else:
         print("  Step 2a: Generate playability mask (Smoothstep distance field)")
-        nodes, connections = generate_strategic_layout(spec)
-        if spec.custom_layout_nodes is not None:
-            nodes.extend(spec.custom_layout_nodes)
-        if spec.custom_layout_connections is not None:
-            connections.extend(spec.custom_layout_connections)
+        if spec.custom_layout_nodes is not None and spec.custom_layout_connections is not None:
+            nodes, connections = spec.custom_layout_nodes, spec.custom_layout_connections
+        else:
+            nodes, connections = generate_strategic_layout(spec)
         hard_mask = generate_playability_mask(
             spec, grid.rows, grid.cols, nodes, connections
         )
