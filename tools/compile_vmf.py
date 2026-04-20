@@ -109,6 +109,12 @@ def compile_vmf(
 
         print("-" * 60)
 
+        if result.returncode != 0:
+            print("Compile failed.")
+            print("Tip: Try enabling 'Use nodetail texture' in Settings.")
+            print(f"Error output:\n{result.stdout}\n{result.stderr}")
+            return False
+
         generated_bsp = os.path.join(sdk_path, vmf_name.replace(".vmf", ".bsp"))
         if os.path.exists(generated_bsp):
             shutil.copy2(generated_bsp, bsp_path)

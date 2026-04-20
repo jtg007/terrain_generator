@@ -696,8 +696,8 @@ class TerrainGeneratorGUI(QMainWindow):
 
         config_layout.addWidget(make_divider())
 
-        # ─── SPAWN SETTINGS ───
-        config_layout.addWidget(make_section_label("SPAWN SETTINGS"))
+        # ─── SETTINGS ───
+        config_layout.addWidget(make_section_label("SETTINGS"))
 
         spawn_grid = QGridLayout()
         spawn_grid.setSpacing(4)
@@ -707,12 +707,14 @@ class TerrainGeneratorGUI(QMainWindow):
         self.chk_disable_resources = QCheckBox("No Resources")
         self.chk_minimal_map = QCheckBox("Minimal (No Props)")
         self.chk_terrain_only = QCheckBox("Terrain Only")
+        self.chk_nodetail = QCheckBox("Use nodetail texture")
 
         self.chk_disable_commander.toggled.connect(self.sync_to_model)
         self.chk_disable_buildings.toggled.connect(self.sync_to_model)
         self.chk_disable_resources.toggled.connect(self.sync_to_model)
         self.chk_minimal_map.toggled.connect(self.sync_to_model)
         self.chk_terrain_only.toggled.connect(self.sync_to_model)
+        self.chk_nodetail.toggled.connect(self.on_nodetail_changed)
 
         def update_spawn_checks():
             minimal = self.chk_minimal_map.isChecked()
@@ -737,6 +739,7 @@ class TerrainGeneratorGUI(QMainWindow):
         spawn_grid.addWidget(self.chk_disable_resources, 1, 0)
         spawn_grid.addWidget(self.chk_minimal_map, 1, 1)
         spawn_grid.addWidget(self.chk_terrain_only, 2, 0)
+        spawn_grid.addWidget(self.chk_nodetail, 2, 1)
         config_layout.addLayout(spawn_grid)
 
         # ─── VALIDATION ───
@@ -1409,6 +1412,10 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config.set("custom_output_folder", text)
         self.update_custom_status()
 
+    def on_nodetail_changed(self):
+        """Save nodetail setting to config."""
+        self.config.set("nodetail", self.chk_nodetail.isChecked())
+
     def browse_custom_output(self):
         """Browse for custom output folder."""
         folder = QFileDialog.getExistingDirectory(
@@ -1542,6 +1549,8 @@ class TerrainGeneratorGUI(QMainWindow):
             )
             self.chk_minimal_map.setChecked(self.config_model.minimal_map)
             self.chk_terrain_only.setChecked(self.config_model.terrain_only)
+
+        self.chk_nodetail.setChecked(self.config.get("nodetail", False))
 
         if self.config_model.custom_image_path:
             self.chk_custom_image.setChecked(True)
@@ -1738,8 +1747,9 @@ class TerrainGeneratorGUI(QMainWindow):
         empires_path = self.config.get("empires_path", "")
         auto_copy = self.config.get("auto_copy_to_empires", True)
         custom_folder = self.config.get("custom_output_folder", "")
+        nodetail = self.config.get("nodetail", False)
 
-        self.compile_worker = CompileWorker(vmf_path, empires_path, auto_copy, custom_folder)
+        self.compile_worker = CompileWorker(vmf_path, empires_path, auto_copy, custom_folder, nodetail)
         self.compile_worker.finished.connect(self.on_compile_finished)
         self.compile_worker.start()
 
@@ -1756,12 +1766,13 @@ class TerrainGeneratorGUI(QMainWindow):
 class CompileWorker(QThread):
     finished = Signal(bool, str)
 
-    def __init__(self, vmf_path, empires_path="", auto_copy=True, custom_folder=""):
+    def __init__(self, vmf_path, empires_path="", auto_copy=True, custom_folder="", nodetail=False):
         super().__init__()
         self.vmf_path = vmf_path
         self.empires_path = empires_path
         self.auto_copy = auto_copy
         self.custom_folder = custom_folder
+        self.nodetail = nodetail
 
     def run(self):
         try:
@@ -1776,7 +1787,7 @@ class CompileWorker(QThread):
                         vmf_path=str(self.vmf_path),
                         sdk_path="",
                         empires_path=self.empires_path,
-                        nodetail=True,
+                        nodetail=self.nodetail,
                         auto_copy=self.auto_copy,
                         custom_output=self.custom_folder,
                     )
@@ -1791,8 +1802,9 @@ class CompileWorker(QThread):
                     sys.executable,
                     str(compile_script),
                     str(self.vmf_path),
-                    "--nodetail",
                 ]
+                if self.nodetail:
+                    cmd.append("--nodetail")
                 if self.empires_path:
                     cmd.extend(["--empires-path", self.empires_path])
 

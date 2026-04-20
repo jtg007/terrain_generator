@@ -36,14 +36,7 @@ def heightgrid_to_heightmap(
 def choose_compile_safe_material(
     requested_material: str, map_width: int, map_height: int
 ) -> str:
-    """Choose a safe terrain material for large maps to avoid detail prop overflow."""
-    if "nodetail" in requested_material.lower():
-        return requested_material
-
-    large_map_threshold = 8192 * 8192
-    if map_width * map_height >= large_map_threshold:
-        return COMPILE_SAFE_NODETAIL_MATERIAL
-
+    """Return the requested material (nodetail is now user-controlled via settings)."""
     return requested_material
 
 

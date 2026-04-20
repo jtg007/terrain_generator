@@ -21,24 +21,10 @@ from terrain_pipeline import run_pipeline
 from vmf_gen import PipelineSpec, DisplacementVMF, DEFAULT_SAFE_SKYBOX
 
 
-COMPILE_SAFE_NODETAIL_MATERIAL = "common/terrain/blend_grass01a_dirt01a_nodetail"
-
-
 def choose_compile_safe_material(
     requested_material: str, map_width: int, map_height: int
 ) -> str:
-    """Prefer a no-detail terrain material for very large maps to avoid VBSP 64K detail prop cap."""
-    if "nodetail" in requested_material.lower():
-        return requested_material
-
-    large_map_threshold = 8192 * 8192
-    if map_width * map_height >= large_map_threshold:
-        print(
-            "Warning: switching terrain material to a _nodetail variant for compile safety "
-            f"({requested_material} -> {COMPILE_SAFE_NODETAIL_MATERIAL})"
-        )
-        return COMPILE_SAFE_NODETAIL_MATERIAL
-
+    """Return the requested material (nodetail is now user-controlled via settings)."""
     return requested_material
 
 

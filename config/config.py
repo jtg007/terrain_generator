@@ -17,6 +17,7 @@ class Config:
         "empires_path": "",
         "auto_copy_to_empires": True,
         "custom_output_folder": "",
+        "nodetail": False,
         "last_resolution": 1024,
         "last_filename": "terrain",
         "vmf_tiles_x": 4,
