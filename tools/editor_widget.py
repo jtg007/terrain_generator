@@ -60,7 +60,7 @@ class VisualNode(QGraphicsEllipseItem):
         self.node_type = node_type
         self.clear_radius = radius
         self.edges = []
-        
+
         self.setPos(x, y)
         self.setFlags(
             QGraphicsItem.ItemIsMovable
@@ -68,9 +68,9 @@ class VisualNode(QGraphicsEllipseItem):
             | QGraphicsItem.ItemSendsGeometryChanges
         )
         self.setZValue(1)
-        
+
         scene.addItem(self)
-    
+
     def boundingRect(self):
         if self.clear_radius <= 0:
             return QRectF(-94, -94, 188, 188)
@@ -80,12 +80,12 @@ class VisualNode(QGraphicsEllipseItem):
     def paint(self, painter, option, widget):
         r = 84
         rect = QRectF(-r, -r, r * 2, r * 2)
-        
+
         if self.node_type == ZoneType.BASE:
             SVG_RENDERERS["imp"].render(painter, rect)
         else:
             SVG_RENDERERS["res"].render(painter, rect)
-        
+
         if self.clear_radius > 0:
             painter.setPen(QPen(QColor(255, 255, 255, 50), 1, Qt.DashLine))
             painter.setBrush(QBrush(QColor(255, 255, 255, 10)))
@@ -217,7 +217,13 @@ class MapEditorWidget(QWidget):
         scene_pos = self.view.mapToScene(event.pos())
 
         if self.current_mode == 1:
-            VisualNode(scene_pos.x(), scene_pos.y(), DEFAULT_BASE_CLEAR_RADIUS, ZoneType.BASE, self.scene)
+            VisualNode(
+                scene_pos.x(),
+                scene_pos.y(),
+                DEFAULT_BASE_CLEAR_RADIUS,
+                ZoneType.BASE,
+                self.scene,
+            )
         elif self.current_mode == 2:
             VisualNode(
                 scene_pos.x(), scene_pos.y(), 256, ZoneType.WILDERNESS, self.scene
@@ -300,3 +306,18 @@ class MapEditorWidget(QWidget):
                 connections.append(conn)
 
         return nodes, connections
+
+    def update_clear_radii(self, base_radius, resource_radius):
+        """Update clear_radius on all VisualNode items based on their type."""
+        for item in self.scene.items():
+            if isinstance(item, VisualNode):
+                if item.node_type == ZoneType.BASE:
+                    if item.clear_radius != base_radius:
+                        item.prepareGeometryChange()
+                        item.clear_radius = base_radius
+                        item.update()
+                elif item.node_type in (ZoneType.RESOURCE, ZoneType.WILDERNESS):
+                    if item.clear_radius != resource_radius:
+                        item.prepareGeometryChange()
+                        item.clear_radius = resource_radius
+                        item.update()

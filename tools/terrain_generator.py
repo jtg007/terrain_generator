@@ -41,9 +41,16 @@ from PySide6.QtWidgets import (
     QTabWidget,
 )
 from PySide6.QtCore import Qt, QThread, Signal, QTimer
-from PySide6.QtGui import QIcon, QImage, QColor, QPainter, QPixmap, QShortcut, QKeySequence
+from PySide6.QtGui import (
+    QIcon,
+    QImage,
+    QColor,
+    QPainter,
+    QPixmap,
+    QShortcut,
+    QKeySequence,
+)
 from tools.preview_widget import MapPreviewWidget
-
 
 
 from src.config_model import GUIConfigModel, MAX_MAP_DISPINFO, MAX_MAP_WORLD_SIZE
@@ -69,7 +76,13 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 class PreviewWorker(QThread):
     finished = Signal(object, object)  # grid, spec
 
-    def __init__(self, config_model, custom_nodes=None, custom_connections=None, custom_resources=None):
+    def __init__(
+        self,
+        config_model,
+        custom_nodes=None,
+        custom_connections=None,
+        custom_resources=None,
+    ):
         super().__init__()
         self.config_model = config_model
         self.custom_nodes = custom_nodes
@@ -81,18 +94,20 @@ class PreviewWorker(QThread):
             # We must not modify the original model's spec, but we can make a custom spec
             # Pass validate=False so we still get a preview even if nodes are being dragged
             spec = self.config_model.make_spec(validate=False)
-            spec.displacement_power = 3  # Power 3 is still fast but shows much more detail
+            spec.displacement_power = (
+                3  # Power 3 is still fast but shows much more detail
+            )
             # Enable scaled-down erosion for preview (max 20000 iterations)
             # Use 50% scaling because the preview grid is faster than the full VMF one
             spec.erosion_iterations = min(int(spec.erosion_iterations * 0.5), 20000)
             spec.disable_commander = True
             spec.disable_buildings = True
             spec.disable_resource_nodes = True
-            
+
             if self.custom_nodes and self.custom_connections:
                 spec.custom_layout_nodes = self.custom_nodes
                 spec.custom_layout_connections = self.custom_connections
-            
+
             if self.custom_resources is not None:
                 spec.custom_resources = self.custom_resources
 
@@ -114,7 +129,14 @@ class PreviewWorker(QThread):
 class GenerationWorker(QThread):
     finished = Signal(bool, str)
 
-    def __init__(self, config_model, custom_nodes=None, custom_connections=None, custom_resources=None, output_filename="gui_terrain"):
+    def __init__(
+        self,
+        config_model,
+        custom_nodes=None,
+        custom_connections=None,
+        custom_resources=None,
+        output_filename="gui_terrain",
+    ):
         super().__init__()
         self.config_model = config_model
         self.custom_nodes = custom_nodes
@@ -128,12 +150,14 @@ class GenerationWorker(QThread):
             if self.custom_nodes and self.custom_connections:
                 spec.custom_layout_nodes = self.custom_nodes
                 spec.custom_layout_connections = self.custom_connections
-                
+
             if self.custom_resources is not None:
                 spec.custom_resources = self.custom_resources
 
             # Run pipeline
-            result = run_pipeline(spec, map_name=self.output_filename, output_dir=str(OUTPUT_DIR))
+            result = run_pipeline(
+                spec, map_name=self.output_filename, output_dir=str(OUTPUT_DIR)
+            )
             if result["errors"]:
                 raise Exception(f"Pipeline errors: {result['errors']}")
 
@@ -233,7 +257,6 @@ class TerrainGeneratorGUI(QMainWindow):
         except Exception as e:
             QMessageBox.warning(self, "Screenshot failed", str(e))
 
-
     def load_textures(self):
         textures_path = PROJECT_ROOT / "config" / "textures.json"
         if textures_path.exists():
@@ -282,7 +305,6 @@ class TerrainGeneratorGUI(QMainWindow):
         div1.setFixedHeight(1)
         div1.setObjectName("Divider")
         sidebar_layout.addWidget(div1)
-
 
         # Divider
         div2 = QWidget()
@@ -347,7 +369,7 @@ class TerrainGeneratorGUI(QMainWindow):
 
         sidebar_layout.addWidget(self.custom_output_container)
 
-        self.on_auto_copy_changed() # Trigger initial state setup
+        self.on_auto_copy_changed()  # Trigger initial state setup
 
         sidebar_layout.addStretch()
 
@@ -476,9 +498,7 @@ class TerrainGeneratorGUI(QMainWindow):
 
         lbl_tx = QLabel("Tiles X")
         lbl_tx.setObjectName("FieldLabel")
-        lbl_tx.setToolTip(
-            "Number of displacement tiles horizontally"
-        )
+        lbl_tx.setToolTip("Number of displacement tiles horizontally")
         dim_grid.addWidget(lbl_tx, 0, 0)
         self.spin_tiles_x = QSpinBox()
         self.spin_tiles_x.setRange(1, 64)
@@ -486,9 +506,7 @@ class TerrainGeneratorGUI(QMainWindow):
 
         lbl_ty = QLabel("Tiles Y")
         lbl_ty.setObjectName("FieldLabel")
-        lbl_ty.setToolTip(
-            "Number of displacement tiles vertically"
-        )
+        lbl_ty.setToolTip("Number of displacement tiles vertically")
         dim_grid.addWidget(lbl_ty, 0, 2)
         self.spin_tiles_y = QSpinBox()
         self.spin_tiles_y.setRange(1, 64)
@@ -568,11 +586,40 @@ class TerrainGeneratorGUI(QMainWindow):
         topo_row.addWidget(lbl_topo)
         self.combo_topology = QComboBox()
         self.combo_topology.addItems(
-            ["Random", "Central Gorge", "Valley", "Two Lane", "Island", "Classic Cross", "Peninsula", "Archipelago", "Delta"]
+            [
+                "Random",
+                "Central Gorge",
+                "Valley",
+                "Two Lane",
+                "Island",
+                "Classic Cross",
+                "Peninsula",
+                "Archipelago",
+                "Delta",
+            ]
         )
         self.combo_topology.setCurrentIndex(0)
         topo_row.addWidget(self.combo_topology, 1)
         config_layout.addLayout(topo_row)
+
+        # Lane Node Radius
+        lnr_row = QHBoxLayout()
+        lnr_row.setSpacing(8)
+        lbl_lnr = QLabel("Lane Node Radius")
+        lbl_lnr.setObjectName("FieldLabel")
+        lbl_lnr.setToolTip(
+            "Radius of strategic lane nodes (separate from terrain flattening)"
+        )
+        lnr_row.addWidget(lbl_lnr)
+        self.slider_lane_node_radius = QSlider(Qt.Horizontal)
+        self.slider_lane_node_radius.setRange(0, 4096)
+        self.slider_lane_node_radius.setValue(512)
+        self.lbl_lane_node_radius_val = QLabel("512")
+        lnr_row.addWidget(
+            make_slider_row(self.slider_lane_node_radius, self.lbl_lane_node_radius_val),
+            1,
+        )
+        config_layout.addLayout(lnr_row)
 
         # Lane Width
         lw_row = QHBoxLayout()
@@ -591,7 +638,6 @@ class TerrainGeneratorGUI(QMainWindow):
             make_slider_row(self.slider_lane_width, self.lbl_lane_width_val, "%"), 1
         )
         config_layout.addLayout(lw_row)
-
 
         # Mountain Height
         mh_row = QHBoxLayout()
@@ -657,11 +703,15 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_erosion.valueChanged.connect(
             lambda v: self.lbl_erosion_val.setText(f"{v}%")
         )
+        self.slider_lane_node_radius.valueChanged.connect(
+            lambda v: self.lbl_lane_node_radius_val.setText(str(v))
+        )
         self.combo_topology.currentIndexChanged.connect(self.sync_to_model)
         self.slider_lane_width.valueChanged.connect(self.sync_to_model)
         self.slider_mountain_height.valueChanged.connect(self.sync_to_model)
         self.slider_rough.valueChanged.connect(self.sync_to_model)
         self.slider_erosion.valueChanged.connect(self.sync_to_model)
+        self.slider_lane_node_radius.valueChanged.connect(self.sync_to_model)
 
         config_layout.addWidget(make_divider())
 
@@ -700,6 +750,21 @@ class TerrainGeneratorGUI(QMainWindow):
         )
         config_layout.addLayout(bf_row)
 
+        # Resource Node Clear Radius
+        res_row = QHBoxLayout()
+        res_row.setSpacing(8)
+        lbl_res = QLabel("Resource Clear")
+        lbl_res.setObjectName("FieldLabel")
+        lbl_res.setToolTip("Radius of flat area around resource nodes (0 = disabled)")
+        res_row.addWidget(lbl_res)
+        self.slider_resource_clear = QSlider(Qt.Horizontal)
+        self.slider_resource_clear.setRange(0, 4096)
+        self.lbl_resource_clear_val = QLabel("0")
+        res_row.addWidget(
+            make_slider_row(self.slider_resource_clear, self.lbl_resource_clear_val), 1
+        )
+        config_layout.addLayout(res_row)
+
         self.slider_base_radius.valueChanged.connect(
             lambda v: self.lbl_base_radius_val.setText(str(v))
         )
@@ -708,6 +773,12 @@ class TerrainGeneratorGUI(QMainWindow):
         )
         self.slider_base_radius.valueChanged.connect(self.sync_to_model)
         self.slider_base_flatness.valueChanged.connect(self.sync_to_model)
+        self.slider_resource_clear.valueChanged.connect(
+            lambda v: self.lbl_resource_clear_val.setText(str(v))
+        )
+        self.slider_resource_clear.valueChanged.connect(self.sync_to_model)
+        self.slider_base_radius.valueChanged.connect(self.update_node_clear_radii)
+        self.slider_resource_clear.valueChanged.connect(self.update_node_clear_radii)
 
         config_layout.addWidget(make_divider())
 
@@ -809,13 +880,8 @@ class TerrainGeneratorGUI(QMainWindow):
 
         # ── Data & Tools Setup ──
 
-
-
         self.preview_widget = MapPreviewWidget()
         self.preview_widget.setMinimumWidth(200)
-
-
-
 
         # Inner splitter: config scroll | tabs
         self._inner_splitter = QSplitter(Qt.Horizontal)
@@ -874,7 +940,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.preview_timer.start(500)
 
     def on_tool_changed(self, id):
-        pass # Tools are fully managed by preview_widget internally now
+        pass  # Tools are fully managed by preview_widget internally now
 
     def on_base_moved(self, faction, x, y):
         if x == 0.0 and y == 0.0:
@@ -909,7 +975,6 @@ class TerrainGeneratorGUI(QMainWindow):
         # but we can do it if desired.
         self.preview_timer.start(500)
 
-
     def on_layout_changed(self):
         # When clear all is called it doesn't emit resource removed signals, just layout changed.
         # We must sync everything from the preview widget's internal state.
@@ -943,7 +1008,7 @@ class TerrainGeneratorGUI(QMainWindow):
     def on_resource_added(self, x, y):
         if self.config_model.custom_resources is None:
             self.config_model.custom_resources = []
-        
+
         # Deduplicate: don't add if a resource already exists at this exact spot
         for rx, ry in self.config_model.custom_resources:
             if abs(rx - x) < 1.0 and abs(ry - y) < 1.0:
@@ -962,7 +1027,7 @@ class TerrainGeneratorGUI(QMainWindow):
                 self.config_model,
                 custom_nodes=nodes if nodes else None,
                 custom_connections=connections if connections else None,
-                custom_resources=resources
+                custom_resources=resources,
             )
             self.preview_worker.finished.connect(self.on_preview_finished)
             self.preview_worker.start()
@@ -1009,8 +1074,14 @@ class TerrainGeneratorGUI(QMainWindow):
             )
             self.preview_widget.set_raw_heights(heights)
 
-            imp_pos = (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y)
-            nf_pos = (self.config_model.custom_nf_base_x, self.config_model.custom_nf_base_y)
+            imp_pos = (
+                self.config_model.custom_imp_base_x,
+                self.config_model.custom_imp_base_y,
+            )
+            nf_pos = (
+                self.config_model.custom_nf_base_x,
+                self.config_model.custom_nf_base_y,
+            )
 
             res = (
                 self.config_model.custom_resources
@@ -1427,7 +1498,6 @@ class TerrainGeneratorGUI(QMainWindow):
         """
         self.setStyleSheet(style)
 
-
     def reset_to_safe(self):
         self.config_model.auto_clamp()
         self.sync_to_ui()
@@ -1478,12 +1548,14 @@ class TerrainGeneratorGUI(QMainWindow):
         disp_count = tiles_x * tiles_y
 
         max_tiles_world = MAX_MAP_WORLD_SIZE // max(tile_size, 1)
-        max_square_by_disp = int(MAX_MAP_DISPINFO ** 0.5)
+        max_square_by_disp = int(MAX_MAP_DISPINFO**0.5)
         max_square_tiles = min(max_tiles_world, max_square_by_disp)
         max_y_for_current_x = MAX_MAP_DISPINFO // max(tiles_x, 1)
 
         is_valid, msg = self.config_model.validate()
-        status = "Current setup: OK" if is_valid else f"Current setup: Not valid ({msg})"
+        status = (
+            "Current setup: OK" if is_valid else f"Current setup: Not valid ({msg})"
+        )
 
         help_text = (
             "Map Size Guide\n\n"
@@ -1508,9 +1580,7 @@ class TerrainGeneratorGUI(QMainWindow):
 
     def browse_custom_output(self):
         """Browse for custom output folder."""
-        folder = QFileDialog.getExistingDirectory(
-            self, "Select Custom Output Folder"
-        )
+        folder = QFileDialog.getExistingDirectory(self, "Select Custom Output Folder")
         if folder:
             self.edit_custom_output.setText(folder)
             self.config.set("custom_output_folder", folder)
@@ -1586,6 +1656,7 @@ class TerrainGeneratorGUI(QMainWindow):
             self.slider_mountain_height,
             self.slider_rough,
             self.slider_erosion,
+            self.slider_lane_node_radius,
             self.slider_base_radius,
             self.slider_base_flatness,
             self.combo_power,
@@ -1620,6 +1691,8 @@ class TerrainGeneratorGUI(QMainWindow):
             self.combo_topology.setCurrentIndex(
                 topology_map.get(self.config_model.topology, 0)
             )
+            self.slider_lane_node_radius.setValue(self.config_model.lane_node_radius)
+            self.lbl_lane_node_radius_val.setText(str(self.config_model.lane_node_radius))
             self.slider_lane_width.setValue(
                 int(self.config_model.lane_width_scale * 100)
             )
@@ -1633,7 +1706,13 @@ class TerrainGeneratorGUI(QMainWindow):
                 int(self.config_model.base_flatness * 100)
             )
             self.lbl_base_radius_val.setText(str(self.config_model.base_clear_radius))
-            self.lbl_base_flat_val.setText(f"{int(self.config_model.base_flatness * 100)}%")
+            self.lbl_base_flat_val.setText(
+                f"{int(self.config_model.base_flatness * 100)}%"
+            )
+            self.slider_resource_clear.setValue(self.config_model.resource_clear_radius)
+            self.lbl_resource_clear_val.setText(
+                str(self.config_model.resource_clear_radius)
+            )
 
             p = self.config_model.displacement_power
             if p == 2:
@@ -1662,6 +1741,9 @@ class TerrainGeneratorGUI(QMainWindow):
 
         self.update_validation_status()
 
+        # Sync clear radii to preview widget after UI update
+        self.update_node_clear_radii()
+
     def sync_to_model(self):
         """Updates config model from UI components and validates."""
         self.config_model.seed = self.spin_seed.value()
@@ -1684,6 +1766,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.topology = topology_reverse_map.get(
             self.combo_topology.currentIndex(), "random"
         )
+        self.config_model.lane_node_radius = self.slider_lane_node_radius.value()
         self.config_model.lane_width_scale = self.slider_lane_width.value() / 100.0
         if hasattr(self, "preview_widget"):
             self.preview_widget.set_lane_scale(self.config_model.lane_width_scale)
@@ -1695,6 +1778,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.erosion_strength = self.slider_erosion.value() / 100.0
         self.config_model.base_clear_radius = self.slider_base_radius.value()
         self.config_model.base_flatness = self.slider_base_flatness.value() / 100.0
+        self.config_model.resource_clear_radius = self.slider_resource_clear.value()
 
         idx = self.combo_power.currentIndex()
         if idx == 0:
@@ -1718,7 +1802,6 @@ class TerrainGeneratorGUI(QMainWindow):
         if hasattr(self, "preview_timer"):
             self.preview_timer.start(500)
 
-
     def update_validation_status(self):
         is_valid, msg = self.config_model.validate()
 
@@ -1740,19 +1823,41 @@ class TerrainGeneratorGUI(QMainWindow):
                     nodes, _, _ = self.preview_widget.get_layout_from_editor()
                     if nodes:
                         temp_spec = self.config_model.make_spec()
-                        
+
                         # Extract base and resource positions from editor nodes
-                        imp_pos = next(((n.x, n.y) for n in nodes if "imp" in n.type.lower() or (n.type == "base_zone" and nodes.index(n) == 0)), None)
-                        nf_pos = next(((n.x, n.y) for n in nodes if "nf" in n.type.lower() or (n.type == "base_zone" and nodes.index(n) == 1)), None)
-                        res_positions = [(n.x, n.y) for n in nodes if "resource" in n.type.lower()]
-                        
+                        imp_pos = next(
+                            (
+                                (n.x, n.y)
+                                for n in nodes
+                                if "imp" in n.type.lower()
+                                or (n.type == "base_zone" and nodes.index(n) == 0)
+                            ),
+                            None,
+                        )
+                        nf_pos = next(
+                            (
+                                (n.x, n.y)
+                                for n in nodes
+                                if "nf" in n.type.lower()
+                                or (n.type == "base_zone" and nodes.index(n) == 1)
+                            ),
+                            None,
+                        )
+                        res_positions = [
+                            (n.x, n.y) for n in nodes if "resource" in n.type.lower()
+                        ]
+
                         if imp_pos:
-                            temp_spec.custom_imp_base_x, temp_spec.custom_imp_base_y = imp_pos
+                            temp_spec.custom_imp_base_x, temp_spec.custom_imp_base_y = (
+                                imp_pos
+                            )
                         if nf_pos:
-                            temp_spec.custom_nf_base_x, temp_spec.custom_nf_base_y = nf_pos
+                            temp_spec.custom_nf_base_x, temp_spec.custom_nf_base_y = (
+                                nf_pos
+                            )
                         if res_positions:
                             temp_spec.custom_resources = res_positions
-                            
+
                         val_result = temp_spec.validate_layout()
                         if not val_result.valid:
                             is_valid = False
@@ -1776,6 +1881,16 @@ class TerrainGeneratorGUI(QMainWindow):
             )
             self.btn_generate.setEnabled(False)
 
+    def update_node_clear_radii(self):
+        """Update clear radii on all visual nodes in editor/preview."""
+        base_r = self.slider_base_radius.value()
+        res_r = self.slider_resource_clear.value()
+        if hasattr(self, "preview_widget"):
+            # Update stored radii so redraws use new values
+            self.preview_widget.base_clear_radius = base_r
+            self.preview_widget.resource_clear_radius = res_r
+            self.preview_widget.update_clear_radii(base_r, res_r)
+
     def _quantize_tile_size(self, value: float) -> int:
         """Quantize tile size to compile-safe UI step and limits."""
         snapped = int(math.floor(value / 64.0) * 64)
@@ -1793,7 +1908,9 @@ class TerrainGeneratorGUI(QMainWindow):
         tiles_y = self.spin_tiles_y.value()
         target_size = self.spin_target_map_size.value()
         if tiles_x <= 0 or tiles_y <= 0:
-            QMessageBox.warning(self, "Invalid Tiles", "Tiles X and Tiles Y must be positive.")
+            QMessageBox.warning(
+                self, "Invalid Tiles", "Tiles X and Tiles Y must be positive."
+            )
             return
 
         ideal_size = min(target_size / tiles_x, target_size / tiles_y)
@@ -1830,14 +1947,16 @@ class TerrainGeneratorGUI(QMainWindow):
 
         # Run generation in background
         map_name = self.txt_map_name.text().strip() or "gui_terrain"
-        layout_nodes, layout_conns, layout_res = self.preview_widget.get_layout_from_editor()
-        
+        layout_nodes, layout_conns, layout_res = (
+            self.preview_widget.get_layout_from_editor()
+        )
+
         self.worker = GenerationWorker(
             self.config_model,
             custom_nodes=layout_nodes if layout_nodes else None,
             custom_connections=layout_conns if layout_conns else None,
             custom_resources=layout_res,
-            output_filename=map_name
+            output_filename=map_name,
         )
         self.worker.finished.connect(self.on_generation_finished)
         self.worker.start()
@@ -1856,6 +1975,7 @@ class TerrainGeneratorGUI(QMainWindow):
             if not auto_copy and custom_folder and Path(custom_folder).exists():
                 try:
                     import shutil
+
                     custom_path = Path(custom_folder)
 
                     vmf_dir = custom_path / "vmf"
@@ -1903,7 +2023,9 @@ class TerrainGeneratorGUI(QMainWindow):
         custom_folder = self.config.get("custom_output_folder", "")
         nodetail = self.config.get("nodetail", False)
 
-        self.compile_worker = CompileWorker(vmf_path, empires_path, auto_copy, custom_folder, nodetail)
+        self.compile_worker = CompileWorker(
+            vmf_path, empires_path, auto_copy, custom_folder, nodetail
+        )
         self.compile_worker.finished.connect(self.on_compile_finished)
         self.compile_worker.start()
 
@@ -1920,7 +2042,14 @@ class TerrainGeneratorGUI(QMainWindow):
 class CompileWorker(QThread):
     finished = Signal(bool, str)
 
-    def __init__(self, vmf_path, empires_path="", auto_copy=True, custom_folder="", nodetail=False):
+    def __init__(
+        self,
+        vmf_path,
+        empires_path="",
+        auto_copy=True,
+        custom_folder="",
+        nodetail=False,
+    ):
         super().__init__()
         self.vmf_path = vmf_path
         self.empires_path = empires_path

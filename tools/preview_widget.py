@@ -38,10 +38,12 @@ else:
 ICONS_DIR = PROJECT_ROOT / "icons"
 from PySide6.QtCore import QByteArray
 
+
 def _load_svg(path):
     with open(path, "rb") as f:
         data = f.read()
     return QSvgRenderer(QByteArray(data))
+
 
 SVG_RENDERERS = {
     "imp": _load_svg(ICONS_DIR / "be base.svg"),
@@ -54,7 +56,9 @@ class VisualFreehandEdge(QGraphicsItem):
     def __init__(self, points, width, start_node=None, end_node=None, parent=None):
         super().__init__(parent)
         self.points = points  # List of QPointF (in scene coords)
-        self.base_points = [p for p in points] # Keep original points for offset calculation
+        self.base_points = [
+            p for p in points
+        ]  # Keep original points for offset calculation
         self.base_width = width
         self.start_node = start_node
         self.end_node = end_node
@@ -86,7 +90,11 @@ class VisualFreehandEdge(QGraphicsItem):
     @property
     def logical_width(self):
         scale = 1.0
-        if self.scene() and self.scene().views() and isinstance(self.scene().views()[0].parent(), MapPreviewWidget):
+        if (
+            self.scene()
+            and self.scene().views()
+            and isinstance(self.scene().views()[0].parent(), MapPreviewWidget)
+        ):
             scale = self.scene().views()[0].parent().global_lane_scale
         return self.base_width * scale
 
@@ -117,8 +125,16 @@ class VisualFreehandEdge(QGraphicsItem):
                     # Very simple linear interpolation of movement
                     if abs(orig_dx) > 0 or abs(orig_dy) > 0:
                         t = i / (len(self.base_points) - 1)
-                        new_x = start_pos.x() + t * dx + (bp.x() - (orig_start.x() + t * orig_dx))
-                        new_y = start_pos.y() + t * dy + (bp.y() - (orig_start.y() + t * orig_dy))
+                        new_x = (
+                            start_pos.x()
+                            + t * dx
+                            + (bp.x() - (orig_start.x() + t * orig_dx))
+                        )
+                        new_y = (
+                            start_pos.y()
+                            + t * dy
+                            + (bp.y() - (orig_start.y() + t * orig_dy))
+                        )
                         new_points.append(QPointF(new_x, new_y))
                     else:
                         new_points.append(bp)
@@ -142,13 +158,19 @@ class VisualFreehandEdge(QGraphicsItem):
         xs = [p.x() for p in self.points]
         ys = [p.y() for p in self.points]
         margin = self.pen.width()
-        return QRectF(min(xs) - margin, min(ys) - margin, max(xs) - min(xs) + 2*margin, max(ys) - min(ys) + 2*margin)
+        return QRectF(
+            min(xs) - margin,
+            min(ys) - margin,
+            max(xs) - min(xs) + 2 * margin,
+            max(ys) - min(ys) + 2 * margin,
+        )
 
     def paint(self, painter, option, widget):
         if len(self.points) < 2:
             return
 
         from PySide6.QtGui import QPainterPath
+
         path = QPainterPath(self.points[0])
         for p in self.points[1:]:
             path.lineTo(p)
@@ -161,6 +183,7 @@ class VisualFreehandEdge(QGraphicsItem):
         # Draw thin crisp outline
         painter.setPen(self.outline_pen)
         painter.drawPath(path)
+
 
 class VisualEdge(QGraphicsLineItem):
     def __init__(self, start_node, end_node, parent=None):
@@ -181,7 +204,7 @@ class VisualEdge(QGraphicsLineItem):
                     scale = parent.global_lane_scale
         except (AttributeError, IndexError):
             pass
-        
+
         pen_w = max(4, (self.base_width * scale) / 25.0)
         pen = QPen(QColor(255, 255, 255, 90), pen_w)
         pen.setCapStyle(Qt.RoundCap)
@@ -190,7 +213,11 @@ class VisualEdge(QGraphicsLineItem):
     @property
     def logical_width(self):
         scale = 1.0
-        if self.scene() and self.scene().views() and isinstance(self.scene().views()[0].parent(), MapPreviewWidget):
+        if (
+            self.scene()
+            and self.scene().views()
+            and isinstance(self.scene().views()[0].parent(), MapPreviewWidget)
+        ):
             scale = self.scene().views()[0].parent().global_lane_scale
         return self.base_width * scale
 
@@ -223,7 +250,7 @@ class VisualNode(QGraphicsEllipseItem):
     def paint(self, painter, option, widget):
         r = 84
         rect = QRectF(-r, -r, r * 2, r * 2)
-        
+
         if self.node_type == ZoneType.RESOURCE:
             if not SVG_RENDERERS["res"].render(painter, rect):
                 # Fallback if SVG fails
@@ -240,7 +267,7 @@ class VisualNode(QGraphicsEllipseItem):
             painter.setPen(QPen(QColor(150, 150, 180), 2))
             painter.setBrush(QBrush(QColor(80, 80, 100, 150)))
             painter.drawEllipse(QRectF(-20, -20, 40, 40))
-            
+
         # Draw clearing radius (only if > 0)
         if self.clear_radius > 0:
             painter.setPen(QPen(QColor(255, 255, 255, 30), 1, Qt.DashLine))
@@ -248,11 +275,20 @@ class VisualNode(QGraphicsEllipseItem):
             r_clear = self.clear_radius
             painter.drawEllipse(QRectF(-r_clear, -r_clear, r_clear * 2, r_clear * 2))
 
+        # Draw lane node radius for bases
+        if self.node_type in (ZoneType.BASE,) and getattr(self, 'lane_radius', 0) > 0:
+            painter.setPen(QPen(QColor(255, 255, 100, 40), 2, Qt.SolidLine))
+            painter.setBrush(Qt.NoBrush)
+            r_lane = self.lane_radius
+            painter.drawEllipse(QRectF(-r_lane, -r_lane, r_lane * 2, r_lane * 2))
+
     def boundingRect(self):
-        if self.clear_radius <= 0:
+        r1 = self.clear_radius if self.clear_radius > 0 else 0
+        r2 = self.lane_radius if self.node_type == ZoneType.BASE and getattr(self, 'lane_radius', 0) > 0 else 0
+        max_r = max(84, r1, r2)
+        if max_r == 84:
             return QRectF(-94, -94, 188, 188)
-        r = max(84, self.clear_radius)
-        return QRectF(-r - 10, -r - 10, r * 2 + 20, r * 2 + 20)
+        return QRectF(-max_r - 10, -max_r - 10, max_r * 2 + 20, max_r * 2 + 20)
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.ItemPositionHasChanged:
@@ -267,7 +303,7 @@ class MapPreviewWidget(QWidget):
     resource_moved = Signal(int, float, float)  # (index, x, y)
     resource_added = Signal(float, float)  # (x, y)
     layout_changed = Signal()  # emitted when nodes/links change to update preview
-    lane_width_changed = Signal(float) # Emits absolute width in units
+    lane_width_changed = Signal(float)  # Emits absolute width in units
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -280,8 +316,8 @@ class MapPreviewWidget(QWidget):
         toolbar_scroll.setFrameShape(QScrollArea.NoFrame)
         toolbar_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         toolbar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        toolbar_scroll.setFixedHeight(40) # Keep it compact
-        
+        toolbar_scroll.setFixedHeight(40)  # Keep it compact
+
         toolbar_widget = QWidget()
         self.tools_row = QHBoxLayout(toolbar_widget)
         self.tools_row.setSpacing(6)
@@ -293,7 +329,9 @@ class MapPreviewWidget(QWidget):
         # Helper to add section labels
         def add_separator(text):
             lbl = QLabel(text)
-            lbl.setStyleSheet("color: #888; font-weight: bold; font-size: 9px; margin-left: 4px; margin-right: 2px;")
+            lbl.setStyleSheet(
+                "color: #888; font-weight: bold; font-size: 9px; margin-left: 4px; margin-right: 2px;"
+            )
             self.tools_row.addWidget(lbl)
 
         # 1. Selection & Manipulation
@@ -313,7 +351,6 @@ class MapPreviewWidget(QWidget):
 
         # 2. Layout
         add_separator("LAYOUT")
-
 
         btn_link = QPushButton("Link")
         btn_link.setCheckable(True)
@@ -364,7 +401,7 @@ class MapPreviewWidget(QWidget):
         # Let's use 7 for Set NF Base
         btn_nf = QPushButton("Set NF")
         btn_nf.setCheckable(True)
-        btn_nf.setObjectName("ToolButtonRed") # NF is typically red in this UI
+        btn_nf.setObjectName("ToolButtonRed")  # NF is typically red in this UI
         self.tool_group.addButton(btn_nf, 7)
         self.tools_row.addWidget(btn_nf)
 
@@ -401,7 +438,9 @@ class MapPreviewWidget(QWidget):
         self.brush_size_slider.setRange(64, 4096)
         self.brush_size_slider.setValue(512)
         self.brush_size_slider.setFixedWidth(80)
-        self.brush_size_slider.valueChanged.connect(lambda v: self.brush_size_label.setText(f"Size: {v}"))
+        self.brush_size_slider.valueChanged.connect(
+            lambda v: self.brush_size_label.setText(f"Size: {v}")
+        )
 
         self.brush_strength_label = QLabel("Str: 50")
         self.brush_strength_label.setStyleSheet("color: #ccc; font-size: 11px;")
@@ -409,7 +448,9 @@ class MapPreviewWidget(QWidget):
         self.brush_strength_slider.setRange(5, 200)
         self.brush_strength_slider.setValue(50)
         self.brush_strength_slider.setFixedWidth(60)
-        self.brush_strength_slider.valueChanged.connect(lambda v: self.brush_strength_label.setText(f"Str: {v}"))
+        self.brush_strength_slider.valueChanged.connect(
+            lambda v: self.brush_strength_label.setText(f"Str: {v}")
+        )
 
         brush_layout.addWidget(self.brush_size_label)
         brush_layout.addWidget(self.brush_size_slider)
@@ -504,7 +545,9 @@ class MapPreviewWidget(QWidget):
         self.origin_x = -4096
         self.origin_y = -4096
 
-        self.scene.setSceneRect(self.origin_x, self.origin_y, self.map_size_x, self.map_size_y)
+        self.scene.setSceneRect(
+            self.origin_x, self.origin_y, self.map_size_x, self.map_size_y
+        )
 
         # In world coordinates
         self.imp_base = None  # (x, y)
@@ -519,7 +562,6 @@ class MapPreviewWidget(QWidget):
 
         self.link_start_node = None
 
-
         self.panning = False
         self.pan_start_pos = QPointF()
 
@@ -531,16 +573,21 @@ class MapPreviewWidget(QWidget):
         self.global_lane_scale = 1.0
 
         # Sculpting state
-        self._base_heights = None      # numpy float64 from pipeline
-        self._height_overlay = None    # numpy float64 additive delta
+        self._base_heights = None  # numpy float64 from pipeline
+        self._height_overlay = None  # numpy float64 additive delta
         self._sculpting = False
+
+        # Clear radii for entity zones
+        self.base_clear_radius = 512
+        self.resource_clear_radius = 256
+        self.lane_node_radius = 512
 
     def draw_grid(self):
         for item in self.grid_items:
             self.scene.removeItem(item)
         self.grid_items.clear()
 
-        grid_pen = QPen(QColor(50, 50, 60, 100)) # Semi-transparent grid
+        grid_pen = QPen(QColor(50, 50, 60, 100))  # Semi-transparent grid
         grid_pen.setWidth(0)
         left = int(self.scene.sceneRect().left())
         right = int(self.scene.sceneRect().right())
@@ -577,7 +624,9 @@ class MapPreviewWidget(QWidget):
         self.map_size_y = size_y
         self.grid_size = max(1, int(tile_size))
 
-        self.scene.setSceneRect(self.origin_x, self.origin_y, self.map_size_x, self.map_size_y)
+        self.scene.setSceneRect(
+            self.origin_x, self.origin_y, self.map_size_x, self.map_size_y
+        )
         self.draw_grid()
         self.update_pixmap()
 
@@ -598,22 +647,42 @@ class MapPreviewWidget(QWidget):
             if hasattr(item, "is_fixed_entity"):
                 self.scene.removeItem(item)
 
+        # Store current radii for new items
+        base_r = getattr(self, "base_clear_radius", 512)
+        res_r = getattr(self, "resource_clear_radius", 256)
+        lane_r = getattr(self, "lane_node_radius", 512)
+
         # A helper class for non-node bases/resources that MapPreviewWidget used to draw natively
         class FixedEntityItem(QGraphicsItem):
-            def __init__(self, x, y, entity_type, index=None, invalid=False, parent=None):
+            def __init__(
+                self,
+                x,
+                y,
+                entity_type,
+                clear_radius=0,
+                lane_radius=0,
+                index=None,
+                invalid=False,
+                parent=None,
+            ):
                 super().__init__(parent)
                 self.x_coord = x
                 self.y_coord = y
                 self.entity_type = entity_type
+                self.clear_radius = clear_radius
+                self.lane_radius = lane_radius
                 self.index = index
                 self.invalid = invalid
                 self.setPos(x, y)
                 self.setZValue(3)
                 self.is_fixed_entity = True
-                self.setFlags(QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemSendsGeometryChanges)
+                self.setFlags(
+                    QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemSendsGeometryChanges
+                )
 
             def boundingRect(self):
-                return QRectF(-90, -90, 180, 180)
+                r = max(84, self.clear_radius) if self.clear_radius > 0 else 84
+                return QRectF(-r - 10, -r - 10, r * 2 + 20, r * 2 + 20)
 
             def itemChange(self, change, value):
                 return super().itemChange(change, value)
@@ -623,16 +692,22 @@ class MapPreviewWidget(QWidget):
                 # Emit only on release to prevent constant synchronous rebuilds while dragging
                 if self.entity_type == "imp":
                     if isinstance(self.scene().views()[0].parent(), MapPreviewWidget):
-                        self.scene().views()[0].parent().base_moved.emit("imp", self.x(), self.y())
+                        self.scene().views()[0].parent().base_moved.emit(
+                            "imp", self.x(), self.y()
+                        )
                 elif self.entity_type == "nf":
                     if isinstance(self.scene().views()[0].parent(), MapPreviewWidget):
-                        self.scene().views()[0].parent().base_moved.emit("nf", self.x(), self.y())
+                        self.scene().views()[0].parent().base_moved.emit(
+                            "nf", self.x(), self.y()
+                        )
                 elif self.entity_type == "res":
                     if isinstance(self.scene().views()[0].parent(), MapPreviewWidget):
                         pw = self.scene().views()[0].parent()
                         old_res_list = list(pw.resources)
                         new_res_list = list(pw.resources)
-                        if self.index is not None and 0 <= self.index < len(new_res_list):
+                        if self.index is not None and 0 <= self.index < len(
+                            new_res_list
+                        ):
                             new_res_list[self.index] = (self.x(), self.y())
                         pw.record_action("set_res", (old_res_list, new_res_list))
                         pw.resources = new_res_list
@@ -640,14 +715,14 @@ class MapPreviewWidget(QWidget):
 
             def paint(self, painter, option, widget):
                 rect = QRectF(-84, -84, 168, 168)
-                
+
                 if self.entity_type == "res":
                     SVG_RENDERERS["res"].render(painter, rect)
                 elif self.entity_type == "imp":
                     SVG_RENDERERS["imp"].render(painter, rect)
                 elif self.entity_type == "nf":
                     SVG_RENDERERS["nf"].render(painter, rect)
-                
+
                 if self.invalid:
                     painter.setPen(QPen(QColor(255, 50, 50), 3))
                     painter.setBrush(Qt.NoBrush)
@@ -655,18 +730,57 @@ class MapPreviewWidget(QWidget):
                     painter.setPen(QColor(255, 50, 50))
                     painter.drawText(0, -95, "⚠")
 
-        if self.imp_base and self.imp_base[0] is not None and self.imp_base[1] is not None:
+                # Draw clearance radius
+                if self.clear_radius > 0:
+                    painter.setPen(QPen(QColor(255, 255, 255, 30), 1, Qt.DashLine))
+                    painter.setBrush(QBrush(QColor(255, 255, 255, 5)))
+                    r_clear = self.clear_radius
+                    painter.drawEllipse(
+                        QRectF(-r_clear, -r_clear, r_clear * 2, r_clear * 2)
+                    )
+
+        if (
+            self.imp_base
+            and self.imp_base[0] is not None
+            and self.imp_base[1] is not None
+        ):
             invalid = "imp" in self.invalid_entities
-            self.scene.addItem(FixedEntityItem(self.imp_base[0], self.imp_base[1], "imp", invalid=invalid))
+            self.scene.addItem(
+                FixedEntityItem(
+                    self.imp_base[0],
+                    self.imp_base[1],
+                    "imp",
+                    clear_radius=self.base_clear_radius,
+                    lane_radius=self.lane_node_radius,
+                    invalid=invalid,
+                )
+            )
 
         if self.nf_base and self.nf_base[0] is not None and self.nf_base[1] is not None:
             invalid = "nf" in self.invalid_entities
-            self.scene.addItem(FixedEntityItem(self.nf_base[0], self.nf_base[1], "nf", invalid=invalid))
+            self.scene.addItem(
+                FixedEntityItem(
+                    self.nf_base[0],
+                    self.nf_base[1],
+                    "nf",
+                    clear_radius=self.base_clear_radius,
+                    lane_radius=self.lane_node_radius,
+                    invalid=invalid,
+                )
+            )
 
         for i, res in enumerate(self.resources):
             invalid = str(i) in self.invalid_entities
-            self.scene.addItem(FixedEntityItem(res[0], res[1], "res", index=i, invalid=invalid))
-
+            self.scene.addItem(
+                FixedEntityItem(
+                    res[0],
+                    res[1],
+                    "res",
+                    clear_radius=self.resource_clear_radius,
+                    index=i,
+                    invalid=invalid,
+                )
+            )
 
     def update_pixmap(self):
         if self.map_image:
@@ -680,6 +794,7 @@ class MapPreviewWidget(QWidget):
             scale_y = self.map_size_y / max(1, pixmap.height())
 
             from PySide6.QtGui import QTransform
+
             self.map_pixmap_item.setTransform(QTransform.fromScale(scale_x, scale_y))
 
             self.map_pixmap_item.setPos(self.origin_x, self.origin_y)
@@ -726,7 +841,7 @@ class MapPreviewWidget(QWidget):
         cols = np.arange(c_min, c_max)
         cc, rr = np.meshgrid(cols, rows)
         dist_sq = (cc - gx) ** 2 + (rr - gy) ** 2
-        radius_sq = brush_r_px ** 2
+        radius_sq = brush_r_px**2
         mask = dist_sq < radius_sq
         falloff = np.exp(-dist_sq / (radius_sq * 0.3)) * mask
 
@@ -757,7 +872,9 @@ class MapPreviewWidget(QWidget):
         self._preview_img_data = img_data
         qimg = QImage(
             self._preview_img_data.data,
-            w, h, w,
+            w,
+            h,
+            w,
             QImage.Format_Grayscale8,
         )
         self.map_image = qimg
@@ -808,12 +925,19 @@ class MapPreviewWidget(QWidget):
             if item == self.map_pixmap_item:
                 continue
             # If it's a grid line (usually QGraphicsLineItem but not VisualEdge)
-            if hasattr(self, 'grid_items') and item in self.grid_items:
+            if hasattr(self, "grid_items") and item in self.grid_items:
                 continue
 
-            if isinstance(item, (VisualNode, VisualEdge, VisualFreehandEdge)) or hasattr(item, "is_fixed_entity"):
+            if isinstance(
+                item, (VisualNode, VisualEdge, VisualFreehandEdge)
+            ) or hasattr(item, "is_fixed_entity"):
                 items_to_remove.append(item)
-            elif type(item).__name__ in ["VisualNode", "VisualEdge", "VisualFreehandEdge", "FixedEntityItem"]:
+            elif type(item).__name__ in [
+                "VisualNode",
+                "VisualEdge",
+                "VisualFreehandEdge",
+                "FixedEntityItem",
+            ]:
                 items_to_remove.append(item)
 
         old_state = {
@@ -821,7 +945,9 @@ class MapPreviewWidget(QWidget):
             "nf": self.nf_base,
             "res": list(self.resources),
             "scene_items": list(items_to_remove),
-            "overlay": self._height_overlay.copy() if self._height_overlay is not None else None
+            "overlay": self._height_overlay.copy()
+            if self._height_overlay is not None
+            else None,
         }
 
         self.history.append(("clear_all", old_state))
@@ -857,11 +983,16 @@ class MapPreviewWidget(QWidget):
         self.layout_changed.emit()
 
     def undo(self):
-        if not self.history: return
+        if not self.history:
+            return
         action, item = self.history.pop()
 
         if action == "sculpt":
-            current = self._height_overlay.copy() if self._height_overlay is not None else None
+            current = (
+                self._height_overlay.copy()
+                if self._height_overlay is not None
+                else None
+            )
             self.redo_history.append(("sculpt", current))
             if self._height_overlay is not None and item is not None:
                 self._height_overlay[:] = item
@@ -910,18 +1041,31 @@ class MapPreviewWidget(QWidget):
                 self._rerender_heightmap()
             self.redo_history.append(("clear_all", old_state))
             self.redraw_fixed_entities()
-            imp_emit = self.imp_base if self.imp_base and self.imp_base[0] is not None else (0.0, 0.0)
-            nf_emit = self.nf_base if self.nf_base and self.nf_base[0] is not None else (0.0, 0.0)
+            imp_emit = (
+                self.imp_base
+                if self.imp_base and self.imp_base[0] is not None
+                else (0.0, 0.0)
+            )
+            nf_emit = (
+                self.nf_base
+                if self.nf_base and self.nf_base[0] is not None
+                else (0.0, 0.0)
+            )
             self.base_moved.emit("imp", imp_emit[0], imp_emit[1])
             self.base_moved.emit("nf", nf_emit[0], nf_emit[1])
         self.layout_changed.emit()
 
     def redo(self):
-        if not self.redo_history: return
+        if not self.redo_history:
+            return
         action, item = self.redo_history.pop()
 
         if action == "sculpt":
-            current = self._height_overlay.copy() if self._height_overlay is not None else None
+            current = (
+                self._height_overlay.copy()
+                if self._height_overlay is not None
+                else None
+            )
             self.history.append(("sculpt", current))
             if self._height_overlay is not None and item is not None:
                 self._height_overlay[:] = item
@@ -990,23 +1134,25 @@ class MapPreviewWidget(QWidget):
 
         scene_pos = self.view.mapToScene(event.pos())
 
-        if self.current_mode == 2: # BE Base
+        if self.current_mode == 2:  # BE Base
             old_val = self.imp_base
             new_val = (scene_pos.x(), scene_pos.y())
             self.record_action("set_imp", (old_val, new_val))
             self.imp_base = new_val
             self.redraw_fixed_entities()
             self.base_moved.emit("imp", scene_pos.x(), scene_pos.y())
-        elif self.current_mode == 7: # NF Base
+        elif self.current_mode == 7:  # NF Base
             old_val = self.nf_base
             new_val = (scene_pos.x(), scene_pos.y())
             self.record_action("set_nf", (old_val, new_val))
             self.nf_base = new_val
             self.redraw_fixed_entities()
             self.base_moved.emit("nf", scene_pos.x(), scene_pos.y())
-        elif self.current_mode == 5: # Remove
+        elif self.current_mode == 5:  # Remove
             item = self.scene.itemAt(scene_pos, self.view.transform())
-            if isinstance(item, (VisualNode, VisualEdge, VisualFreehandEdge)) or type(item).__name__ in ["VisualNode", "VisualEdge", "VisualFreehandEdge"]:
+            if isinstance(item, (VisualNode, VisualEdge, VisualFreehandEdge)) or type(
+                item
+            ).__name__ in ["VisualNode", "VisualEdge", "VisualFreehandEdge"]:
                 items_to_remove = [item]
                 if isinstance(item, VisualNode) or type(item).__name__ == "VisualNode":
                     for edge in getattr(item, "edges", []):
@@ -1039,7 +1185,7 @@ class MapPreviewWidget(QWidget):
                     self.redraw_fixed_entities()
                     # Trigger an update by emitting something generic, or just rely on layout_changed
                     self.layout_changed.emit()
-        elif self.current_mode == 3: # Add Resource
+        elif self.current_mode == 3:  # Add Resource
             old_res_list = list(self.resources)
             new_res_list = list(self.resources)
             new_res_list.append((scene_pos.x(), scene_pos.y()))
@@ -1050,18 +1196,24 @@ class MapPreviewWidget(QWidget):
         elif self.current_mode in (8, 9):  # Raise / Lower
             self._sculpting = True
             # Save overlay snapshot for undo
-            snapshot = self._height_overlay.copy() if self._height_overlay is not None else None
+            snapshot = (
+                self._height_overlay.copy()
+                if self._height_overlay is not None
+                else None
+            )
             self.history.append(("sculpt", snapshot))
             self.redo_history.clear()
             self._apply_brush(scene_pos.x(), scene_pos.y(), self.current_mode == 8)
-        elif self.current_mode == 6: # Draw Lane
+        elif self.current_mode == 6:  # Draw Lane
             self.drawing_lane = True
             self.current_freehand_path = [scene_pos]
             item = self.scene.itemAt(scene_pos, self.view.transform())
             self.freehand_start_node = item if isinstance(item, VisualNode) else None
 
             # Temporary item to draw while dragging
-            self.current_freehand_item = VisualFreehandEdge(self.current_freehand_path, self.current_base_width)
+            self.current_freehand_item = VisualFreehandEdge(
+                self.current_freehand_path, self.current_base_width
+            )
             self.scene.addItem(self.current_freehand_item)
 
         elif self.current_mode == 4:
@@ -1072,8 +1224,14 @@ class MapPreviewWidget(QWidget):
                 else:
                     if item != self.link_start_node:
                         existing = any(
-                            (e.start_node == self.link_start_node and e.end_node == item)
-                            or (e.start_node == item and e.end_node == self.link_start_node)
+                            (
+                                e.start_node == self.link_start_node
+                                and e.end_node == item
+                            )
+                            or (
+                                e.start_node == item
+                                and e.end_node == self.link_start_node
+                            )
                             for e in self.link_start_node.edges
                         )
                         if not existing:
@@ -1136,7 +1294,7 @@ class MapPreviewWidget(QWidget):
                     list(self.current_freehand_path),
                     self.current_base_width,
                     start_node=self.freehand_start_node,
-                    end_node=end_node
+                    end_node=end_node,
                 )
                 self.scene.addItem(final_edge)
                 self.record_action("add", final_edge)
@@ -1193,10 +1351,17 @@ class MapPreviewWidget(QWidget):
                 en = node_map.get(item.end_node)
 
                 if not sn and item.points:
-                    sn = LayoutNode(item.points[0].x(), item.points[0].y(), 100, ZoneType.MAIN_LANE)
+                    sn = LayoutNode(
+                        item.points[0].x(), item.points[0].y(), 100, ZoneType.MAIN_LANE
+                    )
                     nodes.append(sn)
                 if not en and item.points:
-                    en = LayoutNode(item.points[-1].x(), item.points[-1].y(), 100, ZoneType.MAIN_LANE)
+                    en = LayoutNode(
+                        item.points[-1].x(),
+                        item.points[-1].y(),
+                        100,
+                        ZoneType.MAIN_LANE,
+                    )
                     nodes.append(en)
 
                 path_points = [(p.x(), p.y()) for p in item.points]
@@ -1205,9 +1370,43 @@ class MapPreviewWidget(QWidget):
                     end_node=en,
                     width=item.logical_width,
                     type=ZoneType.MAIN_LANE,
-                    path_points=path_points
+                    path_points=path_points,
                 )
                 connections.append(conn)
 
         # Resources are now exclusively tracked by self.resources, not VisualNodes
         return nodes, connections, list(self.resources)
+
+    def update_clear_radii(self, base_radius, resource_radius, lane_radius=None):
+        """Update clear_radius on all VisualNode and FixedEntityItem items."""
+        if lane_radius is not None:
+            self.lane_node_radius = lane_radius
+            
+        for item in self.scene.items():
+            if isinstance(item, VisualNode):
+                if item.node_type == ZoneType.BASE:
+                    if item.clear_radius != base_radius or getattr(item, 'lane_radius', -1) != lane_radius:
+                        item.prepareGeometryChange()
+                        item.clear_radius = base_radius
+                        if lane_radius is not None:
+                            item.lane_radius = lane_radius
+                        item.update()
+                elif item.node_type in (ZoneType.RESOURCE, ZoneType.WILDERNESS):
+                    if item.clear_radius != resource_radius:
+                        item.prepareGeometryChange()
+                        item.clear_radius = resource_radius
+                        item.update()
+            elif hasattr(item, "is_fixed_entity") and hasattr(item, "clear_radius"):
+                # FixedEntityItem: update based on entity_type
+                if item.entity_type in ("imp", "nf"):
+                    if item.clear_radius != base_radius or getattr(item, 'lane_radius', -1) != lane_radius:
+                        item.prepareGeometryChange()
+                        item.clear_radius = base_radius
+                        if lane_radius is not None:
+                            item.lane_radius = lane_radius
+                        item.update()
+                elif item.entity_type == "res":
+                    if item.clear_radius != resource_radius:
+                        item.prepareGeometryChange()
+                        item.clear_radius = resource_radius
+                        item.update()

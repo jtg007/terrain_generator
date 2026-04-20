@@ -23,14 +23,27 @@ import sys
 from typing import List, Tuple, Optional
 
 if getattr(sys, "frozen", False):
-    from terrain_spec import TerrainSpec, HeightGrid, TerrainCell, UnderlayBrush, ZoneType, LayoutNode, LayoutConnection
+    from terrain_spec import (
+        TerrainSpec,
+        HeightGrid,
+        TerrainCell,
+        UnderlayBrush,
+        ZoneType,
+        LayoutNode,
+        LayoutConnection,
+    )
 else:
-    from src.terrain_spec import TerrainSpec, HeightGrid, TerrainCell, UnderlayBrush, ZoneType, LayoutNode, LayoutConnection
+    from src.terrain_spec import (
+        TerrainSpec,
+        HeightGrid,
+        TerrainCell,
+        UnderlayBrush,
+        ZoneType,
+        LayoutNode,
+        LayoutConnection,
+    )
 
 from PIL import Image, ImageOps
-
-
-
 
 
 def generate_vertex_grid(spec: TerrainSpec) -> HeightGrid:
@@ -116,7 +129,16 @@ def generate_strategic_layout(
     import random
 
     rng = random.Random(spec.seed)
-    archetypes = ["central_gorge", "valley", "two_lane", "island", "classic_cross", "peninsula", "archipelago", "delta"]
+    archetypes = [
+        "central_gorge",
+        "valley",
+        "two_lane",
+        "island",
+        "classic_cross",
+        "peninsula",
+        "archipelago",
+        "delta",
+    ]
     if spec.topology in archetypes:
         topology = spec.topology
     else:
@@ -130,7 +152,8 @@ def generate_strategic_layout(
     imp_x, imp_y = spec.default_imp_base()
     nf_x, nf_y = spec.default_nf_base()
 
-    base_radius = spec.base_clear_radius
+    # Use lane_node_radius for strategic layout nodes (separate from terrain flatten radius)
+    base_radius = spec.lane_node_radius
     map_min_dim = min(spec.size_x, spec.size_y)
 
     imp_base = LayoutNode(imp_x, imp_y, base_radius, ZoneType.BASE)
@@ -408,8 +431,12 @@ def generate_strategic_layout(
         mid_x = (imp_x + nf_x) / 2 + perp_dx * map_min_dim * rng.uniform(-0.1, 0.1)
         mid_y = (imp_y + nf_y) / 2 + perp_dy * map_min_dim * rng.uniform(-0.1, 0.1)
         choke1 = LayoutNode(
-            imp_x + lane_dx * lane_len * 0.3 + perp_dx * map_min_dim * rng.uniform(-0.15, 0.15),
-            imp_y + lane_dy * lane_len * 0.3 + perp_dy * map_min_dim * rng.uniform(-0.15, 0.15),
+            imp_x
+            + lane_dx * lane_len * 0.3
+            + perp_dx * map_min_dim * rng.uniform(-0.15, 0.15),
+            imp_y
+            + lane_dy * lane_len * 0.3
+            + perp_dy * map_min_dim * rng.uniform(-0.15, 0.15),
             choke_length,
             ZoneType.CHOKEPOINT,
         )
@@ -420,24 +447,36 @@ def generate_strategic_layout(
             ZoneType.CHOKEPOINT,
         )
         choke3 = LayoutNode(
-            nf_x - lane_dx * lane_len * 0.3 + perp_dx * map_min_dim * rng.uniform(-0.15, 0.15),
-            nf_y - lane_dy * lane_len * 0.3 + perp_dy * map_min_dim * rng.uniform(-0.15, 0.15),
+            nf_x
+            - lane_dx * lane_len * 0.3
+            + perp_dx * map_min_dim * rng.uniform(-0.15, 0.15),
+            nf_y
+            - lane_dy * lane_len * 0.3
+            + perp_dy * map_min_dim * rng.uniform(-0.15, 0.15),
             choke_length,
             ZoneType.CHOKEPOINT,
         )
         nodes.extend([choke1, choke2, choke3])
 
         connections.append(
-            create_connection_path(imp_base, choke1, lane_width, ZoneType.MAIN_LANE, spec)
+            create_connection_path(
+                imp_base, choke1, lane_width, ZoneType.MAIN_LANE, spec
+            )
         )
         connections.append(
-            create_connection_path(choke1, choke2, lane_width, ZoneType.CHOKEPOINT, spec)
+            create_connection_path(
+                choke1, choke2, lane_width, ZoneType.CHOKEPOINT, spec
+            )
         )
         connections.append(
-            create_connection_path(choke2, choke3, lane_width, ZoneType.CHOKEPOINT, spec)
+            create_connection_path(
+                choke2, choke3, lane_width, ZoneType.CHOKEPOINT, spec
+            )
         )
         connections.append(
-            create_connection_path(choke3, nf_base, lane_width, ZoneType.MAIN_LANE, spec)
+            create_connection_path(
+                choke3, nf_base, lane_width, ZoneType.MAIN_LANE, spec
+            )
         )
 
         # Add side vehicle areas
@@ -457,17 +496,25 @@ def generate_strategic_layout(
         nodes.extend([veh1, veh2])
 
         connections.append(
-            create_connection_path(choke1, veh1, lane_width * 0.6, ZoneType.SIDE_ROUTE, spec)
+            create_connection_path(
+                choke1, veh1, lane_width * 0.6, ZoneType.SIDE_ROUTE, spec
+            )
         )
         connections.append(
-            create_connection_path(choke3, veh2, lane_width * 0.6, ZoneType.SIDE_ROUTE, spec)
+            create_connection_path(
+                choke3, veh2, lane_width * 0.6, ZoneType.SIDE_ROUTE, spec
+            )
         )
 
     elif topology == "archipelago":
         # Archipelago: multiple small islands with connections
         island1 = LayoutNode(
-            imp_x + lane_dx * lane_len * 0.25 + perp_dx * map_min_dim * rng.uniform(-0.1, 0.1),
-            imp_y + lane_dy * lane_len * 0.25 + perp_dy * map_min_dim * rng.uniform(-0.1, 0.1),
+            imp_x
+            + lane_dx * lane_len * 0.25
+            + perp_dx * map_min_dim * rng.uniform(-0.1, 0.1),
+            imp_y
+            + lane_dy * lane_len * 0.25
+            + perp_dy * map_min_dim * rng.uniform(-0.1, 0.1),
             veh_radius * 0.6,
             ZoneType.VEHICLE_OPEN,
         )
@@ -478,8 +525,12 @@ def generate_strategic_layout(
             ZoneType.VEHICLE_OPEN,
         )
         island3 = LayoutNode(
-            nf_x - lane_dx * lane_len * 0.25 + perp_dx * map_min_dim * rng.uniform(-0.1, 0.1),
-            nf_y - lane_dy * lane_len * 0.25 + perp_dy * map_min_dim * rng.uniform(-0.1, 0.1),
+            nf_x
+            - lane_dx * lane_len * 0.25
+            + perp_dx * map_min_dim * rng.uniform(-0.1, 0.1),
+            nf_y
+            - lane_dy * lane_len * 0.25
+            + perp_dy * map_min_dim * rng.uniform(-0.1, 0.1),
             veh_radius * 0.6,
             ZoneType.VEHICLE_OPEN,
         )
@@ -493,19 +544,29 @@ def generate_strategic_layout(
 
         # Create a network of connections
         connections.append(
-            create_connection_path(imp_base, island1, lane_width * 0.8, ZoneType.MAIN_LANE, spec)
+            create_connection_path(
+                imp_base, island1, lane_width * 0.8, ZoneType.MAIN_LANE, spec
+            )
         )
         connections.append(
-            create_connection_path(island1, island2, lane_width * 0.7, ZoneType.MAIN_LANE, spec)
+            create_connection_path(
+                island1, island2, lane_width * 0.7, ZoneType.MAIN_LANE, spec
+            )
         )
         connections.append(
-            create_connection_path(island2, island3, lane_width * 0.7, ZoneType.MAIN_LANE, spec)
+            create_connection_path(
+                island2, island3, lane_width * 0.7, ZoneType.MAIN_LANE, spec
+            )
         )
         connections.append(
-            create_connection_path(island3, nf_base, lane_width * 0.8, ZoneType.MAIN_LANE, spec)
+            create_connection_path(
+                island3, nf_base, lane_width * 0.8, ZoneType.MAIN_LANE, spec
+            )
         )
         connections.append(
-            create_connection_path(island2, island4, lane_width * 0.6, ZoneType.SIDE_ROUTE, spec)
+            create_connection_path(
+                island2, island4, lane_width * 0.6, ZoneType.SIDE_ROUTE, spec
+            )
         )
 
     elif topology == "delta":
@@ -526,23 +587,39 @@ def generate_strategic_layout(
             )
             nodes.append(branch_choke)
             connections.append(
-                create_connection_path(center_node, branch_choke, lane_width * 0.8, ZoneType.MAIN_LANE, spec)
+                create_connection_path(
+                    center_node,
+                    branch_choke,
+                    lane_width * 0.8,
+                    ZoneType.MAIN_LANE,
+                    spec,
+                )
             )
 
         # Connect bases to nearest branches
-        if (center_x - imp_x) ** 2 + (center_y - imp_y) ** 2 < (center_x - nf_x) ** 2 + (center_y - nf_y) ** 2:
+        if (center_x - imp_x) ** 2 + (center_y - imp_y) ** 2 < (
+            center_x - nf_x
+        ) ** 2 + (center_y - nf_y) ** 2:
             connections.append(
-                create_connection_path(imp_base, center_node, lane_width, ZoneType.MAIN_LANE, spec)
+                create_connection_path(
+                    imp_base, center_node, lane_width, ZoneType.MAIN_LANE, spec
+                )
             )
             connections.append(
-                create_connection_path(center_node, nf_base, lane_width, ZoneType.MAIN_LANE, spec)
+                create_connection_path(
+                    center_node, nf_base, lane_width, ZoneType.MAIN_LANE, spec
+                )
             )
         else:
             connections.append(
-                create_connection_path(nf_base, center_node, lane_width, ZoneType.MAIN_LANE, spec)
+                create_connection_path(
+                    nf_base, center_node, lane_width, ZoneType.MAIN_LANE, spec
+                )
             )
             connections.append(
-                create_connection_path(center_node, imp_base, lane_width, ZoneType.MAIN_LANE, spec)
+                create_connection_path(
+                    center_node, imp_base, lane_width, ZoneType.MAIN_LANE, spec
+                )
             )
 
         # Add side vehicle areas on branches
@@ -640,7 +717,7 @@ def generate_playability_mask(
 
     # 1. Evaluate Nodes (BASE, VEHICLE_OPEN): smooth ramp
     for node in nodes:
-        if spec.base_clear_radius <= 0 and node.type == ZoneType.BASE:
+        if spec.lane_node_radius <= 0 and node.type == ZoneType.BASE:
             continue
         dist_grid = np.sqrt((WX - node.x) ** 2 + (WY - node.y) ** 2)
         if node.type in (ZoneType.BASE, ZoneType.VEHICLE_OPEN):
@@ -650,16 +727,19 @@ def generate_playability_mask(
 
     # 2. Evaluate Polyline Connections: hard binary
     for conn in connections:
-        # Skip connections from/to base nodes when base_clear_radius is 0
-        if spec.base_clear_radius <= 0 and conn.start_node.type == ZoneType.BASE:
+        # Skip connections from/to base nodes when lane_node_radius is 0
+        if spec.lane_node_radius <= 0 and conn.start_node.type == ZoneType.BASE:
             continue
-        if spec.base_clear_radius <= 0 and conn.end_node.type == ZoneType.BASE:
+        if spec.lane_node_radius <= 0 and conn.end_node.type == ZoneType.BASE:
             continue
         min_dist_grid = np.full((rows, cols), np.inf)
 
         pts = conn.path_points
         if not pts:
-            pts = [(conn.start_node.x, conn.start_node.y), (conn.end_node.x, conn.end_node.y)]
+            pts = [
+                (conn.start_node.x, conn.start_node.y),
+                (conn.end_node.x, conn.end_node.y),
+            ]
 
         for i in range(len(pts) - 1):
             ax, ay = pts[i]
@@ -845,8 +925,6 @@ def smooth_heights(grid: HeightGrid, iterations: int = 1) -> HeightGrid:
     return grid
 
 
-
-
 def flatten_base_areas(
     grid: HeightGrid,
     spec: "TerrainSpec",
@@ -944,8 +1022,8 @@ def flatten_base_areas(
 
     avg_height = spec.terrain_max_height * 0.15  # Fallback for resource nodes
     # Flatten resource nodes
-    if spec.base_clear_radius > 0 and spec.custom_resources:
-        res_radius = spec.base_clear_radius * 0.5
+    if spec.resource_clear_radius > 0 and spec.custom_resources:
+        res_radius = spec.resource_clear_radius
         res_flatness = spec.base_flatness * 0.6
         for res_x, res_y in spec.custom_resources:
             # First, calculate local average height for this resource
@@ -1544,7 +1622,9 @@ def get_cell_alphas(
     return alphas
 
 
-def export_minimap(spec: TerrainSpec, grid: HeightGrid, map_name: str, output_dir: str) -> None:
+def export_minimap(
+    spec: TerrainSpec, grid: HeightGrid, map_name: str, output_dir: str
+) -> None:
     """
     Exports a minimap texture combining heights (grayscale) and playability mask.
     Saves as 1024x1024 .vtf and creates corresponding .vmt file.
@@ -1574,36 +1654,55 @@ def export_minimap(spec: TerrainSpec, grid: HeightGrid, map_name: str, output_di
         shading = img_rgb.astype(np.float32)
         tint_color = np.array([200.0, 180.0, 140.0], dtype=np.float32)
         tinted_shading = shading * (tint_color / 255.0)
-        
+
         # Tint slightly brighter where mask > 0.1
         mask_clip = np.clip(mask, 0.0, 1.0)
         alpha = mask_clip[:, :, np.newaxis] * 0.6
-        
+
         final_rgb = shading * (1.0 - alpha) + tinted_shading * alpha
         img_rgb = np.clip(final_rgb, 0, 255).astype(np.uint8)
 
     out_folder = Path(output_dir)
     out_folder.mkdir(parents=True, exist_ok=True)
-    
+
     # Generate 1024x1024 image
     img = Image.fromarray(img_rgb, mode="RGB")
     img = img.resize((1024, 1024), Image.LANCZOS)
-    
+
     # Native VTF Export (v7.2, BGR888)
     bgr_data = np.array(img)[..., ::-1].copy()
-    
+
     header = struct.pack(
         "<4s 2I I 2H I 2H 4s 3f 4s f I B i 2B H",
-        b"VTF\0", 7, 2, 80, 1024, 1024, 0x0100 | 0x0200 | 0x2000, 1, 0,
-        b"\0\0\0\0", 0.0, 0.0, 0.0, b"\0\0\0\0", 1.0, 3, 1, -1, 0, 0, 1
+        b"VTF\0",
+        7,
+        2,
+        80,
+        1024,
+        1024,
+        0x0100 | 0x0200 | 0x2000,
+        1,
+        0,
+        b"\0\0\0\0",
+        0.0,
+        0.0,
+        0.0,
+        b"\0\0\0\0",
+        1.0,
+        3,
+        1,
+        -1,
+        0,
+        0,
+        1,
     )
     header += b"\0" * 15  # Padding to 80 bytes
-    
+
     vtf_path = out_folder / f"{map_name}.vtf"
     with open(vtf_path, "wb") as f:
         f.write(header)
         f.write(bgr_data.tobytes())
-    
+
     vmt_path = out_folder / f"{map_name}.vmt"
     vmt_content = f""""UnlitGeneric"
 {{
@@ -1615,11 +1714,18 @@ def export_minimap(spec: TerrainSpec, grid: HeightGrid, map_name: str, output_di
     "%keywords" "empires"
 }}"""
     vmt_path.write_text(vmt_content)
-    
-    print("Minimap generated. For your Empires map script, use Top-Left: (0, 0) and Bottom-Right: (1024, 1024).")
+
+    print(
+        "Minimap generated. For your Empires map script, use Top-Left: (0, 0) and Bottom-Right: (1024, 1024)."
+    )
 
 
-def run_pipeline(spec: TerrainSpec, map_name: Optional[str] = None, output_dir: Optional[str] = None, skip_layout_validation: bool = False) -> dict:
+def run_pipeline(
+    spec: TerrainSpec,
+    map_name: Optional[str] = None,
+    output_dir: Optional[str] = None,
+    skip_layout_validation: bool = False,
+) -> dict:
     """
     Run the complete terrain generation pipeline.
 
@@ -1649,17 +1755,22 @@ def run_pipeline(spec: TerrainSpec, map_name: Optional[str] = None, output_dir: 
         print(f"  Step 2: Loading custom heightmap from {spec.custom_image_path}")
         grid = load_custom_heights(spec, grid)
     else:
-        print("  Step 2a: Generate playability mask (Smoothstep distance field)")
-        nodes, connections = generate_strategic_layout(spec)
-        if spec.custom_layout_nodes is not None:
-            nodes.extend(spec.custom_layout_nodes)
-        if spec.custom_layout_connections is not None:
-            connections.extend(spec.custom_layout_connections)
-        hard_mask = generate_playability_mask(
-            spec, grid.rows, grid.cols, nodes, connections
-        )
-        
-        grid.playability_mask = hard_mask
+        if spec.generate_lanes:
+            print("  Step 2a: Generate playability mask (Smoothstep distance field)")
+            nodes, connections = generate_strategic_layout(spec)
+            if spec.custom_layout_nodes is not None:
+                nodes.extend(spec.custom_layout_nodes)
+            if spec.custom_layout_connections is not None:
+                connections.extend(spec.custom_layout_connections)
+            hard_mask = generate_playability_mask(
+                spec, grid.rows, grid.cols, nodes, connections
+            )
+            grid.playability_mask = hard_mask
+        else:
+            print(
+                "  Step 2a: Skipping strategic lane generation (generate_lanes=False)"
+            )
+            grid.playability_mask = None
 
         print(
             f"  Step 2c: Generate heights with fBm (seed={spec.seed}, octaves={spec.noise_octaves})"

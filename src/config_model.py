@@ -49,6 +49,9 @@ class GUIConfigModel:
     # Base flattening settings
     base_clear_radius: int = 512
     base_flatness: float = 0.8
+    resource_clear_radius: int = 256
+    lane_node_radius: int = 512
+    generate_lanes: bool = True
 
     # Spawn settings
     disable_commander: bool = False
@@ -113,17 +116,21 @@ class GUIConfigModel:
         # Layout check
         try:
             # Compile-safe map extent check is done above.
-            
+
             # Use minimal spec for layout validation
             origin_x = int(-self.map_size_x / 2)
             origin_y = int(-self.map_size_y / 2)
-            
+
             spec = TerrainSpec(
                 origin_x=origin_x,
                 origin_y=origin_y,
                 size_x=self.map_size_x,
                 size_y=self.map_size_y,
                 base_clear_radius=self.base_clear_radius,
+                base_flatness=self.base_flatness,
+                resource_clear_radius=self.resource_clear_radius,
+                lane_node_radius=self.lane_node_radius,
+                generate_lanes=self.generate_lanes,
                 custom_imp_base_x=self.custom_imp_base_x,
                 custom_imp_base_y=self.custom_imp_base_y,
                 custom_nf_base_x=self.custom_nf_base_x,
@@ -209,6 +216,9 @@ class GUIConfigModel:
             custom_image_path=self.custom_image_path,
             base_clear_radius=self.base_clear_radius,
             base_flatness=self.base_flatness,
+            resource_clear_radius=self.resource_clear_radius,
+            lane_node_radius=self.lane_node_radius,
+            generate_lanes=self.generate_lanes,
             disable_commander=self.disable_commander,
             disable_buildings=self.disable_buildings,
             disable_resource_nodes=self.disable_resource_nodes,

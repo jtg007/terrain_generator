@@ -2,8 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.3] - 2026-04-20
+### UI & Pipeline
+- Decoupled `Lane Node Radius` from `Base Clear Radius`
+- Added `Lane Node Radius` slider to control strategic node size independently from terrain flattening
+- Removed "Generate strategic lanes" checkbox (lanes are now controlled via node radius)
+- Updated `MapPreviewWidget` to visually render the `Lane Node Radius` as a separate indicator for bases
+- Updated terrain pipeline to correctly use `lane_node_radius` for playability mask calculations
+
 ## [0.9.2] - 2026-04-20
 ### UI & Sizing
+- Added separate sliders for `Clear Radius` (base areas) and `Resource Clear` (resource nodes)
+- `Clear Radius` now only controls base area flattening
+- Added `Resource Clear` slider (default: 256) to independently control resource node clearing radius
+
 - Added `Tile Size` control in `MAP DIMENSIONS` and wired it through generation and preview
 - Added `Target Size` + `Auto Tile Size` calculator with safe clamping and 64-unit snapping
 - Added `Size Help` button with map-size and displacement-limit guidance

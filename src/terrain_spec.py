@@ -8,6 +8,7 @@ Core data structures for compile-safe displacement terrain generation.
 from dataclasses import dataclass
 from typing import List, Tuple, Dict, Any, Optional
 
+
 class ZoneType:
     BASE = "base_zone"
     MAIN_LANE = "main_lane_zone"
@@ -17,12 +18,14 @@ class ZoneType:
     WILDERNESS = "wilderness_zone"
     RESOURCE = "resource_zone"
 
+
 @dataclass
 class LayoutNode:
     x: float
     y: float
     radius: float
     type: str  # ZoneType
+
 
 @dataclass
 class LayoutConnection:
@@ -31,6 +34,7 @@ class LayoutConnection:
     width: float
     type: str  # 'main_lane', 'side_lane', 'chokepoint_lane'
     path_points: Optional[List[Tuple[float, float]]] = None
+
 
 @dataclass
 class TerrainSpec:
@@ -74,6 +78,9 @@ class TerrainSpec:
 
     base_clear_radius: int = 512
     base_flatness: float = 0.8
+    resource_clear_radius: int = 256
+    lane_node_radius: int = 512
+    generate_lanes: bool = True
 
     # Spawn settings
     disable_commander: bool = False
