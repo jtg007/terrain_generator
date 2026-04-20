@@ -74,8 +74,6 @@ class TerrainSpec:
 
     base_clear_radius: int = 512
     base_flatness: float = 0.8
-    center_flatten: float = 0.0
-    center_flatten_radius: float = 0.5
 
     # Spawn settings
     disable_commander: bool = False

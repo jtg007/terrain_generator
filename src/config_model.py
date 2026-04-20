@@ -44,10 +44,6 @@ class GUIConfigModel:
     base_clear_radius: int = 512
     base_flatness: float = 0.8
 
-    # Center flattening settings
-    center_flatten: float = 0.0
-    center_flatten_radius: float = 0.5
-
     # Spawn settings
     disable_commander: bool = False
     disable_buildings: bool = False
@@ -194,8 +190,6 @@ class GUIConfigModel:
             custom_image_path=self.custom_image_path,
             base_clear_radius=self.base_clear_radius,
             base_flatness=self.base_flatness,
-            center_flatten=self.center_flatten,
-            center_flatten_radius=self.center_flatten_radius,
             disable_commander=self.disable_commander,
             disable_buildings=self.disable_buildings,
             disable_resource_nodes=self.disable_resource_nodes,
