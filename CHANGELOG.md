@@ -2,8 +2,6 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
-
 ## [0.9.2] - 2026-04-20
 ### UI & Sizing
 - Added `Tile Size` control in `MAP DIMENSIONS` and wired it through generation and preview
@@ -27,6 +25,12 @@ All notable changes to this project will be documented in this file.
 - Added topology option: `Archipelago` (multiple small islands with connections)
 - Added topology option: `Delta` (branching paths from center)
 - Added topology option: `Peninsula` (winding path with chokepoints)
+
+### Strategic Layer
+- Fixed base placement no longer re-routing or re-drawing strategic lanes
+- `generate_strategic_layout()` now always uses default map anchors for lane generation
+- Custom base positions still apply to base flattening and entity placement
+- Removed unused imports in terrain_pipeline.py
 
 ## [0.9.1] - 2026-04-20
 ### UI

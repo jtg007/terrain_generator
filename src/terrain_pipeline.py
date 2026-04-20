@@ -20,15 +20,12 @@ All coordinate calculations use integer grid positions to prevent T-junctions.
 import math
 import random
 import sys
-from dataclasses import dataclass
 from typing import List, Tuple, Optional
 
 if getattr(sys, "frozen", False):
     from terrain_spec import TerrainSpec, HeightGrid, TerrainCell, UnderlayBrush, ZoneType, LayoutNode, LayoutConnection
-    from noise import NoiseGenerator
 else:
     from src.terrain_spec import TerrainSpec, HeightGrid, TerrainCell, UnderlayBrush, ZoneType, LayoutNode, LayoutConnection
-    from src.noise import NoiseGenerator
 
 from PIL import Image, ImageOps
 
@@ -128,16 +125,10 @@ def generate_strategic_layout(
     center_x = spec.origin_x + spec.size_x / 2
     center_y = spec.origin_y + spec.size_y / 2
 
-    imp_x, imp_y = (
-        (spec.custom_imp_base_x, spec.custom_imp_base_y)
-        if spec.custom_imp_base_x is not None and spec.custom_imp_base_y is not None
-        else spec.default_imp_base()
-    )
-    nf_x, nf_y = (
-        (spec.custom_nf_base_x, spec.custom_nf_base_y)
-        if spec.custom_nf_base_x is not None and spec.custom_nf_base_y is not None
-        else spec.default_nf_base()
-    )
+    # Keep strategic lane routing stable when users drag bases in the editor.
+    # Custom base positions still apply to base flattening and final entity placement.
+    imp_x, imp_y = spec.default_imp_base()
+    nf_x, nf_y = spec.default_nf_base()
 
     base_radius = spec.base_clear_radius
     map_min_dim = min(spec.size_x, spec.size_y)
