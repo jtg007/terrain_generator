@@ -120,7 +120,7 @@ class ValveVMFWriter:
         # 2. Bottom Face
         bottom_side = Side()
         bottom_side.set_plane((X1, Y2, Z1), (X2, Y2, Z1), (X2, Y1, Z1))
-        bottom_side.material = spec.underlay_material
+        bottom_side.material = "TOOLS/TOOLSNODRAW"
         bottom_side.uaxis = "[1 0 0 0] 0.25"
         bottom_side.vaxis = "[0 -1 0 0] 0.25"
         solid.add_side(bottom_side)
@@ -128,7 +128,7 @@ class ValveVMFWriter:
         # 3. Min-Y Wall (South)
         south_side = Side()
         south_side.set_plane((X1, Y1, Z2), (X1, Y1, Z1), (X2, Y1, Z1))
-        south_side.material = spec.underlay_material
+        south_side.material = "TOOLS/TOOLSNODRAW"
         south_side.uaxis = "[1 0 0 0] 0.25"
         south_side.vaxis = "[0 0 -1 0] 0.25"
         solid.add_side(south_side)
@@ -136,7 +136,7 @@ class ValveVMFWriter:
         # 4. Max-Y Wall (North)
         north_side = Side()
         north_side.set_plane((X2, Y2, Z2), (X2, Y2, Z1), (X1, Y2, Z1))
-        north_side.material = spec.underlay_material
+        north_side.material = "TOOLS/TOOLSNODRAW"
         north_side.uaxis = "[1 0 0 0] 0.25"
         north_side.vaxis = "[0 0 -1 0] 0.25"
         solid.add_side(north_side)
@@ -144,7 +144,7 @@ class ValveVMFWriter:
         # 5. Min-X Wall (West)
         west_side = Side()
         west_side.set_plane((X1, Y2, Z2), (X1, Y2, Z1), (X1, Y1, Z1))
-        west_side.material = spec.underlay_material
+        west_side.material = "TOOLS/TOOLSNODRAW"
         west_side.uaxis = "[0 1 0 0] 0.25"
         west_side.vaxis = "[0 0 -1 0] 0.25"
         solid.add_side(west_side)
@@ -152,7 +152,7 @@ class ValveVMFWriter:
         # 6. Max-X Wall (East)
         east_side = Side()
         east_side.set_plane((X2, Y1, Z2), (X2, Y1, Z1), (X2, Y2, Z1))
-        east_side.material = spec.underlay_material
+        east_side.material = "TOOLS/TOOLSNODRAW"
         east_side.uaxis = "[0 1 0 0] 0.25"
         east_side.vaxis = "[0 0 -1 0] 0.25"
         solid.add_side(east_side)
@@ -167,7 +167,7 @@ class ValveVMFWriter:
         Y2 = Y1 + underlay.size_y
         Z1 = underlay.bottom_z
         Z2 = underlay.top_z
-        mat = underlay.material
+        mat = "TOOLS/TOOLSNODRAW"
 
         solid = Solid()
 
