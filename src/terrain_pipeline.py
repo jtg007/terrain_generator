@@ -555,9 +555,16 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
                 floor_height + (mountain_height - floor_height) * noise_combined
             )
 
-            final_height = playable_height * mask_val + wilderness_target * (
-                1.0 - mask_val
-            )
+            if spec.topology == "island":
+                # For islands, the playable area should be the elevated mountain,
+                # and the wilderness should be the low floor (water level)
+                final_height = wilderness_target * mask_val + playable_height * (
+                    1.0 - mask_val
+                )
+            else:
+                final_height = playable_height * mask_val + wilderness_target * (
+                    1.0 - mask_val
+                )
 
             row_heights.append(final_height)
         heightmap.append(row_heights)
