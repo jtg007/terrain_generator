@@ -618,52 +618,14 @@ class TerrainGeneratorGUI(QMainWindow):
         )
         config_layout.addLayout(bf_row)
 
-        # Center Flatten
-        cf_row = QHBoxLayout()
-        cf_row.setSpacing(8)
-        lbl_cf = QLabel("Center Flatten")
-        lbl_cf.setObjectName("FieldLabel")
-        lbl_cf.setToolTip("Flatten terrain towards the map center (0 = disabled)")
-        cf_row.addWidget(lbl_cf)
-        self.slider_center_flatten = QSlider(Qt.Horizontal)
-        self.slider_center_flatten.setRange(0, 100)
-        self.lbl_cf_val = QLabel("0%")
-        cf_row.addWidget(
-            make_slider_row(self.slider_center_flatten, self.lbl_cf_val, "%"), 1
-        )
-        config_layout.addLayout(cf_row)
-
-        # Center Radius
-        cr_row = QHBoxLayout()
-        cr_row.setSpacing(8)
-        lbl_cr = QLabel("Center Radius")
-        lbl_cr.setObjectName("FieldLabel")
-        lbl_cr.setToolTip("Size of center flatten zone (10–50% of map)")
-        cr_row.addWidget(lbl_cr)
-        self.slider_center_radius = QSlider(Qt.Horizontal)
-        self.slider_center_radius.setRange(10, 50)
-        self.lbl_cr_val = QLabel("10%")
-        cr_row.addWidget(
-            make_slider_row(self.slider_center_radius, self.lbl_cr_val, "%"), 1
-        )
-        config_layout.addLayout(cr_row)
-
         self.slider_base_radius.valueChanged.connect(
             lambda v: self.lbl_base_radius_val.setText(str(v))
         )
         self.slider_base_flatness.valueChanged.connect(
             lambda v: self.lbl_base_flat_val.setText(f"{v}%")
         )
-        self.slider_center_flatten.valueChanged.connect(
-            lambda v: self.lbl_cf_val.setText(f"{v}%")
-        )
-        self.slider_center_radius.valueChanged.connect(
-            lambda v: self.lbl_cr_val.setText(f"{v}%")
-        )
         self.slider_base_radius.valueChanged.connect(self.sync_to_model)
         self.slider_base_flatness.valueChanged.connect(self.sync_to_model)
-        self.slider_center_flatten.valueChanged.connect(self.sync_to_model)
-        self.slider_center_radius.valueChanged.connect(self.sync_to_model)
 
         config_layout.addWidget(make_divider())
 
@@ -1455,8 +1417,6 @@ class TerrainGeneratorGUI(QMainWindow):
             self.slider_erosion,
             self.slider_base_radius,
             self.slider_base_flatness,
-            self.slider_center_flatten,
-            self.slider_center_radius,
             self.combo_power,
             self.combo_material,
             self.combo_skybox,
@@ -1492,12 +1452,6 @@ class TerrainGeneratorGUI(QMainWindow):
             self.slider_base_radius.setValue(self.config_model.base_clear_radius)
             self.slider_base_flatness.setValue(
                 int(self.config_model.base_flatness * 100)
-            )
-            self.slider_center_flatten.setValue(
-                int(self.config_model.center_flatten * 100)
-            )
-            self.slider_center_radius.setValue(
-                int(self.config_model.center_flatten_radius * 100)
             )
 
             p = self.config_model.displacement_power
@@ -1555,10 +1509,6 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.erosion_strength = self.slider_erosion.value() / 100.0
         self.config_model.base_clear_radius = self.slider_base_radius.value()
         self.config_model.base_flatness = self.slider_base_flatness.value() / 100.0
-        self.config_model.center_flatten = self.slider_center_flatten.value() / 100.0
-        self.config_model.center_flatten_radius = (
-            self.slider_center_radius.value() / 100.0
-        )
 
         idx = self.combo_power.currentIndex()
         if idx == 0:
