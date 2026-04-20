@@ -119,7 +119,7 @@ def generate_strategic_layout(
     import random
 
     rng = random.Random(spec.seed)
-    archetypes = ["central_gorge", "valley", "two_lane", "island", "classic_cross"]
+    archetypes = ["central_gorge", "valley", "two_lane", "island", "classic_cross", "peninsula", "archipelago", "delta"]
     if spec.topology in archetypes:
         topology = spec.topology
     else:
@@ -139,9 +139,7 @@ def generate_strategic_layout(
         else spec.default_nf_base()
     )
 
-    base_radius = (
-        spec.base_clear_radius if spec.base_clear_radius > 0 else spec.size_x * 0.12
-    )
+    base_radius = spec.base_clear_radius
     map_min_dim = min(spec.size_x, spec.size_y)
 
     imp_base = LayoutNode(imp_x, imp_y, base_radius, ZoneType.BASE)
@@ -357,7 +355,217 @@ def generate_strategic_layout(
             )
         )
 
+    elif topology == "classic_cross":
+        center_choke = LayoutNode(
+            center_x, center_y, choke_length / 2, ZoneType.CHOKEPOINT
+        )
+        nodes.append(center_choke)
+
+        veh1 = LayoutNode(
+            imp_x + lane_dx * lane_len * 0.25,
+            imp_y + lane_dy * lane_len * 0.25,
+            veh_radius,
+            ZoneType.VEHICLE_OPEN,
+        )
+        veh2 = LayoutNode(
+            imp_x + lane_dx * lane_len * 0.75,
+            imp_y + lane_dy * lane_len * 0.75,
+            veh_radius,
+            ZoneType.VEHICLE_OPEN,
+        )
+        nodes.extend([veh1, veh2])
+
+        connections.append(
+            create_connection_path(imp_base, veh1, lane_width, ZoneType.MAIN_LANE, spec)
+        )
+        connections.append(
+            create_connection_path(
+                veh1, center_choke, lane_width, ZoneType.CHOKEPOINT, spec
+            )
+        )
+        connections.append(
+            create_connection_path(
+                center_choke, veh2, lane_width, ZoneType.CHOKEPOINT, spec
+            )
+        )
+        connections.append(
+            create_connection_path(veh2, nf_base, lane_width, ZoneType.MAIN_LANE, spec)
+        )
+
+        side_offset = map_min_dim * rng.uniform(0.25, 0.4)
+        side_veh = LayoutNode(
+            center_x + perp_dx * side_offset,
+            center_y + perp_dy * side_offset,
+            veh_radius * 0.7,
+            ZoneType.VEHICLE_OPEN,
+        )
+        nodes.append(side_veh)
+
+        connections.append(
+            create_connection_path(
+                veh1, side_veh, lane_width * 0.7, ZoneType.SIDE_ROUTE, spec
+            )
+        )
+        connections.append(
+            create_connection_path(
+                side_veh, veh2, lane_width * 0.7, ZoneType.SIDE_ROUTE, spec
+            )
+        )
+
+    elif topology == "peninsula":
+        # Peninsula: landmass extending from one base with winding path
+        mid_x = (imp_x + nf_x) / 2 + perp_dx * map_min_dim * rng.uniform(-0.1, 0.1)
+        mid_y = (imp_y + nf_y) / 2 + perp_dy * map_min_dim * rng.uniform(-0.1, 0.1)
+        choke1 = LayoutNode(
+            imp_x + lane_dx * lane_len * 0.3 + perp_dx * map_min_dim * rng.uniform(-0.15, 0.15),
+            imp_y + lane_dy * lane_len * 0.3 + perp_dy * map_min_dim * rng.uniform(-0.15, 0.15),
+            choke_length,
+            ZoneType.CHOKEPOINT,
+        )
+        choke2 = LayoutNode(
+            mid_x + perp_dx * map_min_dim * rng.uniform(-0.2, 0.2),
+            mid_y + perp_dy * map_min_dim * rng.uniform(-0.2, 0.2),
+            choke_length,
+            ZoneType.CHOKEPOINT,
+        )
+        choke3 = LayoutNode(
+            nf_x - lane_dx * lane_len * 0.3 + perp_dx * map_min_dim * rng.uniform(-0.15, 0.15),
+            nf_y - lane_dy * lane_len * 0.3 + perp_dy * map_min_dim * rng.uniform(-0.15, 0.15),
+            choke_length,
+            ZoneType.CHOKEPOINT,
+        )
+        nodes.extend([choke1, choke2, choke3])
+
+        connections.append(
+            create_connection_path(imp_base, choke1, lane_width, ZoneType.MAIN_LANE, spec)
+        )
+        connections.append(
+            create_connection_path(choke1, choke2, lane_width, ZoneType.CHOKEPOINT, spec)
+        )
+        connections.append(
+            create_connection_path(choke2, choke3, lane_width, ZoneType.CHOKEPOINT, spec)
+        )
+        connections.append(
+            create_connection_path(choke3, nf_base, lane_width, ZoneType.MAIN_LANE, spec)
+        )
+
+        # Add side vehicle areas
+        side_offset = map_min_dim * rng.uniform(0.2, 0.35)
+        veh1 = LayoutNode(
+            choke1.x + perp_dx * side_offset,
+            choke1.y + perp_dy * side_offset,
+            veh_radius * 0.8,
+            ZoneType.VEHICLE_OPEN,
+        )
+        veh2 = LayoutNode(
+            choke3.x - perp_dx * side_offset,
+            choke3.y - perp_dy * side_offset,
+            veh_radius * 0.8,
+            ZoneType.VEHICLE_OPEN,
+        )
+        nodes.extend([veh1, veh2])
+
+        connections.append(
+            create_connection_path(choke1, veh1, lane_width * 0.6, ZoneType.SIDE_ROUTE, spec)
+        )
+        connections.append(
+            create_connection_path(choke3, veh2, lane_width * 0.6, ZoneType.SIDE_ROUTE, spec)
+        )
+
+    elif topology == "archipelago":
+        # Archipelago: multiple small islands with connections
+        island1 = LayoutNode(
+            imp_x + lane_dx * lane_len * 0.25 + perp_dx * map_min_dim * rng.uniform(-0.1, 0.1),
+            imp_y + lane_dy * lane_len * 0.25 + perp_dy * map_min_dim * rng.uniform(-0.1, 0.1),
+            veh_radius * 0.6,
+            ZoneType.VEHICLE_OPEN,
+        )
+        island2 = LayoutNode(
+            center_x + perp_dx * map_min_dim * rng.uniform(-0.15, 0.15),
+            center_y + perp_dy * map_min_dim * rng.uniform(-0.15, 0.15),
+            veh_radius * 0.7,
+            ZoneType.VEHICLE_OPEN,
+        )
+        island3 = LayoutNode(
+            nf_x - lane_dx * lane_len * 0.25 + perp_dx * map_min_dim * rng.uniform(-0.1, 0.1),
+            nf_y - lane_dy * lane_len * 0.25 + perp_dy * map_min_dim * rng.uniform(-0.1, 0.1),
+            veh_radius * 0.6,
+            ZoneType.VEHICLE_OPEN,
+        )
+        island4 = LayoutNode(
+            center_x - perp_dx * map_min_dim * rng.uniform(-0.15, 0.15),
+            center_y - perp_dy * map_min_dim * rng.uniform(-0.15, 0.15),
+            veh_radius * 0.7,
+            ZoneType.VEHICLE_OPEN,
+        )
+        nodes.extend([island1, island2, island3, island4])
+
+        # Create a network of connections
+        connections.append(
+            create_connection_path(imp_base, island1, lane_width * 0.8, ZoneType.MAIN_LANE, spec)
+        )
+        connections.append(
+            create_connection_path(island1, island2, lane_width * 0.7, ZoneType.MAIN_LANE, spec)
+        )
+        connections.append(
+            create_connection_path(island2, island3, lane_width * 0.7, ZoneType.MAIN_LANE, spec)
+        )
+        connections.append(
+            create_connection_path(island3, nf_base, lane_width * 0.8, ZoneType.MAIN_LANE, spec)
+        )
+        connections.append(
+            create_connection_path(island2, island4, lane_width * 0.6, ZoneType.SIDE_ROUTE, spec)
+        )
+
+    elif topology == "delta":
+        # Delta: branching paths from center like a river delta
+        center_node = LayoutNode(
+            center_x, center_y, veh_radius * 1.2, ZoneType.VEHICLE_OPEN
+        )
+        nodes.append(center_node)
+
+        # Three main branches
+        branch_angle = rng.uniform(0, 2 * math.pi)
+        for i in range(3):
+            angle = branch_angle + i * (2 * math.pi / 3)
+            branch_x = center_x + math.cos(angle) * map_min_dim * 0.3
+            branch_y = center_y + math.sin(angle) * map_min_dim * 0.3
+            branch_choke = LayoutNode(
+                branch_x, branch_y, choke_length * 0.8, ZoneType.CHOKEPOINT
+            )
+            nodes.append(branch_choke)
+            connections.append(
+                create_connection_path(center_node, branch_choke, lane_width * 0.8, ZoneType.MAIN_LANE, spec)
+            )
+
+        # Connect bases to nearest branches
+        if (center_x - imp_x) ** 2 + (center_y - imp_y) ** 2 < (center_x - nf_x) ** 2 + (center_y - nf_y) ** 2:
+            connections.append(
+                create_connection_path(imp_base, center_node, lane_width, ZoneType.MAIN_LANE, spec)
+            )
+            connections.append(
+                create_connection_path(center_node, nf_base, lane_width, ZoneType.MAIN_LANE, spec)
+            )
+        else:
+            connections.append(
+                create_connection_path(nf_base, center_node, lane_width, ZoneType.MAIN_LANE, spec)
+            )
+            connections.append(
+                create_connection_path(center_node, imp_base, lane_width, ZoneType.MAIN_LANE, spec)
+            )
+
+        # Add side vehicle areas on branches
+        for i in range(3):
+            angle = branch_angle + i * (2 * math.pi / 3) + math.pi / 6
+            side_x = center_x + math.cos(angle) * map_min_dim * 0.25
+            side_y = center_y + math.sin(angle) * map_min_dim * 0.25
+            side_veh = LayoutNode(
+                side_x, side_y, veh_radius * 0.6, ZoneType.VEHICLE_OPEN
+            )
+            nodes.append(side_veh)
+
     else:
+        # Default fallback (same as classic_cross)
         center_choke = LayoutNode(
             center_x, center_y, choke_length / 2, ZoneType.CHOKEPOINT
         )
@@ -441,6 +649,8 @@ def generate_playability_mask(
 
     # 1. Evaluate Nodes (BASE, VEHICLE_OPEN): smooth ramp
     for node in nodes:
+        if spec.base_clear_radius <= 0 and node.type == ZoneType.BASE:
+            continue
         dist_grid = np.sqrt((WX - node.x) ** 2 + (WY - node.y) ** 2)
         if node.type in (ZoneType.BASE, ZoneType.VEHICLE_OPEN):
             fade = np.clip((dist_grid - node.radius) / ramp_width, 0.0, 1.0)
@@ -449,6 +659,11 @@ def generate_playability_mask(
 
     # 2. Evaluate Polyline Connections: hard binary
     for conn in connections:
+        # Skip connections from/to base nodes when base_clear_radius is 0
+        if spec.base_clear_radius <= 0 and conn.start_node.type == ZoneType.BASE:
+            continue
+        if spec.base_clear_radius <= 0 and conn.end_node.type == ZoneType.BASE:
+            continue
         min_dist_grid = np.full((rows, cols), np.inf)
 
         pts = conn.path_points

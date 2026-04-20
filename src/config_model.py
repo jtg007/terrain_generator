@@ -8,6 +8,11 @@ if getattr(sys, "frozen", False):
 else:
     from src.terrain_spec import TerrainSpec
 
+# Keep a small safety margin from Hammer/VBSP hard bounds (±16384) to avoid
+# borderline compile failures like "HashVec: point outside valid range".
+MAX_MAP_WORLD_SIZE = 32640
+MAX_MAP_DISPINFO = 2048
+
 
 @dataclass
 class GUIConfigModel:
@@ -39,6 +44,7 @@ class GUIConfigModel:
     # Texture and skybox selections
     terrain_material: str = "common/nature/blend_grass_mountainwall_000"
     skybox: str = "empsky_overcast3yellow"
+    use_nodetail_texture: bool = False
 
     # Base flattening settings
     base_clear_radius: int = 512
@@ -79,11 +85,20 @@ class GUIConfigModel:
                 f"Invalid displacement power: {self.displacement_power}. Allowed: 2, 3, 4.",
             )
 
-        # Hammer limit check: map centered at 0,0, limits are -16384 to +16384 -> max size = 32768
-        if self.map_size_x > 32768 or self.map_size_y > 32768:
+        # Compile-safe limit check (slightly below Hammer hard bounds).
+        if self.map_size_x > MAX_MAP_WORLD_SIZE or self.map_size_y > MAX_MAP_WORLD_SIZE:
             return (
                 False,
-                f"Map size ({self.map_size_x}x{self.map_size_y}) exceeds Hammer limits (32768x32768).",
+                f"Map size ({self.map_size_x}x{self.map_size_y}) exceeds compile-safe limit "
+                f"({MAX_MAP_WORLD_SIZE}x{MAX_MAP_WORLD_SIZE}).",
+            )
+
+        disp_count = self.tiles_x * self.tiles_y
+        if disp_count > MAX_MAP_DISPINFO:
+            return (
+                False,
+                f"Too many displacement tiles ({disp_count} > {MAX_MAP_DISPINFO}). "
+                "Reduce Tiles X/Y or increase Tile Size.",
             )
 
         if self.height_scale <= 0 or self.height_scale > 4096:
@@ -97,8 +112,7 @@ class GUIConfigModel:
 
         # Layout check
         try:
-            # Hammer limit check: map centered at 0,0, limits are -16384 to +16384 -> max size = 32768
-            # (Done above)
+            # Compile-safe map extent check is done above.
             
             # Use minimal spec for layout validation
             origin_x = int(-self.map_size_x / 2)
@@ -129,12 +143,17 @@ class GUIConfigModel:
         """
         Mutates the configuration to ensure it's safe to use.
         """
-        # Clamp tiles to avoid exceeding hammer limits
-        max_tiles_x = 32768 // max(self.cell_size, 1)
-        max_tiles_y = 32768 // max(self.cell_size, 1)
+        # Clamp tiles to avoid exceeding hammer limits.
+        max_tiles_x = MAX_MAP_WORLD_SIZE // max(self.cell_size, 1)
+        max_tiles_y = MAX_MAP_WORLD_SIZE // max(self.cell_size, 1)
 
         self.tiles_x = max(1, min(self.tiles_x, max_tiles_x))
         self.tiles_y = max(1, min(self.tiles_y, max_tiles_y))
+
+        if self.tiles_x * self.tiles_y > MAX_MAP_DISPINFO:
+            self.tiles_y = max(1, MAX_MAP_DISPINFO // self.tiles_x)
+            if self.tiles_x * self.tiles_y > MAX_MAP_DISPINFO:
+                self.tiles_x = max(1, MAX_MAP_DISPINFO // self.tiles_y)
 
         # Power clamping
         if self.displacement_power < 2:

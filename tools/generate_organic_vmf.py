@@ -18,7 +18,12 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from terrain_spec import TerrainSpec, HeightGrid
 from terrain_pipeline import run_pipeline
-from vmf_gen import PipelineSpec, DisplacementVMF, DEFAULT_SAFE_SKYBOX
+from vmf_gen import (
+    PipelineSpec,
+    DisplacementVMF,
+    DEFAULT_SAFE_SKYBOX,
+    MAX_MAP_DISPINFO,
+)
 
 
 def choose_compile_safe_material(
@@ -142,7 +147,8 @@ def main():
         target_width = 16384
         target_height = 16384
 
-    max_map_size = 16384
+    # Keep a compile-safe margin from ±16384 world bounds.
+    max_map_size = 16320
     target_width = min(target_width, max_map_size)
     target_height = min(target_height, max_map_size)
 
@@ -158,6 +164,13 @@ def main():
     else:
         tiles_x = min(args.tiles_x, max_tiles)
         tiles_y = min(args.tiles_y, max_tiles)
+    disp_count = tiles_x * tiles_y
+    if disp_count > MAX_MAP_DISPINFO:
+        print(
+            f"Error: too many displacement tiles ({disp_count} > {MAX_MAP_DISPINFO}). "
+            "Reduce --tiles-x/--tiles-y or increase --tile-size."
+        )
+        sys.exit(2)
 
     vertex_cols = tiles_x * (grid_size - 1) + 1
     vertex_rows = tiles_y * (grid_size - 1) + 1

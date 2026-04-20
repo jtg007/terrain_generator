@@ -17,6 +17,9 @@ from pathlib import Path
 import sys
 
 from src.terrain_spec import ZoneType, LayoutNode, LayoutConnection
+from src.config_model import GUIConfigModel
+
+DEFAULT_BASE_CLEAR_RADIUS = GUIConfigModel.base_clear_radius
 
 
 # Global SVG Renderers
@@ -58,10 +61,6 @@ class VisualNode(QGraphicsEllipseItem):
         self.clear_radius = radius
         self.edges = []
         
-    def boundingRect(self):
-        r = max(84, self.clear_radius)
-        return QRectF(-r - 10, -r - 10, r * 2 + 20, r * 2 + 20)
-
         self.setPos(x, y)
         self.setFlags(
             QGraphicsItem.ItemIsMovable
@@ -69,8 +68,14 @@ class VisualNode(QGraphicsEllipseItem):
             | QGraphicsItem.ItemSendsGeometryChanges
         )
         self.setZValue(1)
-
+        
         scene.addItem(self)
+    
+    def boundingRect(self):
+        if self.clear_radius <= 0:
+            return QRectF(-94, -94, 188, 188)
+        r = max(84, self.clear_radius)
+        return QRectF(-r - 10, -r - 10, r * 2 + 20, r * 2 + 20)
 
     def paint(self, painter, option, widget):
         r = 84
@@ -80,11 +85,12 @@ class VisualNode(QGraphicsEllipseItem):
             SVG_RENDERERS["imp"].render(painter, rect)
         else:
             SVG_RENDERERS["res"].render(painter, rect)
-            
-        painter.setPen(QPen(QColor(255, 255, 255, 50), 1, Qt.DashLine))
-        painter.setBrush(QBrush(QColor(255, 255, 255, 10)))
-        r_clear = self.clear_radius
-        painter.drawEllipse(QRectF(-r_clear, -r_clear, r_clear * 2, r_clear * 2))
+        
+        if self.clear_radius > 0:
+            painter.setPen(QPen(QColor(255, 255, 255, 50), 1, Qt.DashLine))
+            painter.setBrush(QBrush(QColor(255, 255, 255, 10)))
+            r_clear = self.clear_radius
+            painter.drawEllipse(QRectF(-r_clear, -r_clear, r_clear * 2, r_clear * 2))
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.ItemPositionHasChanged:
@@ -211,7 +217,7 @@ class MapEditorWidget(QWidget):
         scene_pos = self.view.mapToScene(event.pos())
 
         if self.current_mode == 1:
-            VisualNode(scene_pos.x(), scene_pos.y(), 512, ZoneType.BASE, self.scene)
+            VisualNode(scene_pos.x(), scene_pos.y(), DEFAULT_BASE_CLEAR_RADIUS, ZoneType.BASE, self.scene)
         elif self.current_mode == 2:
             VisualNode(
                 scene_pos.x(), scene_pos.y(), 256, ZoneType.WILDERNESS, self.scene

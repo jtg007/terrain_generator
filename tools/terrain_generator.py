@@ -1,6 +1,7 @@
 import sys
 import json
 import random
+import math
 from pathlib import Path
 
 if getattr(sys, "frozen", False):
@@ -45,7 +46,7 @@ from tools.preview_widget import MapPreviewWidget
 
 
 
-from src.config_model import GUIConfigModel
+from src.config_model import GUIConfigModel, MAX_MAP_DISPINFO, MAX_MAP_WORLD_SIZE
 from src.terrain_pipeline import run_pipeline
 from src.export_utils import export_vmf
 from src.vmf_gen import (
@@ -173,6 +174,7 @@ class TerrainGeneratorGUI(QMainWindow):
 
         self.config_model = GUIConfigModel()
         self.config = Config()
+        self.config_model.use_nodetail_texture = self.config.get("nodetail", False)
         self.terrain_materials, self.skyboxes = self.load_textures()
 
         self.setup_ui()
@@ -454,7 +456,18 @@ class TerrainGeneratorGUI(QMainWindow):
         config_layout.addWidget(make_divider())
 
         # ─── MAP DIMENSIONS ───
-        config_layout.addWidget(make_section_label("MAP DIMENSIONS"))
+        dim_header = QHBoxLayout()
+        dim_header.setSpacing(8)
+        dim_header.addWidget(make_section_label("MAP DIMENSIONS"))
+        dim_header.addStretch()
+        self.btn_size_help = QPushButton("Size Help")
+        self.btn_size_help.setObjectName("SmallButton")
+        self.btn_size_help.setToolTip(
+            "Explain world-size and displacement limits for large maps"
+        )
+        self.btn_size_help.clicked.connect(self.show_map_size_help)
+        dim_header.addWidget(self.btn_size_help)
+        config_layout.addLayout(dim_header)
 
         dim_grid = QGridLayout()
         dim_grid.setSpacing(6)
@@ -464,7 +477,7 @@ class TerrainGeneratorGUI(QMainWindow):
         lbl_tx = QLabel("Tiles X")
         lbl_tx.setObjectName("FieldLabel")
         lbl_tx.setToolTip(
-            "Number of displacement tiles horizontally (each is 512 world units)"
+            "Number of displacement tiles horizontally"
         )
         dim_grid.addWidget(lbl_tx, 0, 0)
         self.spin_tiles_x = QSpinBox()
@@ -474,30 +487,61 @@ class TerrainGeneratorGUI(QMainWindow):
         lbl_ty = QLabel("Tiles Y")
         lbl_ty.setObjectName("FieldLabel")
         lbl_ty.setToolTip(
-            "Number of displacement tiles vertically (each is 512 world units)"
+            "Number of displacement tiles vertically"
         )
         dim_grid.addWidget(lbl_ty, 0, 2)
         self.spin_tiles_y = QSpinBox()
         self.spin_tiles_y.setRange(1, 64)
         dim_grid.addWidget(self.spin_tiles_y, 0, 3)
 
+        lbl_ts = QLabel("Tile Size")
+        lbl_ts.setObjectName("FieldLabel")
+        lbl_ts.setToolTip("World units per displacement tile edge")
+        dim_grid.addWidget(lbl_ts, 1, 0)
+        self.spin_tile_size = QSpinBox()
+        self.spin_tile_size.setRange(128, 2048)
+        self.spin_tile_size.setSingleStep(64)
+        dim_grid.addWidget(self.spin_tile_size, 1, 1)
+
         lbl_hs = QLabel("Height")
         lbl_hs.setObjectName("FieldLabel")
         lbl_hs.setToolTip("Maximum terrain height in world units")
-        dim_grid.addWidget(lbl_hs, 1, 0)
+        dim_grid.addWidget(lbl_hs, 1, 2)
         self.spin_height = QSpinBox()
         self.spin_height.setRange(128, 4096)
-        dim_grid.addWidget(self.spin_height, 1, 1)
+        dim_grid.addWidget(self.spin_height, 1, 3)
 
         lbl_pw = QLabel("Detail")
         lbl_pw.setObjectName("FieldLabel")
         lbl_pw.setToolTip("Displacement power — vertices per tile edge")
-        dim_grid.addWidget(lbl_pw, 1, 2)
+        dim_grid.addWidget(lbl_pw, 2, 0)
         self.combo_power = QComboBox()
         self.combo_power.addItems(["2 (5×5)", "3 (9×9)", "4 (17×17)"])
-        dim_grid.addWidget(self.combo_power, 1, 3)
+        dim_grid.addWidget(self.combo_power, 2, 1)
 
         config_layout.addLayout(dim_grid)
+
+        size_auto_row = QHBoxLayout()
+        size_auto_row.setSpacing(8)
+        lbl_target_size = QLabel("Target Size")
+        lbl_target_size.setObjectName("FieldLabel")
+        lbl_target_size.setToolTip(
+            "Desired max map dimension in world units. "
+            "Auto Tile Size uses this plus current tile counts."
+        )
+        size_auto_row.addWidget(lbl_target_size)
+        self.spin_target_map_size = QSpinBox()
+        self.spin_target_map_size.setRange(512, MAX_MAP_WORLD_SIZE)
+        self.spin_target_map_size.setSingleStep(64)
+        size_auto_row.addWidget(self.spin_target_map_size, 1)
+        self.btn_auto_tile_size = QPushButton("Auto Tile Size")
+        self.btn_auto_tile_size.setObjectName("SmallButton")
+        self.btn_auto_tile_size.setToolTip(
+            "Compute tile size from target map size and current Tiles X/Y"
+        )
+        self.btn_auto_tile_size.clicked.connect(self.auto_compute_tile_size_from_target)
+        size_auto_row.addWidget(self.btn_auto_tile_size)
+        config_layout.addLayout(size_auto_row)
 
         # Live map-size info label
         self.lbl_map_info = QLabel()
@@ -506,6 +550,7 @@ class TerrainGeneratorGUI(QMainWindow):
 
         self.spin_tiles_x.valueChanged.connect(self.sync_to_model)
         self.spin_tiles_y.valueChanged.connect(self.sync_to_model)
+        self.spin_tile_size.valueChanged.connect(self.sync_to_model)
         self.spin_height.valueChanged.connect(self.sync_to_model)
         self.combo_power.currentIndexChanged.connect(self.sync_to_model)
 
@@ -523,7 +568,7 @@ class TerrainGeneratorGUI(QMainWindow):
         topo_row.addWidget(lbl_topo)
         self.combo_topology = QComboBox()
         self.combo_topology.addItems(
-            ["Random", "Central Gorge", "Valley", "Two Lane", "Island", "Classic Cross"]
+            ["Random", "Central Gorge", "Valley", "Two Lane", "Island", "Classic Cross", "Peninsula", "Archipelago", "Delta"]
         )
         self.combo_topology.setCurrentIndex(0)
         topo_row.addWidget(self.combo_topology, 1)
@@ -955,7 +1000,12 @@ class TerrainGeneratorGUI(QMainWindow):
             )
 
             self.preview_widget.set_map_image(
-                qimg, spec.origin_x, spec.origin_y, spec.size_x, spec.size_y
+                qimg,
+                spec.origin_x,
+                spec.origin_y,
+                spec.size_x,
+                spec.size_y,
+                spec.cell_size,
             )
             self.preview_widget.set_raw_heights(heights)
 
@@ -1414,7 +1464,47 @@ class TerrainGeneratorGUI(QMainWindow):
 
     def on_nodetail_changed(self):
         """Save nodetail setting to config."""
-        self.config.set("nodetail", self.chk_nodetail.isChecked())
+        enabled = self.chk_nodetail.isChecked()
+        self.config.set("nodetail", enabled)
+        self.config_model.use_nodetail_texture = enabled
+
+    def show_map_size_help(self):
+        """Show compile-safe size guidance for current map settings."""
+        tile_size = self.spin_tile_size.value()
+        tiles_x = self.spin_tiles_x.value()
+        tiles_y = self.spin_tiles_y.value()
+        map_size_x = tiles_x * tile_size
+        map_size_y = tiles_y * tile_size
+        disp_count = tiles_x * tiles_y
+
+        max_tiles_world = MAX_MAP_WORLD_SIZE // max(tile_size, 1)
+        max_square_by_disp = int(MAX_MAP_DISPINFO ** 0.5)
+        max_square_tiles = min(max_tiles_world, max_square_by_disp)
+        max_y_for_current_x = MAX_MAP_DISPINFO // max(tiles_x, 1)
+
+        is_valid, msg = self.config_model.validate()
+        status = "Current setup: OK" if is_valid else f"Current setup: Not valid ({msg})"
+
+        help_text = (
+            "Map Size Guide\n\n"
+            "Two limits matter:\n"
+            f"1. Compile-safe world size: {MAX_MAP_WORLD_SIZE} x {MAX_MAP_WORLD_SIZE} units\n"
+            f"2. Displacement count: max {MAX_MAP_DISPINFO} (Tiles X * Tiles Y)\n\n"
+            f"Current values:\n"
+            f"- Tile Size: {tile_size}\n"
+            f"- Tiles: {tiles_x} x {tiles_y}\n"
+            f"- World Size: {map_size_x} x {map_size_y}\n"
+            f"- Displacements: {disp_count}/{MAX_MAP_DISPINFO}\n\n"
+            f"For Tile Size {tile_size}, max tiles by world-size is {max_tiles_world} per axis.\n"
+            f"For current Tiles X={tiles_x}, max Tiles Y by displacement limit is {max_y_for_current_x}.\n"
+            f"Safe square recommendation for this Tile Size: up to {max_square_tiles} x {max_square_tiles}.\n\n"
+            "Tips:\n"
+            "- Larger world with fewer displacements: increase Tile Size.\n"
+            "- More detail: increase Tiles (if limits allow).\n"
+            "- If compile fails near limits, reduce one step.\n\n"
+            f"{status}"
+        )
+        QMessageBox.information(self, "Map Size Help", help_text)
 
     def browse_custom_output(self):
         """Browse for custom output folder."""
@@ -1488,6 +1578,8 @@ class TerrainGeneratorGUI(QMainWindow):
             self.spin_seed,
             self.spin_tiles_x,
             self.spin_tiles_y,
+            self.spin_tile_size,
+            self.spin_target_map_size,
             self.spin_height,
             self.combo_topology,
             self.slider_lane_width,
@@ -1504,10 +1596,15 @@ class TerrainGeneratorGUI(QMainWindow):
             self.chk_disable_resources,
             self.chk_minimal_map,
             self.chk_terrain_only,
+            self.chk_nodetail,
         ):
             self.spin_seed.setValue(self.config_model.seed)
             self.spin_tiles_x.setValue(self.config_model.tiles_x)
             self.spin_tiles_y.setValue(self.config_model.tiles_y)
+            self.spin_tile_size.setValue(self.config_model.cell_size)
+            self.spin_target_map_size.setValue(
+                max(self.config_model.map_size_x, self.config_model.map_size_y)
+            )
             self.spin_height.setValue(self.config_model.height_scale)
             topology_map = {
                 "random": 0,
@@ -1516,6 +1613,9 @@ class TerrainGeneratorGUI(QMainWindow):
                 "two_lane": 3,
                 "island": 4,
                 "classic_cross": 5,
+                "peninsula": 6,
+                "archipelago": 7,
+                "delta": 8,
             }
             self.combo_topology.setCurrentIndex(
                 topology_map.get(self.config_model.topology, 0)
@@ -1532,6 +1632,8 @@ class TerrainGeneratorGUI(QMainWindow):
             self.slider_base_flatness.setValue(
                 int(self.config_model.base_flatness * 100)
             )
+            self.lbl_base_radius_val.setText(str(self.config_model.base_clear_radius))
+            self.lbl_base_flat_val.setText(f"{int(self.config_model.base_flatness * 100)}%")
 
             p = self.config_model.displacement_power
             if p == 2:
@@ -1549,8 +1651,7 @@ class TerrainGeneratorGUI(QMainWindow):
             )
             self.chk_minimal_map.setChecked(self.config_model.minimal_map)
             self.chk_terrain_only.setChecked(self.config_model.terrain_only)
-
-        self.chk_nodetail.setChecked(self.config.get("nodetail", False))
+            self.chk_nodetail.setChecked(self.config_model.use_nodetail_texture)
 
         if self.config_model.custom_image_path:
             self.chk_custom_image.setChecked(True)
@@ -1566,6 +1667,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.seed = self.spin_seed.value()
         self.config_model.tiles_x = self.spin_tiles_x.value()
         self.config_model.tiles_y = self.spin_tiles_y.value()
+        self.config_model.cell_size = self.spin_tile_size.value()
         self.config_model.height_scale = self.spin_height.value()
 
         topology_reverse_map = {
@@ -1575,6 +1677,9 @@ class TerrainGeneratorGUI(QMainWindow):
             3: "two_lane",
             4: "island",
             5: "classic_cross",
+            6: "peninsula",
+            7: "archipelago",
+            8: "delta",
         }
         self.config_model.topology = topology_reverse_map.get(
             self.combo_topology.currentIndex(), "random"
@@ -1607,6 +1712,7 @@ class TerrainGeneratorGUI(QMainWindow):
         )
         self.config_model.minimal_map = self.chk_minimal_map.isChecked()
         self.config_model.terrain_only = self.chk_terrain_only.isChecked()
+        self.config_model.use_nodetail_texture = self.chk_nodetail.isChecked()
 
         self.update_validation_status()
         if hasattr(self, "preview_timer"):
@@ -1619,9 +1725,13 @@ class TerrainGeneratorGUI(QMainWindow):
         # Update map info line
         tx = self.spin_tiles_x.value()
         ty = self.spin_tiles_y.value()
-        w = tx * 512
-        h = ty * 512
-        self.lbl_map_info.setText(f"{w}×{h} units  ·  {tx}×{ty} tiles")
+        tile_size = self.spin_tile_size.value()
+        w = tx * tile_size
+        h = ty * tile_size
+        disp_count = tx * ty
+        self.lbl_map_info.setText(
+            f"{w}×{h} units  ·  {tx}×{ty} tiles  ·  {disp_count}/{MAX_MAP_DISPINFO} disps"
+        )
 
         if is_valid:
             # Check layout from editor
@@ -1665,6 +1775,50 @@ class TerrainGeneratorGUI(QMainWindow):
                 "background: #221212; border-radius: 6px; padding: 8px 10px;"
             )
             self.btn_generate.setEnabled(False)
+
+    def _quantize_tile_size(self, value: float) -> int:
+        """Quantize tile size to compile-safe UI step and limits."""
+        snapped = int(math.floor(value / 64.0) * 64)
+        return max(128, min(2048, snapped))
+
+    def _max_tile_size_for_tiles(self, tiles_x: int, tiles_y: int) -> int:
+        """Maximum compile-safe tile size for current tile counts."""
+        max_for_x = MAX_MAP_WORLD_SIZE // max(tiles_x, 1)
+        max_for_y = MAX_MAP_WORLD_SIZE // max(tiles_y, 1)
+        return max(128, min(2048, max_for_x, max_for_y))
+
+    def auto_compute_tile_size_from_target(self):
+        """Auto-calculate tile size from target map size and tile counts."""
+        tiles_x = self.spin_tiles_x.value()
+        tiles_y = self.spin_tiles_y.value()
+        target_size = self.spin_target_map_size.value()
+        if tiles_x <= 0 or tiles_y <= 0:
+            QMessageBox.warning(self, "Invalid Tiles", "Tiles X and Tiles Y must be positive.")
+            return
+
+        ideal_size = min(target_size / tiles_x, target_size / tiles_y)
+        computed_tile_size = self._quantize_tile_size(ideal_size)
+        max_allowed = self._max_tile_size_for_tiles(tiles_x, tiles_y)
+        computed_tile_size = min(computed_tile_size, max_allowed)
+
+        if computed_tile_size < 128:
+            computed_tile_size = 128
+
+        self.spin_tile_size.setValue(computed_tile_size)
+
+        actual_map_x = tiles_x * computed_tile_size
+        actual_map_y = tiles_y * computed_tile_size
+        QMessageBox.information(
+            self,
+            "Tile Size Calculated",
+            (
+                f"Target size: {target_size} units\n"
+                f"Tiles: {tiles_x} x {tiles_y}\n"
+                f"Computed tile size: {computed_tile_size}\n"
+                f"Actual map size: {actual_map_x} x {actual_map_y}\n"
+                f"Max allowed tile size for current tiles: {max_allowed}"
+            ),
+        )
 
     def generate_map(self):
         is_valid, msg = self.config_model.validate()

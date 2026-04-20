@@ -241,13 +241,16 @@ class VisualNode(QGraphicsEllipseItem):
             painter.setBrush(QBrush(QColor(80, 80, 100, 150)))
             painter.drawEllipse(QRectF(-20, -20, 40, 40))
             
-        # Draw clearing radius
-        painter.setPen(QPen(QColor(255, 255, 255, 30), 1, Qt.DashLine))
-        painter.setBrush(QBrush(QColor(255, 255, 255, 5)))
-        r_clear = self.clear_radius
-        painter.drawEllipse(QRectF(-r_clear, -r_clear, r_clear * 2, r_clear * 2))
+        # Draw clearing radius (only if > 0)
+        if self.clear_radius > 0:
+            painter.setPen(QPen(QColor(255, 255, 255, 30), 1, Qt.DashLine))
+            painter.setBrush(QBrush(QColor(255, 255, 255, 5)))
+            r_clear = self.clear_radius
+            painter.drawEllipse(QRectF(-r_clear, -r_clear, r_clear * 2, r_clear * 2))
 
     def boundingRect(self):
+        if self.clear_radius <= 0:
+            return QRectF(-94, -94, 188, 188)
         r = max(84, self.clear_radius)
         return QRectF(-r - 10, -r - 10, r * 2 + 20, r * 2 + 20)
 
@@ -558,12 +561,21 @@ class MapPreviewWidget(QWidget):
             self.scene.addItem(line)
             self.grid_items.append(line)
 
-    def set_map_image(self, image: QImage, origin_x, origin_y, size_x, size_y):
+    def set_map_image(
+        self,
+        image: QImage,
+        origin_x,
+        origin_y,
+        size_x,
+        size_y,
+        tile_size: int = 512,
+    ):
         self.map_image = image
         self.origin_x = origin_x
         self.origin_y = origin_y
         self.map_size_x = size_x
         self.map_size_y = size_y
+        self.grid_size = max(1, int(tile_size))
 
         self.scene.setSceneRect(self.origin_x, self.origin_y, self.map_size_x, self.map_size_y)
         self.draw_grid()

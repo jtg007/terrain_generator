@@ -34,9 +34,16 @@ def heightgrid_to_heightmap(
 
 
 def choose_compile_safe_material(
-    requested_material: str, map_width: int, map_height: int
+    requested_material: str,
+    map_width: int,
+    map_height: int,
+    use_nodetail_texture: bool = False,
 ) -> str:
-    """Return the requested material (nodetail is now user-controlled via settings)."""
+    """Return a compile-safe terrain material based on user nodetail preference."""
+    if use_nodetail_texture:
+        if requested_material.endswith("_nodetail"):
+            return requested_material
+        return COMPILE_SAFE_NODETAIL_MATERIAL
     return requested_material
 
 
@@ -58,6 +65,7 @@ def export_vmf(grid, config_model, output_dir: Path, output_filename: str) -> st
         config_model.terrain_material,
         map_width,
         map_height,
+        config_model.use_nodetail_texture,
     )
 
     vertex_cols = tiles_x * (grid_size - 1) + 1

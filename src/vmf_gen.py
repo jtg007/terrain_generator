@@ -34,6 +34,10 @@ SAFE_EMPIRES_SKYBOXES = [
 ]
 SAFE_EMPIRES_SKYBOX_SET = set(SAFE_EMPIRES_SKYBOXES)
 DEFAULT_SAFE_SKYBOX = "empsky_overcast2"
+MAX_MAP_DISPINFO = 2048
+WORLD_MIN_COORD = -16384
+WORLD_MAX_COORD = 16384
+WORLD_SAFE_MARGIN = 64
 
 
 def quantize_coord(val: float, precision: float = 1.0) -> float:
@@ -91,6 +95,17 @@ def generate_skybox(
     map_end_x = origin_x + map_width
     map_end_y = origin_y + map_height
 
+    # Expand outward where possible. If already at world bounds, place skybox walls inward.
+    pad_west = wall_thickness if origin_x - wall_thickness >= WORLD_MIN_COORD else 0
+    pad_east = wall_thickness if map_end_x + wall_thickness <= WORLD_MAX_COORD else 0
+    pad_south = wall_thickness if origin_y - wall_thickness >= WORLD_MIN_COORD else 0
+    pad_north = wall_thickness if map_end_y + wall_thickness <= WORLD_MAX_COORD else 0
+
+    floor_min_x = max(WORLD_MIN_COORD, origin_x - pad_west)
+    floor_max_x = min(WORLD_MAX_COORD, map_end_x + pad_east)
+    floor_min_y = max(WORLD_MIN_COORD, origin_y - pad_south)
+    floor_max_y = min(WORLD_MAX_COORD, map_end_y + pad_north)
+
     def split_range(start: int, end: int, max_size: int) -> List[Tuple[int, int]]:
         sections = []
         pos = start
@@ -102,18 +117,10 @@ def generate_skybox(
             sections[-1] = (sections[-1][0], end)
         return sections
 
-    x_sections = split_range(
-        origin_x - wall_thickness, map_end_x + wall_thickness, max_brush_size
-    )
-    y_sections = split_range(
-        origin_y - wall_thickness, map_end_y + wall_thickness, max_brush_size
-    )
-    x_wall_sections = split_range(
-        origin_x - wall_thickness, map_end_x + wall_thickness, max_brush_size
-    )
-    y_wall_sections = split_range(
-        origin_y - wall_thickness, map_end_y + wall_thickness, max_brush_size
-    )
+    x_sections = split_range(floor_min_x, floor_max_x, max_brush_size)
+    y_sections = split_range(floor_min_y, floor_max_y, max_brush_size)
+    x_wall_sections = split_range(floor_min_x, floor_max_x, max_brush_size)
+    y_wall_sections = split_range(floor_min_y, floor_max_y, max_brush_size)
 
     for x_start, x_end in x_sections:
         for y_start, y_end in y_sections:
@@ -141,8 +148,20 @@ def generate_skybox(
     for x_start, x_end in x_wall_sections:
         cx = (x_start + x_end) // 2
         w = x_end - x_start
-        north_y = map_end_y + (wall_thickness // 2)
-        south_y = origin_y - (wall_thickness // 2)
+        if pad_north > 0:
+            north_min_y = map_end_y
+            north_max_y = map_end_y + wall_thickness
+        else:
+            north_min_y = map_end_y - wall_thickness
+            north_max_y = map_end_y
+        if pad_south > 0:
+            south_min_y = origin_y - wall_thickness
+            south_max_y = origin_y
+        else:
+            south_min_y = origin_y
+            south_max_y = origin_y + wall_thickness
+        north_y = (north_min_y + north_max_y) // 2
+        south_y = (south_min_y + south_max_y) // 2
 
         north = Block(
             Vertex(
@@ -150,7 +169,7 @@ def generate_skybox(
                 north_y,
                 wall_center_z,
             ),
-            (w, wall_thickness, wall_height),
+            (w, north_max_y - north_min_y, wall_height),
             "tools/toolsskybox",
         )
         north.set_material("tools/toolsskybox")
@@ -162,7 +181,7 @@ def generate_skybox(
                 south_y,
                 wall_center_z,
             ),
-            (w, wall_thickness, wall_height),
+            (w, south_max_y - south_min_y, wall_height),
             "tools/toolsskybox",
         )
         south.set_material("tools/toolsskybox")
@@ -171,8 +190,20 @@ def generate_skybox(
     for y_start, y_end in y_wall_sections:
         cy = (y_start + y_end) // 2
         h = y_end - y_start
-        east_x = map_end_x + (wall_thickness // 2)
-        west_x = origin_x - (wall_thickness // 2)
+        if pad_east > 0:
+            east_min_x = map_end_x
+            east_max_x = map_end_x + wall_thickness
+        else:
+            east_min_x = map_end_x - wall_thickness
+            east_max_x = map_end_x
+        if pad_west > 0:
+            west_min_x = origin_x - wall_thickness
+            west_max_x = origin_x
+        else:
+            west_min_x = origin_x
+            west_max_x = origin_x + wall_thickness
+        east_x = (east_min_x + east_max_x) // 2
+        west_x = (west_min_x + west_max_x) // 2
 
         east = Block(
             Vertex(
@@ -180,7 +211,7 @@ def generate_skybox(
                 cy,
                 wall_center_z,
             ),
-            (wall_thickness, h, wall_height),
+            (east_max_x - east_min_x, h, wall_height),
             "tools/toolsskybox",
         )
         east.set_material("tools/toolsskybox")
@@ -192,7 +223,7 @@ def generate_skybox(
                 cy,
                 wall_center_z,
             ),
-            (wall_thickness, h, wall_height),
+            (west_max_x - west_min_x, h, wall_height),
             "tools/toolsskybox",
         )
         west.set_material("tools/toolsskybox")
@@ -1177,6 +1208,12 @@ class DisplacementVMF:
         power = self.spec.terrain_power
         tile_size = self.spec.terrain_tile_size
         height_scale = self.spec.terrain_max_height
+        disp_count = tiles_x * tiles_y
+        if disp_count > MAX_MAP_DISPINFO:
+            raise ValueError(
+                f"Too many displacement tiles for VBSP: {disp_count} > {MAX_MAP_DISPINFO}. "
+                "Reduce Tiles X/Y or increase tile size."
+            )
 
         valve_map = vmf.ValveMap()
         valve_map.world.properties["maxpropscreenwidth"] = "-1"
@@ -1194,6 +1231,20 @@ class DisplacementVMF:
 
         origin_x = int(-map_width / 2)
         origin_y = int(-map_height / 2)
+        map_end_x = origin_x + map_width
+        map_end_y = origin_y + map_height
+        if (
+            origin_x < WORLD_MIN_COORD + WORLD_SAFE_MARGIN
+            or origin_y < WORLD_MIN_COORD + WORLD_SAFE_MARGIN
+            or map_end_x > WORLD_MAX_COORD - WORLD_SAFE_MARGIN
+            or map_end_y > WORLD_MAX_COORD - WORLD_SAFE_MARGIN
+        ):
+            raise ValueError(
+                "Map extents exceed compile-safe coordinate limits: "
+                f"X [{origin_x}, {map_end_x}], Y [{origin_y}, {map_end_y}] "
+                "must stay within "
+                f"[{WORLD_MIN_COORD + WORLD_SAFE_MARGIN}, {WORLD_MAX_COORD - WORLD_SAFE_MARGIN}]."
+            )
         map_center_x = 0.0
         map_center_y = 0.0
 
@@ -1245,30 +1296,32 @@ class DisplacementVMF:
         flatten_radius = self.spec.base_clear_radius
 
         working_heightmap = self.heightmap.copy()
-        working_heightmap = flatten_terrain_at_location(
-            working_heightmap,
-            imp_base_x,
-            imp_base_y,
-            flatten_radius,
-            img_width,
-            img_height,
-            map_width,
-            map_height,
-            origin_x,
-            origin_y,
-        )
-        working_heightmap = flatten_terrain_at_location(
-            working_heightmap,
-            nf_base_x,
-            nf_base_y,
-            flatten_radius,
-            img_width,
-            img_height,
-            map_width,
-            map_height,
-            origin_x,
-            origin_y,
-        )
+
+        if flatten_radius > 0:
+            working_heightmap = flatten_terrain_at_location(
+                working_heightmap,
+                imp_base_x,
+                imp_base_y,
+                flatten_radius,
+                img_width,
+                img_height,
+                map_width,
+                map_height,
+                origin_x,
+                origin_y,
+            )
+            working_heightmap = flatten_terrain_at_location(
+                working_heightmap,
+                nf_base_x,
+                nf_base_y,
+                flatten_radius,
+                img_width,
+                img_height,
+                map_width,
+                map_height,
+                origin_x,
+                origin_y,
+            )
 
         height_array = (working_heightmap * 255).astype(np.uint8)
 

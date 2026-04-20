@@ -22,6 +22,34 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from steam_paths import is_windows, find_empires_path, find_empires_bin
 
+COMPILE_SAFE_NODETAIL_MATERIAL = "common/terrain/blend_grass01a_dirt01a_nodetail"
+DETAIL_HEAVY_TERRAIN_MATERIALS = [
+    "common/nature/blend_grass_mountainwall_000",
+    "common/nature/blend_grass_mud_003",
+    "common/terrain/blend_grass01a_dirt01a",
+    "nature/terrain/blend_grass1_dirt1",
+    "nature/terrain/blend_grass1_rock1",
+]
+
+
+def force_nodetail_materials(vmf_path: str) -> int:
+    """
+    Rewrite known terrain blend materials to a nodetail-safe material.
+    Returns replacement count.
+    """
+    path = Path(vmf_path)
+    content = path.read_text(encoding="utf-8", errors="ignore")
+    replacement_count = 0
+    for mat in DETAIL_HEAVY_TERRAIN_MATERIALS:
+        old = f'"material" "{mat}"'
+        new = f'"material" "{COMPILE_SAFE_NODETAIL_MATERIAL}"'
+        occurrences = content.count(old)
+        if occurrences > 0:
+            content = content.replace(old, new)
+            replacement_count += occurrences
+    path.write_text(content, encoding="utf-8")
+    return replacement_count
+
 
 def compile_vmf(
     vmf_path: str,
@@ -79,23 +107,43 @@ def compile_vmf(
 
     temp_vmf = os.path.join(sdk_path, vmf_name)
     shutil.copy2(str(vmf_path), temp_vmf)
-
-    # Run VBSP with OS-appropriate command
-    if is_windows():
-        # Windows: Run VBSP directly
-        cmd = [vbsp_exe, "-game", "..\\empires"]
-    else:
-        # Linux: Run via Wine
-        cmd = ["wine", "vbsp.exe", "-game", "../empires"]
-
     if nodetail:
-        cmd.append("-nodetail")
+        replaced = force_nodetail_materials(temp_vmf)
+        if replaced > 0:
+            print(
+                "Nodetail material override enabled:"
+                f" replaced {replaced} terrain material reference(s)."
+            )
 
-    cmd.append(vmf_name)
+    def build_cmd(use_nodetail: bool) -> list:
+        if is_windows():
+            cmd = [vbsp_exe, "-game", "..\\empires"]
+        else:
+            cmd = ["wine", "vbsp.exe", "-game", "../empires"]
+        if use_nodetail:
+            cmd.append("-nodetail")
+        cmd.append(vmf_name)
+        return cmd
+
+    def print_failure_hint(combined_output: str) -> None:
+        if "bounds out of range" in combined_output:
+            print(
+                "Tip: Map/skybox extents exceeded Hammer coordinate limits. "
+                "Reduce map size (Tiles X/Y or Tile Size)."
+            )
+        elif "HashVec: point outside valid range" in combined_output:
+            print(
+                "Tip: Map is too close to world limits (±16384). "
+                "Reduce Tiles X/Y or Tile Size."
+            )
+        elif "Too many detail props emitted" in combined_output:
+            print("Tip: Enable 'Use nodetail texture' in Settings.")
+        else:
+            print("Tip: Check geometry and entity placement near map bounds.")
 
     try:
         result = subprocess.run(
-            cmd,
+            build_cmd(nodetail),
             cwd=sdk_path,
             capture_output=True,
             text=True,
@@ -110,10 +158,38 @@ def compile_vmf(
         print("-" * 60)
 
         if result.returncode != 0:
-            print("Compile failed.")
-            print("Tip: Try enabling 'Use nodetail texture' in Settings.")
-            print(f"Error output:\n{result.stdout}\n{result.stderr}")
-            return False
+            combined_output = f"{result.stdout}\n{result.stderr}"
+            if (not nodetail) and ("Too many detail props emitted" in combined_output):
+                print("Detail prop limit hit. Retrying compile with nodetail fallback...")
+                replaced = force_nodetail_materials(temp_vmf)
+                if replaced > 0:
+                    print(
+                        "Nodetail material override enabled:"
+                        f" replaced {replaced} terrain material reference(s)."
+                    )
+                retry_result = subprocess.run(
+                    build_cmd(True),
+                    cwd=sdk_path,
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                )
+                if retry_result.stdout:
+                    print(retry_result.stdout)
+                if retry_result.stderr:
+                    print("STDERR:", retry_result.stderr)
+                print("-" * 60)
+                if retry_result.returncode != 0:
+                    print("Compile failed.")
+                    combined_output = f"{retry_result.stdout}\n{retry_result.stderr}"
+                    print_failure_hint(combined_output)
+                    print(f"Error output:\n{retry_result.stdout}\n{retry_result.stderr}")
+                    return False
+            else:
+                print("Compile failed.")
+                print_failure_hint(combined_output)
+                print(f"Error output:\n{result.stdout}\n{result.stderr}")
+                return False
 
         generated_bsp = os.path.join(sdk_path, vmf_name.replace(".vmf", ".bsp"))
         if os.path.exists(generated_bsp):
