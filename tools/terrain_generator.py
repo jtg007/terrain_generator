@@ -374,6 +374,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.txt_map_name = QLineEdit()
         self.txt_map_name.setText("gui_terrain")
         self.txt_map_name.setPlaceholderText("Enter map name...")
+        name_lbl.setBuddy(self.txt_map_name)
         name_row.addWidget(self.txt_map_name, 1)
         config_layout.addLayout(name_row)
 
@@ -385,10 +386,12 @@ class TerrainGeneratorGUI(QMainWindow):
         seed_row.addWidget(seed_lbl)
         self.spin_seed = QSpinBox()
         self.spin_seed.setRange(0, 999999999)
+        seed_lbl.setBuddy(self.spin_seed)
         seed_row.addWidget(self.spin_seed, 1)
         self.btn_random_seed = QPushButton("🎲")
         self.btn_random_seed.setFixedSize(34, 30)
         self.btn_random_seed.setToolTip("Randomize seed")
+        self.btn_random_seed.setAccessibleName("Randomize seed")
         self.btn_random_seed.clicked.connect(
             lambda: self.spin_seed.setValue(random.randint(0, 999999999))
         )
@@ -406,6 +409,7 @@ class TerrainGeneratorGUI(QMainWindow):
         img_row.addWidget(self.chk_custom_image)
         self.btn_browse = QPushButton("Browse…")
         self.btn_browse.setEnabled(False)
+        self.btn_browse.setToolTip("Enable 'Custom' to select a heightmap")
         img_row.addWidget(self.btn_browse)
         self.lbl_image_path = QLabel("None")
         self.lbl_image_path.setObjectName("HintLabel")
@@ -432,6 +436,7 @@ class TerrainGeneratorGUI(QMainWindow):
         dim_grid.addWidget(lbl_tx, 0, 0)
         self.spin_tiles_x = QSpinBox()
         self.spin_tiles_x.setRange(1, 64)
+        lbl_tx.setBuddy(self.spin_tiles_x)
         dim_grid.addWidget(self.spin_tiles_x, 0, 1)
 
         lbl_ty = QLabel("Tiles Y")
@@ -442,6 +447,7 @@ class TerrainGeneratorGUI(QMainWindow):
         dim_grid.addWidget(lbl_ty, 0, 2)
         self.spin_tiles_y = QSpinBox()
         self.spin_tiles_y.setRange(1, 64)
+        lbl_ty.setBuddy(self.spin_tiles_y)
         dim_grid.addWidget(self.spin_tiles_y, 0, 3)
 
         lbl_hs = QLabel("Height")
@@ -450,6 +456,7 @@ class TerrainGeneratorGUI(QMainWindow):
         dim_grid.addWidget(lbl_hs, 1, 0)
         self.spin_height = QSpinBox()
         self.spin_height.setRange(128, 4096)
+        lbl_hs.setBuddy(self.spin_height)
         dim_grid.addWidget(self.spin_height, 1, 1)
 
         lbl_pw = QLabel("Detail")
@@ -458,6 +465,7 @@ class TerrainGeneratorGUI(QMainWindow):
         dim_grid.addWidget(lbl_pw, 1, 2)
         self.combo_power = QComboBox()
         self.combo_power.addItems(["2 (5×5)", "3 (9×9)", "4 (17×17)"])
+        lbl_pw.setBuddy(self.combo_power)
         dim_grid.addWidget(self.combo_power, 1, 3)
 
         config_layout.addLayout(dim_grid)
@@ -489,6 +497,7 @@ class TerrainGeneratorGUI(QMainWindow):
             ["Random", "Central Gorge", "Valley", "Two Lane", "Island", "Classic Cross"]
         )
         self.combo_topology.setCurrentIndex(0)
+        lbl_topo.setBuddy(self.combo_topology)
         topo_row.addWidget(self.combo_topology, 1)
         config_layout.addLayout(topo_row)
 
@@ -504,6 +513,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_lane_width = QSlider(Qt.Horizontal)
         self.slider_lane_width.setRange(0, 200)
         self.slider_lane_width.setValue(100)
+        lbl_lw.setBuddy(self.slider_lane_width)
         self.lbl_lane_width_val = QLabel("100%")
         lw_row.addWidget(
             make_slider_row(self.slider_lane_width, self.lbl_lane_width_val, "%"), 1
@@ -523,6 +533,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_mountain_height = QSlider(Qt.Horizontal)
         self.slider_mountain_height.setRange(0, 100)
         self.slider_mountain_height.setValue(50)
+        lbl_mh.setBuddy(self.slider_mountain_height)
         self.lbl_mountain_height_val = QLabel("50%")
         mh_row.addWidget(
             make_slider_row(
@@ -541,6 +552,7 @@ class TerrainGeneratorGUI(QMainWindow):
         rough_row.addWidget(lbl_r)
         self.slider_rough = QSlider(Qt.Horizontal)
         self.slider_rough.setRange(0, 100)
+        lbl_r.setBuddy(self.slider_rough)
         self.lbl_rough_val = QLabel("50%")
         rough_row.addWidget(
             make_slider_row(self.slider_rough, self.lbl_rough_val, "%"), 1
@@ -556,6 +568,7 @@ class TerrainGeneratorGUI(QMainWindow):
         eros_row.addWidget(lbl_e)
         self.slider_erosion = QSlider(Qt.Horizontal)
         self.slider_erosion.setRange(0, 100)
+        lbl_e.setBuddy(self.slider_erosion)
         self.lbl_erosion_val = QLabel("50%")
         eros_row.addWidget(
             make_slider_row(self.slider_erosion, self.lbl_erosion_val, "%"), 1
@@ -595,6 +608,7 @@ class TerrainGeneratorGUI(QMainWindow):
         br_row.addWidget(lbl_br)
         self.slider_base_radius = QSlider(Qt.Horizontal)
         self.slider_base_radius.setRange(0, 8192)
+        lbl_br.setBuddy(self.slider_base_radius)
         self.lbl_base_radius_val = QLabel("0")
         br_row.addWidget(
             make_slider_row(self.slider_base_radius, self.lbl_base_radius_val), 1
@@ -612,6 +626,7 @@ class TerrainGeneratorGUI(QMainWindow):
         bf_row.addWidget(lbl_bf)
         self.slider_base_flatness = QSlider(Qt.Horizontal)
         self.slider_base_flatness.setRange(0, 100)
+        lbl_bf.setBuddy(self.slider_base_flatness)
         self.lbl_base_flat_val = QLabel("0%")
         bf_row.addWidget(
             make_slider_row(self.slider_base_flatness, self.lbl_base_flat_val, "%"), 1
@@ -627,6 +642,7 @@ class TerrainGeneratorGUI(QMainWindow):
         cf_row.addWidget(lbl_cf)
         self.slider_center_flatten = QSlider(Qt.Horizontal)
         self.slider_center_flatten.setRange(0, 100)
+        lbl_cf.setBuddy(self.slider_center_flatten)
         self.lbl_cf_val = QLabel("0%")
         cf_row.addWidget(
             make_slider_row(self.slider_center_flatten, self.lbl_cf_val, "%"), 1
@@ -642,6 +658,7 @@ class TerrainGeneratorGUI(QMainWindow):
         cr_row.addWidget(lbl_cr)
         self.slider_center_radius = QSlider(Qt.Horizontal)
         self.slider_center_radius.setRange(10, 50)
+        lbl_cr.setBuddy(self.slider_center_radius)
         self.lbl_cr_val = QLabel("10%")
         cr_row.addWidget(
             make_slider_row(self.slider_center_radius, self.lbl_cr_val, "%"), 1
@@ -679,6 +696,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.combo_material = QComboBox()
         self.combo_material.addItems(self.terrain_materials)
         self.combo_material.setCurrentText("common/nature/blend_grass_mountainwall_000")
+        lbl_mat.setBuddy(self.combo_material)
         mat_row.addWidget(self.combo_material, 1)
         config_layout.addLayout(mat_row)
         self.combo_material.currentIndexChanged.connect(self.sync_to_model)
@@ -691,6 +709,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.combo_skybox = QComboBox()
         self.combo_skybox.addItems(self.skyboxes)
         self.combo_skybox.setCurrentText("empsky_overcast3yellow")
+        lbl_sky.setBuddy(self.combo_skybox)
         sky_row.addWidget(self.combo_skybox, 1)
         config_layout.addLayout(sky_row)
         self.combo_skybox.currentIndexChanged.connect(self.sync_to_model)
@@ -1382,6 +1401,10 @@ class TerrainGeneratorGUI(QMainWindow):
 
     def toggle_custom_image(self, checked):
         self.btn_browse.setEnabled(checked)
+        if checked:
+            self.btn_browse.setToolTip("Select a custom heightmap image")
+        else:
+            self.btn_browse.setToolTip("Enable 'Custom' to select a heightmap")
         self.slider_rough.setEnabled(not checked)
         self.spin_seed.setEnabled(not checked)
         self.btn_random_seed.setEnabled(not checked)

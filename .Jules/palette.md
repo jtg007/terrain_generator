@@ -1,3 +1,3 @@
-## 2023-10-24 - Prevent accidental data loss on delete actions
-**Learning:** Destructive actions without confirmation (like clearing all placed resources) can lead to frustrating data loss, especially when the clear button is placed right next to frequently used tool buttons.
-**Action:** Always add a confirmation dialog (like `QMessageBox.question`) before executing bulk delete or clear operations.
+## 2024-04-20 - PySide6 Accessibility Enhancements
+**Learning:** For PySide6 GUI accessibility and UX, associate `QLabel` widgets with their inputs using `.setBuddy()`, set `.setAccessibleName()` on icon-only buttons for screen readers, and provide explanatory tooltips on disabled buttons to improve the user experience.
+**Action:** When implementing new UI elements or reviewing existing ones in PySide6, always add `.setBuddy()` to labels, `.setAccessibleName()` to icon-only controls, and tooltips to disabled buttons.
