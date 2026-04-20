@@ -293,6 +293,12 @@ class TerrainGeneratorGUI(QMainWindow):
         path_label.setObjectName("SectionLabel")
         sidebar_layout.addWidget(path_label)
 
+        self.chk_auto_copy = QCheckBox("Auto-copy to Empires folder")
+        self.chk_auto_copy.setObjectName("FieldLabel")
+        self.chk_auto_copy.setChecked(self.config.get("auto_copy_to_empires", True))
+        self.chk_auto_copy.stateChanged.connect(self.on_auto_copy_changed)
+        sidebar_layout.addWidget(self.chk_auto_copy)
+
         self.edit_empires_path = QLineEdit()
         self.edit_empires_path.setPlaceholderText("Empires install folder...")
         sidebar_layout.addWidget(self.edit_empires_path)
@@ -309,6 +315,37 @@ class TerrainGeneratorGUI(QMainWindow):
         sidebar_layout.addLayout(empires_bottom)
 
         self.edit_empires_path.textChanged.connect(self.on_empires_path_changed)
+
+        # Custom output folder
+        self.custom_output_container = QWidget()
+        custom_output_layout = QVBoxLayout(self.custom_output_container)
+        custom_output_layout.setContentsMargins(0, 0, 0, 0)
+        custom_output_layout.setSpacing(6)
+
+        self.lbl_custom_output = QLabel("Custom Output Folder:")
+        self.lbl_custom_output.setObjectName("FieldLabel")
+        custom_output_layout.addWidget(self.lbl_custom_output)
+
+        self.edit_custom_output = QLineEdit()
+        self.edit_custom_output.setPlaceholderText("Select output folder...")
+        self.edit_custom_output.setText(self.config.get("custom_output_folder", ""))
+        self.edit_custom_output.textChanged.connect(self.on_custom_output_changed)
+        custom_output_layout.addWidget(self.edit_custom_output)
+
+        custom_output_bottom = QHBoxLayout()
+        custom_output_bottom.setSpacing(6)
+        self.lbl_custom_status = QLabel()
+        self.lbl_custom_status.setObjectName("HintLabel")
+        custom_output_bottom.addWidget(self.lbl_custom_status, 1)
+        self.btn_browse_custom = QPushButton("Browse")
+        self.btn_browse_custom.setObjectName("SmallButton")
+        self.btn_browse_custom.clicked.connect(self.browse_custom_output)
+        custom_output_bottom.addWidget(self.btn_browse_custom)
+        custom_output_layout.addLayout(custom_output_bottom)
+
+        sidebar_layout.addWidget(self.custom_output_container)
+
+        self.on_auto_copy_changed() # Trigger initial state setup
 
         sidebar_layout.addStretch()
 
@@ -1361,6 +1398,41 @@ class TerrainGeneratorGUI(QMainWindow):
             self.config_model.custom_image_path = file_path
             self.sync_to_model()
 
+    def on_auto_copy_changed(self):
+        """Toggle UI elements based on the auto copy setting."""
+        is_auto = self.chk_auto_copy.isChecked()
+        self.config.set("auto_copy_to_empires", is_auto)
+        self.custom_output_container.setVisible(not is_auto)
+
+    def on_custom_output_changed(self, text):
+        """Handle changes to custom output path."""
+        self.config.set("custom_output_folder", text)
+        self.update_custom_status()
+
+    def browse_custom_output(self):
+        """Browse for custom output folder."""
+        folder = QFileDialog.getExistingDirectory(
+            self, "Select Custom Output Folder"
+        )
+        if folder:
+            self.edit_custom_output.setText(folder)
+            self.config.set("custom_output_folder", folder)
+            self.update_custom_status()
+
+    def update_custom_status(self):
+        path = self.edit_custom_output.text()
+        if not path:
+            self.lbl_custom_status.setText("Not configured")
+            self.lbl_custom_status.setStyleSheet("color: #555560; font-size: 10px;")
+        elif not Path(path).exists():
+            self.lbl_custom_status.setText("✗  Not Found")
+            self.lbl_custom_status.setStyleSheet("color: #ef4444; font-size: 10px;")
+        else:
+            self.lbl_custom_status.setText("✓  Valid")
+            self.lbl_custom_status.setStyleSheet(
+                "color: #22c55e; font-size: 10px; font-weight: bold;"
+            )
+
     def browse_empires_path(self):
         folder = QFileDialog.getExistingDirectory(
             self, "Select Empires Installation Folder"
@@ -1614,6 +1686,40 @@ class TerrainGeneratorGUI(QMainWindow):
         if success:
             map_name = self.txt_map_name.text().strip() or "gui_terrain"
             self._last_vmf_path = str(OUTPUT_DIR / f"{map_name}.vmf")
+
+            # If auto-copy is false and custom folder is set, copy files to the custom folder
+            auto_copy = self.config.get("auto_copy_to_empires", True)
+            custom_folder = self.config.get("custom_output_folder", "")
+            if not auto_copy and custom_folder and Path(custom_folder).exists():
+                try:
+                    import shutil
+                    custom_path = Path(custom_folder)
+
+                    vmf_dir = custom_path / "vmf"
+                    vmf_dir.mkdir(parents=True, exist_ok=True)
+                    vmf_src = OUTPUT_DIR / f"{map_name}.vmf"
+                    if vmf_src.exists():
+                        shutil.copy2(vmf_src, vmf_dir / f"{map_name}.vmf")
+
+                    txt_dir = custom_path / "txt"
+                    txt_dir.mkdir(parents=True, exist_ok=True)
+                    txt_src = OUTPUT_DIR / f"{map_name}.txt"
+                    if txt_src.exists():
+                        shutil.copy2(txt_src, txt_dir / f"{map_name}.txt")
+
+                    minimap_dir = custom_path / "minimap"
+                    minimap_dir.mkdir(parents=True, exist_ok=True)
+                    vmt_src = OUTPUT_DIR / f"{map_name}.vmt"
+                    if vmt_src.exists():
+                        shutil.copy2(vmt_src, minimap_dir / f"{map_name}.vmt")
+                    vtf_src = OUTPUT_DIR / f"{map_name}.vtf"
+                    if vtf_src.exists():
+                        shutil.copy2(vtf_src, minimap_dir / f"{map_name}.vtf")
+
+                    msg += f"\nFiles copied to {custom_folder}"
+                except Exception as e:
+                    msg += f"\nWarning: Failed to copy to custom folder: {e}"
+
             QMessageBox.information(self, "Success", msg)
         else:
             QMessageBox.critical(self, "Generation Failed", msg)
@@ -1630,8 +1736,10 @@ class TerrainGeneratorGUI(QMainWindow):
         self.btn_compile.setText("Compiling...")
 
         empires_path = self.config.get("empires_path", "")
+        auto_copy = self.config.get("auto_copy_to_empires", True)
+        custom_folder = self.config.get("custom_output_folder", "")
 
-        self.compile_worker = CompileWorker(vmf_path, empires_path)
+        self.compile_worker = CompileWorker(vmf_path, empires_path, auto_copy, custom_folder)
         self.compile_worker.finished.connect(self.on_compile_finished)
         self.compile_worker.start()
 
@@ -1648,10 +1756,12 @@ class TerrainGeneratorGUI(QMainWindow):
 class CompileWorker(QThread):
     finished = Signal(bool, str)
 
-    def __init__(self, vmf_path, empires_path=""):
+    def __init__(self, vmf_path, empires_path="", auto_copy=True, custom_folder=""):
         super().__init__()
         self.vmf_path = vmf_path
         self.empires_path = empires_path
+        self.auto_copy = auto_copy
+        self.custom_folder = custom_folder
 
     def run(self):
         try:
@@ -1667,6 +1777,8 @@ class CompileWorker(QThread):
                         sdk_path="",
                         empires_path=self.empires_path,
                         nodetail=True,
+                        auto_copy=self.auto_copy,
+                        custom_output=self.custom_folder,
                     )
 
                 if not success:
@@ -1684,6 +1796,11 @@ class CompileWorker(QThread):
                 if self.empires_path:
                     cmd.extend(["--empires-path", self.empires_path])
 
+                if not self.auto_copy:
+                    cmd.append("--no-auto-copy")
+                if self.custom_folder:
+                    cmd.extend(["--custom-output", self.custom_folder])
+
                 result = subprocess.run(
                     cmd,
                     cwd=str(PROJECT_ROOT),
@@ -1698,13 +1815,15 @@ class CompileWorker(QThread):
                     )
                     raise RuntimeError(err or "Compile failed")
 
-            self.finished.emit(
-                True,
-                (
-                    "BSP compiled and deployed to Empires.\n"
-                    "Overview TXT + minimap VMT were also deployed for stability."
-                ),
-            )
+            success_msg = "BSP compiled"
+            if self.auto_copy:
+                success_msg += " and deployed to Empires.\nOverview TXT + minimap VMT were also deployed for stability."
+            elif self.custom_folder:
+                success_msg += f" and moved to custom folder:\n{self.custom_folder}"
+            else:
+                success_msg += " successfully."
+
+            self.finished.emit(True, success_msg)
         except Exception as e:
             import traceback
 

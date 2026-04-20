@@ -16,6 +16,7 @@ class Config:
     DEFAULT_CONFIG = {
         "empires_path": "",
         "auto_copy_to_empires": True,
+        "custom_output_folder": "",
         "last_resolution": 1024,
         "last_filename": "terrain",
         "vmf_tiles_x": 4,
