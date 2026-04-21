@@ -86,6 +86,7 @@ class TerrainSpec:
     disable_commander: bool = False
     disable_buildings: bool = False
     disable_resource_nodes: bool = False
+    disable_capture_points: bool = True
     minimal_map: bool = False
     terrain_only: bool = False
 

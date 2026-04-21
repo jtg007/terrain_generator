@@ -57,6 +57,7 @@ class GUIConfigModel:
     disable_commander: bool = False
     disable_buildings: bool = False
     disable_resource_nodes: bool = False
+    disable_capture_points: bool = True
     minimal_map: bool = False
     terrain_only: bool = False
 
@@ -222,6 +223,7 @@ class GUIConfigModel:
             disable_commander=self.disable_commander,
             disable_buildings=self.disable_buildings,
             disable_resource_nodes=self.disable_resource_nodes,
+            disable_capture_points=self.disable_capture_points,
             minimal_map=self.minimal_map,
             terrain_only=self.terrain_only,
             custom_imp_base_x=self.custom_imp_base_x,

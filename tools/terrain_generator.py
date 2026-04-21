@@ -863,6 +863,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.chk_disable_commander = QCheckBox("No Commander")
         self.chk_disable_buildings = QCheckBox("No Buildings")
         self.chk_disable_resources = QCheckBox("No Resources")
+        self.chk_disable_flags = QCheckBox("No Flags")
         self.chk_minimal_map = QCheckBox("Minimal (No Props)")
         self.chk_terrain_only = QCheckBox("Terrain Only")
         self.chk_nodetail = QCheckBox("Use nodetail texture")
@@ -870,6 +871,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.chk_disable_commander.toggled.connect(self.sync_to_model)
         self.chk_disable_buildings.toggled.connect(self.sync_to_model)
         self.chk_disable_resources.toggled.connect(self.sync_to_model)
+        self.chk_disable_flags.toggled.connect(self.sync_to_model)
         self.chk_minimal_map.toggled.connect(self.sync_to_model)
         self.chk_terrain_only.toggled.connect(self.sync_to_model)
         self.chk_nodetail.toggled.connect(self.on_nodetail_changed)
@@ -884,10 +886,12 @@ class TerrainGeneratorGUI(QMainWindow):
             self.chk_disable_commander.setEnabled(not disable_individual)
             self.chk_disable_buildings.setEnabled(not disable_individual)
             self.chk_disable_resources.setEnabled(not disable_individual)
+            self.chk_disable_flags.setEnabled(not disable_individual)
             if disable_individual:
                 self.chk_disable_commander.setChecked(False)
                 self.chk_disable_buildings.setChecked(False)
                 self.chk_disable_resources.setChecked(False)
+                self.chk_disable_flags.setChecked(False)
 
         self.chk_minimal_map.toggled.connect(update_spawn_checks)
         self.chk_terrain_only.toggled.connect(update_spawn_checks)
@@ -895,9 +899,10 @@ class TerrainGeneratorGUI(QMainWindow):
         spawn_grid.addWidget(self.chk_disable_commander, 0, 0)
         spawn_grid.addWidget(self.chk_disable_buildings, 0, 1)
         spawn_grid.addWidget(self.chk_disable_resources, 1, 0)
-        spawn_grid.addWidget(self.chk_minimal_map, 1, 1)
-        spawn_grid.addWidget(self.chk_terrain_only, 2, 0)
-        spawn_grid.addWidget(self.chk_nodetail, 2, 1)
+        spawn_grid.addWidget(self.chk_disable_flags, 1, 1)
+        spawn_grid.addWidget(self.chk_minimal_map, 2, 0)
+        spawn_grid.addWidget(self.chk_terrain_only, 2, 1)
+        spawn_grid.addWidget(self.chk_nodetail, 3, 0, 1, 2)
         config_layout.addLayout(spawn_grid)
 
         # ─── VALIDATION ───
@@ -1707,6 +1712,7 @@ class TerrainGeneratorGUI(QMainWindow):
             self.chk_disable_commander,
             self.chk_disable_buildings,
             self.chk_disable_resources,
+            self.chk_disable_flags,
             self.chk_minimal_map,
             self.chk_terrain_only,
             self.chk_nodetail,
@@ -1769,6 +1775,9 @@ class TerrainGeneratorGUI(QMainWindow):
             self.chk_disable_buildings.setChecked(self.config_model.disable_buildings)
             self.chk_disable_resources.setChecked(
                 self.config_model.disable_resource_nodes
+            )
+            self.chk_disable_flags.setChecked(
+                self.config_model.disable_capture_points
             )
             self.chk_minimal_map.setChecked(self.config_model.minimal_map)
             self.chk_terrain_only.setChecked(self.config_model.terrain_only)
@@ -1836,6 +1845,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.disable_resource_nodes = (
             self.chk_disable_resources.isChecked()
         )
+        self.config_model.disable_capture_points = self.chk_disable_flags.isChecked()
         self.config_model.minimal_map = self.chk_minimal_map.isChecked()
         self.config_model.terrain_only = self.chk_terrain_only.isChecked()
         self.config_model.use_nodetail_texture = self.chk_nodetail.isChecked()

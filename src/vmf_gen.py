@@ -1084,6 +1084,7 @@ class PipelineSpec:
     disable_commander: bool = False
     disable_buildings: bool = False
     disable_resource_nodes: bool = False
+    disable_capture_points: bool = True
     minimal_map: bool = False
     terrain_only: bool = False
     base_clear_radius: int = 512
@@ -1417,7 +1418,11 @@ class DisplacementVMF:
             or self.spec.minimal_map
             or self.spec.terrain_only
         )
-        skip_misc = self.spec.minimal_map or self.spec.terrain_only
+        skip_misc = (
+            self.spec.disable_capture_points
+            or self.spec.minimal_map
+            or self.spec.terrain_only
+        )
         skip_player_spawns = self.spec.terrain_only
 
         if self.spec.use_enhanced_spawning:
