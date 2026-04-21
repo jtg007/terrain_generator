@@ -821,29 +821,40 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
 
             mask_val = float(hard_mask[r, c])
 
-            base_noise = noise.fbm(
-                wx_warp * macro_scale, wy_warp * macro_scale, octaves=spec.noise_octaves
-            )
-            ridge_val = noise.fbm(
-                wx_warp * ridge_scale + 50,
-                wy_warp * ridge_scale + 50,
-                octaves=spec.noise_octaves,
-            )
-            ridge_val = (1.0 - abs(ridge_val)) ** 2
-            detail_val = noise.fbm(wx_warp * 0.008, wy_warp * 0.008, octaves=3)
+            if spec.manual_terrain:
+                base_noise = 0.0
+                ridge_val = 0.0
+                detail_val = 0.0
+                noise_combined = 1.0
+            else:
+                base_noise = noise.fbm(
+                    wx_warp * macro_scale, wy_warp * macro_scale, octaves=spec.noise_octaves
+                )
+                ridge_val = noise.fbm(
+                    wx_warp * ridge_scale + 50,
+                    wy_warp * ridge_scale + 50,
+                    octaves=spec.noise_octaves,
+                )
+                ridge_val = (1.0 - abs(ridge_val)) ** 2
+                detail_val = noise.fbm(wx_warp * 0.008, wy_warp * 0.008, octaves=3)
 
-            noise_combined = (
-                (0.5 - 0.2 * roughness) * base_noise
-                + (0.3 + 0.4 * roughness) * ridge_val
-                + 0.05 * detail_val
-            )
+                noise_combined = (
+                    (0.5 - 0.2 * roughness) * base_noise
+                    + (0.3 + 0.4 * roughness) * ridge_val
+                    + 0.05 * detail_val
+                )
 
             playable_height = floor_height + (max_height * 0.01 * base_noise)
             wilderness_target = (
                 floor_height + (mountain_height - floor_height) * noise_combined
             )
 
-            if spec.topology == "island":
+            if spec.invert_lanes:
+                # User selected invert lanes: lane is raised, wilderness is low
+                final_height = wilderness_target * mask_val + playable_height * (
+                    1.0 - mask_val
+                )
+            elif spec.topology == "island":
                 # For islands, the playable area should be the elevated mountain,
                 # and the wilderness should be the low floor (water level)
                 final_height = wilderness_target * mask_val + playable_height * (
@@ -1942,8 +1953,12 @@ def run_pipeline(
                 spec, grid.rows, grid.cols, nodes, connections
             )
             grid.playability_mask = hard_mask
+            print("  Step 2c: Generate heights with flat terrain (manual mode)")
+            grid = generate_heights(spec, grid)
         else:
             grid.playability_mask = None
+            print("  Step 2c: Generate heights with flat terrain (manual mode)")
+            grid = generate_heights(spec, grid)
     else:
         if spec.generate_lanes:
             print("  Step 2a: Generate playability mask (Smoothstep distance field)")

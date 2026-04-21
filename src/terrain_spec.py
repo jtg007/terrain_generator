@@ -91,6 +91,7 @@ class TerrainSpec:
     terrain_only: bool = False
 
     manual_terrain: bool = False
+    invert_lanes: bool = False
 
     def default_imp_base(self) -> Tuple[float, float]:
         """
