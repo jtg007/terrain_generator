@@ -1623,7 +1623,7 @@ def get_cell_alphas(
 
 
 def export_minimap(
-    spec: TerrainSpec, grid: HeightGrid, map_name: str, output_dir: str
+    spec: TerrainSpec, grid: HeightGrid, map_name: str, project_root: str
 ) -> None:
     """
     Exports a minimap texture combining heights (grayscale) and playability mask.
@@ -1662,7 +1662,7 @@ def export_minimap(
         final_rgb = shading * (1.0 - alpha) + tinted_shading * alpha
         img_rgb = np.clip(final_rgb, 0, 255).astype(np.uint8)
 
-    out_folder = Path(output_dir)
+    out_folder = Path(project_root) / "materials" / "maps"
     out_folder.mkdir(parents=True, exist_ok=True)
 
     # Generate 1024x1024 image

@@ -65,9 +65,14 @@ def compile_vmf(
         print(f"Error: VMF not found: {vmf_path}")
         return False
 
-    output_dir = vmf_path.parent
-    bsp_path = output_dir / f"{vmf_path.stem}.bsp"
     vmf_name = vmf_path.name
+    # Project root is the parent of mapsrc/
+    project_root = vmf_path.parent.parent
+    mapsrc_dir = project_root / "mapsrc"
+    maps_dir = project_root / "maps"
+    maps_dir.mkdir(parents=True, exist_ok=True)
+
+    bsp_path = maps_dir / f"{vmf_path.stem}.bsp"
 
     if not sdk_path:
         if empires_path:
@@ -218,7 +223,7 @@ def compile_vmf(
                 print(f"BSP copied to: {final_bsp_download}")
 
                 # Also copy the resource .txt script if it exists
-                txt_path = output_dir / f"{vmf_path.stem}.txt"
+                txt_path = project_root / "resource" / "maps" / f"{vmf_path.stem}.txt"
                 if txt_path.exists():
                     txt_dest_dir = os.path.join(empires_path, "resource", "maps")
                     os.makedirs(txt_dest_dir, exist_ok=True)
@@ -230,13 +235,13 @@ def compile_vmf(
                 vmt_dest_dir = os.path.join(empires_path, "materials", "maps")
                 os.makedirs(vmt_dest_dir, exist_ok=True)
 
-                vmt_src = output_dir / f"{vmf_path.stem}.vmt"
+                vmt_src = project_root / "materials" / "maps" / f"{vmf_path.stem}.vmt"
                 if vmt_src.exists():
                     final_vmt = os.path.join(vmt_dest_dir, f"{vmf_path.stem}.vmt")
                     shutil.copy2(str(vmt_src), final_vmt)
                     print(f"VMT minimap material copied to: {final_vmt}")
 
-                vtf_src = output_dir / f"{vmf_path.stem}.vtf"
+                vtf_src = project_root / "materials" / "maps" / f"{vmf_path.stem}.vtf"
                 if vtf_src.exists():
                     final_vtf = os.path.join(vmt_dest_dir, f"{vmf_path.stem}.vtf")
                     shutil.copy2(str(vtf_src), final_vtf)
@@ -245,38 +250,34 @@ def compile_vmf(
             elif not auto_copy and custom_output:
                 custom_path = Path(custom_output)
                 if custom_path.exists():
-                    # Copy BSP to custom_folder/bsp/
-                    custom_bsp_dir = custom_path / "bsp"
-                    custom_bsp_dir.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(bsp_path, custom_bsp_dir / f"{vmf_path.stem}.bsp")
-                    print(f"BSP copied to custom folder: {custom_bsp_dir}")
+                    # If the custom folder doesn't look like a standardized project root, 
+                    # create the maps/ folder inside it.
+                    # Actually, if the user provided a custom_output, we should just mirror 
+                    # the project_root into it if it's the same structure, 
+                    # but here we are just copying the results of compilation.
+                    
+                    # Copy BSP to custom_folder/maps/
+                    custom_maps_dir = custom_path / "maps"
+                    custom_maps_dir.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(bsp_path, custom_maps_dir / f"{vmf_path.stem}.bsp")
+                    print(f"BSP copied to custom folder: {custom_maps_dir}")
 
-                    # Also copy VMF to custom_folder/vmf/
-                    custom_vmf_dir = custom_path / "vmf"
-                    custom_vmf_dir.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(str(vmf_path), custom_vmf_dir / vmf_name)
-                    print(f"VMF copied to custom folder: {custom_vmf_dir}")
-
-                    # Also copy TXT
-                    txt_path = output_dir / f"{vmf_path.stem}.txt"
-                    if txt_path.exists():
-                        custom_txt_dir = custom_path / "txt"
-                        custom_txt_dir.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(str(txt_path), custom_txt_dir / f"{vmf_path.stem}.txt")
-                        print(f"TXT copied to custom folder: {custom_txt_dir}")
-
-                    # Also copy minimap
-                    custom_minimap_dir = custom_path / "minimap"
-                    custom_minimap_dir.mkdir(parents=True, exist_ok=True)
-                    vmt_src = output_dir / f"{vmf_path.stem}.vmt"
-                    if vmt_src.exists():
-                        shutil.copy2(str(vmt_src), custom_minimap_dir / f"{vmf_path.stem}.vmt")
-                        print(f"VMT copied to custom folder: {custom_minimap_dir}")
-
-                    vtf_src = output_dir / f"{vmf_path.stem}.vtf"
-                    if vtf_src.exists():
-                        shutil.copy2(str(vtf_src), custom_minimap_dir / f"{vmf_path.stem}.vtf")
-                        print(f"VTF copied to custom folder: {custom_minimap_dir}")
+                    # Mirror other assets if they exist in project_root
+                    for subdir in ["mapsrc", "materials", "resource"]:
+                        src_dir = project_root / subdir
+                        if src_dir.exists():
+                            dest_dir = custom_path / subdir
+                            if dest_dir.exists():
+                                # Use a safe copy that doesn't overwrite the whole dir if it exists
+                                for item in src_dir.rglob("*"):
+                                    if item.is_file():
+                                        rel_path = item.relative_to(src_dir)
+                                        target = dest_dir / rel_path
+                                        target.parent.mkdir(parents=True, exist_ok=True)
+                                        shutil.copy2(item, target)
+                            else:
+                                shutil.copytree(src_dir, dest_dir)
+                    print(f"Assets mirrored to custom folder: {custom_path}")
 
             return True
         else:

@@ -55,7 +55,7 @@ from tools.preview_widget import MapPreviewWidget
 
 from src.config_model import GUIConfigModel, MAX_MAP_DISPINFO, MAX_MAP_WORLD_SIZE
 from src.terrain_pipeline import run_pipeline
-from src.export_utils import export_vmf
+from src.export_utils import export_vmf, get_versioned_path
 from src.vmf_gen import (
     SAFE_EMPIRES_SKYBOXES,
     DEFAULT_SAFE_SKYBOX,
@@ -143,9 +143,14 @@ class GenerationWorker(QThread):
         self.custom_connections = custom_connections
         self.custom_resources = custom_resources
         self.output_filename = output_filename
+        self.project_root = None
 
     def run(self):
         try:
+            # Create a versioned project root
+            self.project_root = get_versioned_path(OUTPUT_DIR, self.output_filename)
+            self.project_root.mkdir(parents=True, exist_ok=True)
+
             spec = self.config_model.make_spec()
             if self.custom_nodes and self.custom_connections:
                 spec.custom_layout_nodes = self.custom_nodes
@@ -156,7 +161,7 @@ class GenerationWorker(QThread):
 
             # Run pipeline
             result = run_pipeline(
-                spec, map_name=self.output_filename, output_dir=str(OUTPUT_DIR)
+                spec, map_name=self.output_filename, output_dir=str(self.project_root)
             )
             if result["errors"]:
                 raise Exception(f"Pipeline errors: {result['errors']}")
@@ -166,7 +171,7 @@ class GenerationWorker(QThread):
             message = export_vmf(
                 grid,
                 self.config_model,
-                OUTPUT_DIR,
+                self.project_root,
                 self.output_filename,
             )
 
@@ -1967,39 +1972,25 @@ class TerrainGeneratorGUI(QMainWindow):
 
         if success:
             map_name = self.txt_map_name.text().strip() or "gui_terrain"
-            self._last_vmf_path = str(OUTPUT_DIR / f"{map_name}.vmf")
+            project_root = getattr(self.worker, "project_root", None)
+            if project_root:
+                self._last_vmf_path = str(project_root / "mapsrc" / f"{map_name}.vmf")
+            
+            self._last_custom_project_root = None
 
-            # If auto-copy is false and custom folder is set, copy files to the custom folder
+            # If auto-copy is false and custom folder is set, copy the whole project to the custom folder
             auto_copy = self.config.get("auto_copy_to_empires", True)
             custom_folder = self.config.get("custom_output_folder", "")
-            if not auto_copy and custom_folder and Path(custom_folder).exists():
+            if not auto_copy and custom_folder and Path(custom_folder).exists() and project_root:
                 try:
                     import shutil
 
-                    custom_path = Path(custom_folder)
+                    # Create a versioned path in the custom folder
+                    custom_dest = get_versioned_path(Path(custom_folder), map_name)
+                    shutil.copytree(project_root, custom_dest)
+                    self._last_custom_project_root = str(custom_dest)
 
-                    vmf_dir = custom_path / "vmf"
-                    vmf_dir.mkdir(parents=True, exist_ok=True)
-                    vmf_src = OUTPUT_DIR / f"{map_name}.vmf"
-                    if vmf_src.exists():
-                        shutil.copy2(vmf_src, vmf_dir / f"{map_name}.vmf")
-
-                    txt_dir = custom_path / "txt"
-                    txt_dir.mkdir(parents=True, exist_ok=True)
-                    txt_src = OUTPUT_DIR / f"{map_name}.txt"
-                    if txt_src.exists():
-                        shutil.copy2(txt_src, txt_dir / f"{map_name}.txt")
-
-                    minimap_dir = custom_path / "minimap"
-                    minimap_dir.mkdir(parents=True, exist_ok=True)
-                    vmt_src = OUTPUT_DIR / f"{map_name}.vmt"
-                    if vmt_src.exists():
-                        shutil.copy2(vmt_src, minimap_dir / f"{map_name}.vmt")
-                    vtf_src = OUTPUT_DIR / f"{map_name}.vtf"
-                    if vtf_src.exists():
-                        shutil.copy2(vtf_src, minimap_dir / f"{map_name}.vtf")
-
-                    msg += f"\nFiles copied to {custom_folder}"
+                    msg += f"\nFiles copied to {custom_dest}"
                 except Exception as e:
                     msg += f"\nWarning: Failed to copy to custom folder: {e}"
 
@@ -2020,7 +2011,12 @@ class TerrainGeneratorGUI(QMainWindow):
 
         empires_path = self.config.get("empires_path", "")
         auto_copy = self.config.get("auto_copy_to_empires", True)
-        custom_folder = self.config.get("custom_output_folder", "")
+        
+        # Use the specific project root if it was just generated
+        custom_folder = getattr(self, "_last_custom_project_root", None)
+        if not custom_folder:
+            custom_folder = self.config.get("custom_output_folder", "")
+            
         nodetail = self.config.get("nodetail", False)
 
         self.compile_worker = CompileWorker(

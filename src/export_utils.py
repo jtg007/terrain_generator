@@ -50,11 +50,32 @@ def choose_compile_safe_material(
 from src.vmf_gen import PipelineSpec, DisplacementVMF
 
 
-def export_vmf(grid, config_model, output_dir: Path, output_filename: str) -> str:
+def get_versioned_path(base_dir: Path, name: str) -> Path:
+    """Returns a versioned Path like 'base_dir/name', 'base_dir/name_01', etc."""
+    path = base_dir / name
+    if not path.exists():
+        return path
+
+    counter = 1
+    while True:
+        versioned_name = f"{name}_{counter:02d}"
+        path = base_dir / versioned_name
+        if not path.exists():
+            return path
+        counter += 1
+
+
+def export_vmf(grid, config_model, project_root: Path, output_filename: str) -> str:
     """Exports the given height grid and config to a VMF file, returns a success message."""
     spec = config_model.make_spec()
     tile_size = config_model.cell_size
     displacement_power = config_model.displacement_power
+
+    # Create subdirectories
+    mapsrc_dir = project_root / "mapsrc"
+    mapsrc_dir.mkdir(parents=True, exist_ok=True)
+    resource_dir = project_root / "resource" / "maps"
+    resource_dir.mkdir(parents=True, exist_ok=True)
 
     grid_size = (2**displacement_power) + 1
     tiles_x = spec.size_x // tile_size
@@ -75,7 +96,7 @@ def export_vmf(grid, config_model, output_dir: Path, output_filename: str) -> st
 
     hm_array = (heightmap * 255).astype(np.uint8)
     hm_img = Image.fromarray(hm_array, mode="L")
-    hm_path = output_dir / f"{output_filename}_temp.png"
+    hm_path = mapsrc_dir / f"{output_filename}_temp.png"
     hm_img.save(hm_path)
 
     calculated_max_height = config_model.height_scale
@@ -91,7 +112,7 @@ def export_vmf(grid, config_model, output_dir: Path, output_filename: str) -> st
         skybox=config_model.skybox,
         terrain_tiles_x=tiles_x,
         terrain_tiles_y=tiles_y,
-        output_dir=str(output_dir),
+        output_dir=str(mapsrc_dir),
         rules_file="map_rules.json",
         use_enhanced_spawning=True,
         base_clear_radius=config_model.base_clear_radius,
@@ -110,7 +131,7 @@ def export_vmf(grid, config_model, output_dir: Path, output_filename: str) -> st
     vmf_gen = DisplacementVMF(vmf_spec)
     vmf_gen.load_heightmap(str(hm_path), auto_resize=False)
 
-    vmf_path = output_dir / f"{output_filename}.vmf"
+    vmf_path = mapsrc_dir / f"{output_filename}.vmf"
     vmf_gen.generate_vmf(str(vmf_path))
 
     origin_x = -(map_width // 2)
@@ -143,7 +164,7 @@ def export_vmf(grid, config_model, output_dir: Path, output_filename: str) -> st
 	"imp_objective" "Build refineries to gain resources and destroy the enemy command vehicle."
 }}
 """
-    resource_file = output_dir / f"{output_filename}.txt"
+    resource_file = resource_dir / f"{output_filename}.txt"
     resource_file.write_text(resource_content)
 
     hm_path.unlink(missing_ok=True)
