@@ -38,13 +38,30 @@ def choose_compile_safe_material(
     map_width: int,
     map_height: int,
     use_nodetail_texture: bool = False,
-) -> str:
-    """Return a compile-safe terrain material based on user nodetail preference."""
+) -> Tuple[str, Optional[str]]:
+    """Return (material_name, optional_warning)."""
     if use_nodetail_texture:
+        # Default materials from config and spec
+        defaults = [
+            "common/nature/blend_grass_mountainwall_000",
+            "nature/terrain/blend_dirt_grass_dmz_sscale",
+            "common/stene/grass02"
+        ]
+        if requested_material in defaults:
+            return COMPILE_SAFE_NODETAIL_MATERIAL, None
+            
         if requested_material.endswith("_nodetail"):
-            return requested_material
-        return COMPILE_SAFE_NODETAIL_MATERIAL
-    return requested_material
+            return requested_material, None
+            
+        # User picked a custom texture but "nodetail" is checked.
+        # We allow it, but provide a warning.
+        warning = (
+            f"Custom material '{requested_material}' is used without a nodetail version. "
+            "Large maps may hit the detail prop limit."
+        )
+        return requested_material, warning
+        
+    return requested_material, None
 
 
 from src.vmf_gen import PipelineSpec, DisplacementVMF
@@ -65,8 +82,8 @@ def get_versioned_path(base_dir: Path, name: str) -> Path:
         counter += 1
 
 
-def export_vmf(grid, config_model, project_root: Path, output_filename: str) -> str:
-    """Exports the given height grid and config to a VMF file, returns a success message."""
+def export_vmf(grid, config_model, project_root: Path, output_filename: str) -> Tuple[str, Optional[str]]:
+    """Exports the given height grid and config to a VMF file, returns (success_msg, warning_msg)."""
     spec = config_model.make_spec()
     tile_size = config_model.cell_size
     displacement_power = config_model.displacement_power
@@ -82,7 +99,7 @@ def export_vmf(grid, config_model, project_root: Path, output_filename: str) -> 
     tiles_y = spec.size_y // tile_size
     map_width = tiles_x * tile_size
     map_height = tiles_y * tile_size
-    compile_safe_material = choose_compile_safe_material(
+    compile_safe_material, warning = choose_compile_safe_material(
         config_model.terrain_material,
         map_width,
         map_height,
@@ -95,6 +112,10 @@ def export_vmf(grid, config_model, project_root: Path, output_filename: str) -> 
     heightmap = heightgrid_to_heightmap(grid, vertex_rows, vertex_cols)
 
     hm_array = (heightmap * 255).astype(np.uint8)
+    
+    # Fix Mirroring: Source Y is bottom-to-top, Image Y is top-to-bottom.
+    hm_array = np.flipud(hm_array)
+    
     hm_img = Image.fromarray(hm_array, mode="L")
     hm_path = mapsrc_dir / f"{output_filename}_temp.png"
     hm_img.save(hm_path)
@@ -170,9 +191,4 @@ def export_vmf(grid, config_model, project_root: Path, output_filename: str) -> 
     hm_path.unlink(missing_ok=True)
 
     message = f"VMF saved: {vmf_path}"
-    if compile_safe_material != config_model.terrain_material:
-        message += (
-            f"\nLarge map safety: switched terrain material to {compile_safe_material}"
-        )
-
-    return message
+    return message, warning

@@ -1375,7 +1375,7 @@ class MapPreviewWidget(QWidget):
                 connections.append(conn)
 
         # Resources are now exclusively tracked by self.resources, not VisualNodes
-        return nodes, connections, list(self.resources)
+        return nodes, connections, list(self.resources), self._height_overlay.copy() if self._height_overlay is not None else None
 
     def update_clear_radii(self, base_radius, resource_radius, lane_radius=None):
         """Update clear_radius on all VisualNode and FixedEntityItem items."""
