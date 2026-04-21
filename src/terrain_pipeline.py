@@ -1933,7 +1933,17 @@ def run_pipeline(
         grid = load_custom_heights(spec, grid)
     elif spec.manual_terrain:
         print("  Step 2: Manual terrain mode (flat base, user controls everything)")
-        grid.playability_mask = None
+        # Still use editor-drawn lane tool for playability if nodes exist
+        if spec.custom_layout_nodes is not None:
+            nodes = list(spec.custom_layout_nodes)
+            connections = spec.custom_layout_connections or []
+            print("  Step 2a: Using editor lane tool for playability mask")
+            hard_mask = generate_playability_mask(
+                spec, grid.rows, grid.cols, nodes, connections
+            )
+            grid.playability_mask = hard_mask
+        else:
+            grid.playability_mask = None
     else:
         if spec.generate_lanes:
             print("  Step 2a: Generate playability mask (Smoothstep distance field)")
