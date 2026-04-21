@@ -127,7 +127,7 @@ class PreviewWorker(QThread):
 
 
 class GenerationWorker(QThread):
-    finished = Signal(bool, str)
+    finished = Signal(bool, str, object)  # success, message, warning
 
     def __init__(
         self,
@@ -136,6 +136,7 @@ class GenerationWorker(QThread):
         custom_connections=None,
         custom_resources=None,
         output_filename="gui_terrain",
+        height_overlay=None,
     ):
         super().__init__()
         self.config_model = config_model
@@ -143,6 +144,7 @@ class GenerationWorker(QThread):
         self.custom_connections = custom_connections
         self.custom_resources = custom_resources
         self.output_filename = output_filename
+        self.height_overlay = height_overlay
         self.project_root = None
 
     def run(self):
@@ -168,19 +170,54 @@ class GenerationWorker(QThread):
 
             grid = result["grid"]
 
-            message = export_vmf(
+            # Apply sculpting height overlay if present
+            sculpt_warning = None
+            if self.height_overlay is not None and self.height_overlay.any():
+                import numpy as np
+                from scipy.ndimage import zoom
+
+                h, w = self.height_overlay.shape
+                target_h = grid.rows
+                target_w = grid.cols
+
+                try:
+                    # Fix Mirroring: Flip overlay to match the bottom-to-top grid
+                    overlay_to_apply = np.flipud(self.height_overlay)
+
+                    if (h, w) != (target_h, target_w):
+                        # Rescale overlay to match the final height grid dimensions
+                        scale_y = target_h / h
+                        scale_x = target_w / w
+                        rescaled_overlay = zoom(overlay_to_apply, (scale_y, scale_x), order=1)
+                    else:
+                        rescaled_overlay = overlay_to_apply
+
+                    # Add overlay to the height grid
+                    grid_heights = np.array(grid.heights)
+                    grid_heights += rescaled_overlay
+                    grid.heights = grid_heights.tolist()
+                except Exception as e:
+                    sculpt_warning = f"Manual sculpting application failed: {e}"
+
+            message, export_warning = export_vmf(
                 grid,
                 self.config_model,
                 self.project_root,
                 self.output_filename,
             )
 
-            self.finished.emit(True, message)
+            final_warning = ""
+            if sculpt_warning:
+                final_warning += sculpt_warning + "\n"
+            if export_warning:
+                final_warning += export_warning
+
+            self.finished.emit(True, message, final_warning if final_warning else None)
         except Exception as e:
             import traceback
 
             traceback.print_exc()
-            self.finished.emit(False, str(e))
+            self.finished.emit(False, str(e), None)
 
 
 class TerrainGeneratorGUI(QMainWindow):
@@ -1027,7 +1064,7 @@ class TerrainGeneratorGUI(QMainWindow):
 
     def run_preview(self):
         if not hasattr(self, "preview_worker") or not self.preview_worker.isRunning():
-            nodes, connections, resources = self.preview_widget.get_layout_from_editor()
+            nodes, connections, resources, _ = self.preview_widget.get_layout_from_editor()
             self.preview_worker = PreviewWorker(
                 self.config_model,
                 custom_nodes=nodes if nodes else None,
@@ -1952,7 +1989,7 @@ class TerrainGeneratorGUI(QMainWindow):
 
         # Run generation in background
         map_name = self.txt_map_name.text().strip() or "gui_terrain"
-        layout_nodes, layout_conns, layout_res = (
+        layout_nodes, layout_conns, layout_res, height_overlay = (
             self.preview_widget.get_layout_from_editor()
         )
 
@@ -1962,11 +1999,12 @@ class TerrainGeneratorGUI(QMainWindow):
             custom_connections=layout_conns if layout_conns else None,
             custom_resources=layout_res,
             output_filename=map_name,
+            height_overlay=height_overlay,
         )
         self.worker.finished.connect(self.on_generation_finished)
         self.worker.start()
 
-    def on_generation_finished(self, success, msg):
+    def on_generation_finished(self, success, msg, warning):
         self.btn_generate.setEnabled(True)
         self.btn_generate.setText("Generate VMF")
 
@@ -1994,7 +2032,10 @@ class TerrainGeneratorGUI(QMainWindow):
                 except Exception as e:
                     msg += f"\nWarning: Failed to copy to custom folder: {e}"
 
-            QMessageBox.information(self, "Success", msg)
+            if warning:
+                QMessageBox.warning(self, "Generation Warning", f"{msg}\n\nWARNING:\n{warning}")
+            else:
+                QMessageBox.information(self, "Success", msg)
         else:
             QMessageBox.critical(self, "Generation Failed", msg)
 
