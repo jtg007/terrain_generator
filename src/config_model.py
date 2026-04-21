@@ -68,6 +68,7 @@ class GUIConfigModel:
     custom_resources: Optional[list] = None
 
     manual_terrain: bool = False
+    invert_lanes: bool = False
     preview_with_pipeline: bool = False
 
     @property
@@ -235,4 +236,5 @@ class GUIConfigModel:
             custom_nf_base_y=self.custom_nf_base_y,
             custom_resources=self.custom_resources,
             manual_terrain=self.manual_terrain,
+            invert_lanes=self.invert_lanes,
         )

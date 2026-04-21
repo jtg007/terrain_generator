@@ -880,6 +880,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.chk_terrain_only = QCheckBox("Terrain Only")
         self.chk_nodetail = QCheckBox("Use nodetail texture")
         self.chk_manual_terrain = QCheckBox("Manual terrain")
+        self.chk_invert_lanes = QCheckBox("Invert Lanes (Raised)")
         self.chk_preview_pipeline = QCheckBox("Preview with pipeline")
 
         self.chk_disable_commander.toggled.connect(self.sync_to_model)
@@ -890,6 +891,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.chk_terrain_only.toggled.connect(self.sync_to_model)
         self.chk_nodetail.toggled.connect(self.on_nodetail_changed)
         self.chk_manual_terrain.toggled.connect(self.sync_to_model)
+        self.chk_invert_lanes.toggled.connect(self.sync_to_model)
         self.chk_preview_pipeline.toggled.connect(self.sync_to_model)
 
         def update_spawn_checks():
@@ -930,7 +932,8 @@ class TerrainGeneratorGUI(QMainWindow):
         )
         preview_grid.addWidget(lbl_preview_opts, 0, 0, 1, 2)
         preview_grid.addWidget(self.chk_manual_terrain, 1, 0, 1, 2)
-        preview_grid.addWidget(self.chk_preview_pipeline, 2, 0, 1, 2)
+        preview_grid.addWidget(self.chk_invert_lanes, 2, 0, 1, 2)
+        preview_grid.addWidget(self.chk_preview_pipeline, 3, 0, 1, 2)
         config_layout.addLayout(preview_grid)
 
         # ─── VALIDATION ───
@@ -1812,6 +1815,9 @@ class TerrainGeneratorGUI(QMainWindow):
             self.chk_minimal_map.setChecked(self.config_model.minimal_map)
             self.chk_terrain_only.setChecked(self.config_model.terrain_only)
             self.chk_nodetail.setChecked(self.config_model.use_nodetail_texture)
+            self.chk_manual_terrain.setChecked(self.config_model.manual_terrain)
+            self.chk_invert_lanes.setChecked(self.config_model.invert_lanes)
+            self.chk_preview_pipeline.setChecked(self.config_model.preview_with_pipeline)
 
         if self.config_model.custom_image_path:
             self.chk_custom_image.setChecked(True)
@@ -1880,6 +1886,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.terrain_only = self.chk_terrain_only.isChecked()
         self.config_model.use_nodetail_texture = self.chk_nodetail.isChecked()
         self.config_model.manual_terrain = self.chk_manual_terrain.isChecked()
+        self.config_model.invert_lanes = self.chk_invert_lanes.isChecked()
         self.config_model.preview_with_pipeline = self.chk_preview_pipeline.isChecked()
 
         self.update_validation_status()
