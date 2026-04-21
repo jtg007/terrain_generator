@@ -679,6 +679,9 @@ class MapPreviewWidget(QWidget):
                 self.setFlags(
                     QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemSendsGeometryChanges
                 )
+                # Flip the node vertically because the view is flipped
+                # No transform needed, stars should be at the bottom
+                pass
 
             def boundingRect(self):
                 r = max(84, self.clear_radius) if self.clear_radius > 0 else 84
@@ -808,9 +811,8 @@ class MapPreviewWidget(QWidget):
         if self._height_overlay is None or self._height_overlay.shape != heights.shape:
             self._height_overlay = np.zeros_like(self._base_heights)
 
-        # Re-render with overlay if sculpt edits exist
-        if self._height_overlay.any():
-            self._rerender_heightmap()
+        # Always re-render to ensure consistent normalization (e.g. neutral gray for flat maps)
+        self._rerender_heightmap()
 
     def _apply_brush(self, scene_x: float, scene_y: float, raise_terrain: bool):
         if self._base_heights is None:
@@ -856,15 +858,19 @@ class MapPreviewWidget(QWidget):
 
         combined = self._base_heights + self._height_overlay
 
-        # Use the exact same min/max as the original preview rendering
-        # so unsculpted areas stay pixel-identical. Sculpted areas clamp.
-        min_h = self._base_min
-        max_h = self._base_max
+        min_h = min(self._base_min, float(combined.min()))
+        max_h = max(self._base_max, float(combined.max()))
+
+        # Stabilize range if it's too small (prevents sudden color jumps/flashes)
+        # This ensures height 0 stays near neutral gray if the total range is under 512 units.
+        if max_h - min_h < 512.0:
+            min_h = min(min_h, -256.0)
+            max_h = max(max_h, 256.0)
 
         if max_h > min_h:
             normalized = (combined - min_h) / (max_h - min_h)
         else:
-            normalized = np.zeros_like(combined)
+            normalized = np.full_like(combined, 0.5)
 
         img_data = (np.clip(normalized, 0, 1) * 255).astype(np.uint8)
         h, w = img_data.shape

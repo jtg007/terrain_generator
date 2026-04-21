@@ -17,7 +17,7 @@ from typing import Optional, List, Tuple, Dict, Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "tools" / "vmflib"))
 from vmflib import vmf
-from vmflib.types import Vertex
+from vmflib.types import Vertex, Output
 from vmflib.brush import DispInfo
 from vmflib.tools import Block
 from vmflib import vmf as vmf_lib
@@ -87,7 +87,8 @@ def generate_skybox(
     """Generate airtight skybox with exact flush coordinates, split into smaller sections."""
     wall_thickness = 64
     terrain_base_z = -512
-    ceiling_z = max_terrain_height + 1536
+    ceiling_z = max_terrain_height + 7072
+    
     wall_height = ceiling_z - terrain_base_z
     wall_center_z = (ceiling_z + terrain_base_z) / 2.0
     max_brush_size = 2048
@@ -273,6 +274,7 @@ def flatten_terrain_at_location(
     origin_x: float,
     origin_y: float,
     blend_to_avg: bool = True,
+    flatness: float = 1.0,
 ) -> np.ndarray:
     """Gently clear terrain at base location with smooth falloff.
 
@@ -324,6 +326,8 @@ def flatten_terrain_at_location(
                     t = 1.0 - ((dist - plateau_radius) / falloff_dist)
                     t = t * t * (3 - 2 * t)
 
+                t = t * flatness
+
                 if blend_to_avg:
                     target_height = local_avg
                 else:
@@ -368,6 +372,8 @@ def spawn_base_entities_enhanced(
     skip_buildings: bool = False,
 ) -> None:
     """Spawn base entities for IMP or NF faction using data-driven placement."""
+    if origin_x is None or origin_y is None:
+        return
     if rules is None:
         rules = {}
 
@@ -441,14 +447,14 @@ def spawn_base_entities_enhanced(
         commander_class = "emp_imp_commander"
         barracks_class = "emp_building_imp_barracks"
         team_num = 2
-        commander_z = quantize_coord(commander_terrain_h + 96, 1.0)
-        barracks_z = quantize_coord(terrain_height + 96, 1.0)
+        commander_z = quantize_coord(commander_terrain_h + 64, 1.0)
+        barracks_z = quantize_coord(terrain_height + 16, 1.0)
     elif faction == "nf":
         commander_class = "emp_nf_commander"
         barracks_class = "emp_building_nf_barracks"
         team_num = 3
-        commander_z = quantize_coord(commander_terrain_h + 128, 1.0)
-        barracks_z = quantize_coord(terrain_height + 128, 1.0)
+        commander_z = quantize_coord(commander_terrain_h + 96, 1.0)
+        barracks_z = quantize_coord(terrain_height + 16, 1.0)
     else:
         raise ValueError(f"Unknown faction: {faction}")
 
@@ -470,6 +476,11 @@ def spawn_base_entities_enhanced(
         spawn_base_buildings(
             valve_map, faction, origin_x, origin_y, terrain_height, rules
         )
+
+    if not skip_commander:
+        pass
+    if not skip_buildings:
+        pass
 
 
 def spawn_base_buildings(
@@ -595,7 +606,10 @@ def spawn_resource_nodes_enhanced(
     tiles_y: int = 8,
     power: int = 3,
 ) -> None:
-    """Spawn resource nodes using learned placement patterns."""
+    """Spawn resource nodes around a base using learned placement patterns."""
+    if base_x is None or base_y is None:
+        return
+
     resource_strategy = rules.get("resource_strategy", {})
 
     node_count_avg = resource_strategy.get("node_count_per_map", {}).get("avg", 9)
@@ -670,12 +684,12 @@ def spawn_resource_nodes_enhanced(
             prop_offset.get("dy", {}).get("min", -88),
             prop_offset.get("dy", {}).get("max", 30),
         )
-        
+
         prop_x = node_x + prop_dx_raw
         prop_y = node_y + prop_dy_raw
         prop_x = quantize_coord(max(map_min_x, min(map_max_x, prop_x)), 1.0)
         prop_y = quantize_coord(max(map_min_y, min(map_max_y, prop_y)), 1.0)
-        
+
         prop_terrain_z = get_terrain_height_at(
             prop_x,
             prop_y,
@@ -689,7 +703,7 @@ def spawn_resource_nodes_enhanced(
             tiles_y,
             power,
         )
-        
+
         # Prevent negative Z offsets to ensure the model sticks out of the ground
         # but retain the variation
         prop_dz_raw = random.uniform(
@@ -720,6 +734,19 @@ def spawn_resource_nodes_enhanced(
         resource_prop.properties["model"] = "models/props_wasteland/rockcliff01b.mdl"
         resource_prop.properties["Enabled"] = "1"
         resource_prop.properties["angles"] = f"0 {random.uniform(0, 360):.1f} 0"
+
+        conn = vmf_lib.Connections()
+        conn.children.append(
+            Output("OnEnable", model_targetname, "InputEnable", "", 0, -1)
+        )
+        conn.children.append(
+            Output("OnDisable", model_targetname, "InputDisable", "", 0, -1)
+        )
+        conn.children.append(
+            Output("OnDisable", smoke_targetname, "TurnOff", "", 0, -1)
+        )
+        conn.children.append(Output("OnEnable", smoke_targetname, "TurnOn", "", 0, -1))
+        resource_logic.children.append(conn)
 
         smoke = vmf_lib.Entity("env_smokestack")
         smoke.origin = f"{prop_x:.1f} {prop_y:.1f} {prop_z + 80:.1f}"
@@ -798,10 +825,10 @@ def spawn_custom_resources(
 
         prop_x = node_x + prop_dx_raw
         prop_y = node_y + prop_dy_raw
-        
+
         prop_x = quantize_coord(max(map_min_x, min(map_max_x, prop_x)), 1.0)
         prop_y = quantize_coord(max(map_min_y, min(map_max_y, prop_y)), 1.0)
-        
+
         prop_terrain_z = get_terrain_height_at(
             prop_x,
             prop_y,
@@ -815,7 +842,7 @@ def spawn_custom_resources(
             tiles_y,
             power,
         )
-        
+
         prop_dz_raw = random.uniform(
             0,
             max(0, prop_offset.get("dz", {}).get("max", 49)),
@@ -839,6 +866,19 @@ def spawn_custom_resources(
         resource_prop.properties["model"] = "models/props_wasteland/rockcliff01b.mdl"
         resource_prop.properties["Enabled"] = "1"
         resource_prop.properties["angles"] = f"0 {random.uniform(0, 360):.1f} 0"
+
+        conn = vmf_lib.Connections()
+        conn.children.append(
+            Output("OnEnable", model_targetname, "InputEnable", "", 0, -1)
+        )
+        conn.children.append(
+            Output("OnDisable", model_targetname, "InputDisable", "", 0, -1)
+        )
+        conn.children.append(
+            Output("OnDisable", smoke_targetname, "TurnOff", "", 0, -1)
+        )
+        conn.children.append(Output("OnEnable", smoke_targetname, "TurnOn", "", 0, -1))
+        resource_logic.children.append(conn)
 
         smoke = vmf_lib.Entity("env_smokestack")
         smoke.origin = f"{prop_x:.1f} {prop_y:.1f} {prop_z + 80:.1f}"
@@ -971,11 +1011,11 @@ def spawn_required_entities_enhanced(
     minimap_z_median = minimap_camera.get("z_height_stats", {}).get("median")
 
     if minimap_z_median is not None:
-        overview_z = minimap_z_median
+        overview_z = max(1087, minimap_z_median)
     elif minimap_z_avg is not None:
-        overview_z = minimap_z_avg
+        overview_z = max(1087, minimap_z_avg)
     else:
-        overview_z = max_terrain_height + 256
+        overview_z = max(1087, max_terrain_height + 512)
 
     info_overview = vmf_lib.Entity("emp_info_map_overview")
     info_overview.origin = f"{center_x:.1f} {center_y:.1f} {overview_z:.1f}"
@@ -1002,25 +1042,27 @@ def spawn_player_spawn_points(
     nf_count = 4 if nf_spawn_pct > 50 else 0
 
     spawn_offset = 200
-    for i in range(imp_count):
-        angle = (i / imp_count) * 360
-        angle_rad = math.radians(angle)
-        spawn_x = imp_base_x + math.cos(angle_rad) * spawn_offset
-        spawn_y = imp_base_y + math.sin(angle_rad) * spawn_offset
+    if imp_base_x is not None and imp_base_y is not None:
+        for i in range(imp_count):
+            angle = (i / imp_count) * 360
+            angle_rad = math.radians(angle)
+            spawn_x = imp_base_x + math.cos(angle_rad) * spawn_offset
+            spawn_y = imp_base_y + math.sin(angle_rad) * spawn_offset
 
-        spawn = vmf_lib.Entity("emp_info_player_Imp")
-        spawn.origin = f"{quantize_coord(spawn_x)} {quantize_coord(spawn_y)} {quantize_coord(terrain_height + 16)}"
-        spawn.properties["angles"] = f"0 {angle} 0"
+            spawn = vmf_lib.Entity("emp_info_player_Imp")
+            spawn.origin = f"{quantize_coord(spawn_x)} {quantize_coord(spawn_y)} {quantize_coord(terrain_height + 16)}"
+            spawn.properties["angles"] = f"0 {angle} 0"
 
-    for i in range(nf_count):
-        angle = (i / nf_count) * 360
-        angle_rad = math.radians(angle)
-        spawn_x = nf_base_x + math.cos(angle_rad) * spawn_offset
-        spawn_y = nf_base_y + math.sin(angle_rad) * spawn_offset
+    if nf_base_x is not None and nf_base_y is not None:
+        for i in range(nf_count):
+            angle = (i / nf_count) * 360
+            angle_rad = math.radians(angle)
+            spawn_x = nf_base_x + math.cos(angle_rad) * spawn_offset
+            spawn_y = nf_base_y + math.sin(angle_rad) * spawn_offset
 
-        spawn = vmf_lib.Entity("emp_info_player_NF")
-        spawn.origin = f"{quantize_coord(spawn_x)} {quantize_coord(spawn_y)} {quantize_coord(terrain_height + 16)}"
-        spawn.properties["angles"] = f"0 {angle} 0"
+            spawn = vmf_lib.Entity("emp_info_player_NF")
+            spawn.origin = f"{quantize_coord(spawn_x)} {quantize_coord(spawn_y)} {quantize_coord(terrain_height + 16)}"
+            spawn.properties["angles"] = f"0 {angle} 0"
 
 
 def spawn_capture_points(
@@ -1035,6 +1077,8 @@ def spawn_capture_points(
     rules: Dict[str, Any],
 ) -> None:
     """Spawn capture points based on learned frequency data."""
+    if imp_base_x is None or nf_base_x is None:
+        return
     spawn_system = rules.get("spawn_system", {})
     cap_freq = spawn_system.get("capture_point_frequency_by_type", {})
 
@@ -1088,12 +1132,14 @@ class PipelineSpec:
     minimal_map: bool = False
     terrain_only: bool = False
     base_clear_radius: int = 512
+    base_flatness: float = 0.8
 
     custom_imp_base_x: Optional[float] = None
     custom_imp_base_y: Optional[float] = None
     custom_nf_base_x: Optional[float] = None
     custom_nf_base_y: Optional[float] = None
     custom_resources: Optional[List[Tuple[float, float]]] = None
+    manual_terrain: bool = False
 
     def default_imp_base(self) -> Tuple[float, float]:
         """
@@ -1271,58 +1317,72 @@ class DisplacementVMF:
         nf_offset = min(nf_offset, max_offset)
         imp_offset = min(imp_offset, max_offset)
 
-        imp_default_x, imp_default_y = self.spec.default_imp_base()
-        imp_base_x = (
-            int(self.spec.custom_imp_base_x)
-            if self.spec.custom_imp_base_x is not None
-            else int(imp_default_x)
-        )
-        imp_base_y = (
-            int(self.spec.custom_imp_base_y)
-            if self.spec.custom_imp_base_y is not None
-            else int(imp_default_y)
-        )
-        nf_default_x, nf_default_y = self.spec.default_nf_base()
-        nf_base_x = (
-            int(self.spec.custom_nf_base_x)
-            if self.spec.custom_nf_base_x is not None
-            else int(nf_default_x)
-        )
-        nf_base_y = (
-            int(self.spec.custom_nf_base_y)
-            if self.spec.custom_nf_base_y is not None
-            else int(nf_default_y)
-        )
+        # In manual mode, only use custom positions. In procedural mode, use defaults if not set.
+        if self.spec.manual_terrain:
+            imp_base_x = int(self.spec.custom_imp_base_x) if self.spec.custom_imp_base_x is not None else None
+            imp_base_y = int(self.spec.custom_imp_base_y) if self.spec.custom_imp_base_y is not None else None
+            nf_base_x = int(self.spec.custom_nf_base_x) if self.spec.custom_nf_base_x is not None else None
+            nf_base_y = int(self.spec.custom_nf_base_y) if self.spec.custom_nf_base_y is not None else None
+        else:
+            imp_default_x, imp_default_y = self.spec.default_imp_base()
+            imp_base_x = (
+                int(self.spec.custom_imp_base_x)
+                if self.spec.custom_imp_base_x is not None
+                else int(imp_default_x)
+            )
+            imp_base_y = (
+                int(self.spec.custom_imp_base_y)
+                if self.spec.custom_imp_base_y is not None
+                else int(imp_default_y)
+            )
+            nf_default_x, nf_default_y = self.spec.default_nf_base()
+            nf_base_x = (
+                int(self.spec.custom_nf_base_x)
+                if self.spec.custom_nf_base_x is not None
+                else int(nf_default_x)
+            )
+            nf_base_y = (
+                int(self.spec.custom_nf_base_y)
+                if self.spec.custom_nf_base_y is not None
+                else int(nf_default_y)
+            )
 
         flatten_radius = self.spec.base_clear_radius
 
         working_heightmap = self.heightmap.copy()
 
         if flatten_radius > 0:
-            working_heightmap = flatten_terrain_at_location(
-                working_heightmap,
-                imp_base_x,
-                imp_base_y,
-                flatten_radius,
-                img_width,
-                img_height,
-                map_width,
-                map_height,
-                origin_x,
-                origin_y,
-            )
-            working_heightmap = flatten_terrain_at_location(
-                working_heightmap,
-                nf_base_x,
-                nf_base_y,
-                flatten_radius,
-                img_width,
-                img_height,
-                map_width,
-                map_height,
-                origin_x,
-                origin_y,
-            )
+            if imp_base_x is not None and imp_base_y is not None:
+                working_heightmap = flatten_terrain_at_location(
+                    working_heightmap,
+                    imp_base_x,
+                    imp_base_y,
+                    flatten_radius,
+                    img_width,
+                    img_height,
+                    map_width,
+                    map_height,
+                    origin_x,
+                    origin_y,
+                    True,
+                    self.spec.base_flatness,
+                )
+
+            if nf_base_x is not None and nf_base_y is not None:
+                working_heightmap = flatten_terrain_at_location(
+                    working_heightmap,
+                    nf_base_x,
+                    nf_base_y,
+                    flatten_radius,
+                    img_width,
+                    img_height,
+                    map_width,
+                    map_height,
+                    origin_x,
+                    origin_y,
+                    True,
+                    self.spec.base_flatness,
+                )
 
         height_array = (working_heightmap * 255).astype(np.uint8)
 
@@ -1345,6 +1405,8 @@ class DisplacementVMF:
                         py = max(0, min(py, img_height - 1))
                         h = height_array[py, px]
                         h = int(math.floor(h / 255.0 * height_scale))
+                        # Clamp h to avoid exceeding world bounds
+                        h = max(-16000, min(16000, h))
                         row_heights.append(h)
                     height_distances.append(row_heights)
 
@@ -1424,6 +1486,7 @@ class DisplacementVMF:
             or self.spec.terrain_only
         )
         skip_player_spawns = self.spec.terrain_only
+
 
         if self.spec.use_enhanced_spawning:
             if not skip_commander or not skip_buildings:
@@ -1591,6 +1654,8 @@ class DisplacementVMF:
                     tiles_x=tiles_x,
                     tiles_y=tiles_y,
                     power=power,
+                    skip_commander=skip_commander,
+                    skip_buildings=skip_buildings,
                 )
             if self.spec.custom_resources is not None:
                 spawn_custom_resources(

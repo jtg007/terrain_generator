@@ -297,6 +297,30 @@ class TerrainSpec:
    - Do **not** force a custom `top().vaxis`; keep vmflib/Hammer default face axes.
    - This combination fixed broken/rotated displacement tiles and checkerboard seam artifacts.
 
+## Coordinate System & Mapping (CRITICAL)
+
+**The terrain generator uses a perfect, native Cartesian mapping system.**
+All Python array indices map 1:1 to the 3D world coordinates. There is NO "Hammer flip" or mirroring in X or Y if the displacement rules above are followed.
+
+### The Truth of Coordinates
+- **Row 0, Col 0** (`Data_SW`) -> Maps to **South-West** in the 3D World `(-X, -Y)`
+- **Row N-1, Col N-1** (`Data_NE`) -> Maps to **North-East** in the 3D World `(+X, +Y)`
+- **Row N-1, Col 0** (`Data_NW`) -> Maps to **North-West** in the 3D World `(-X, +Y)`
+- **Row 0, Col N-1** (`Data_SE`) -> Maps to **South-East** in the 3D World `(+X, -Y)`
+
+**CRITICAL RULE: DO NOT INVERT COORDINATES**
+Never invert `X` or `Y` when placing entities (e.g. `imp_base_x = -custom_x`). 
+Because the procedural terrain (fBm noise + erosion) matches the Cartesian world exactly, inverting coordinates will cause entities to spawn on mountains instead of their flattened valley patches.
+
+### Minimap Orientation
+The Source Engine `emp_info_map_overview` entity reads `min_bounds_y` as the **TOP** of the image, not the bottom.
+To ensure the minimap is oriented correctly (North = Up), the bounds must be swapped in the resource `.txt` script:
+```text
+"min_bounds_y"  "{origin_y + map_height}"  // Top of image = North (+max)
+"max_bounds_y"  "{origin_y}"               // Bottom of image = South (-max)
+```
+Do NOT use `np.flipud` when generating the heightmap PNG, but DO use `Image.FLIP_TOP_BOTTOM` when exporting the VTF. This ensures the visual minimap correctly aligns with the 3D world geometry.
+
 ## Pipeline Steps
 
 Pipeline steps return modified objects (functional style):

@@ -67,6 +67,9 @@ class GUIConfigModel:
     custom_nf_base_y: Optional[float] = None
     custom_resources: Optional[list] = None
 
+    manual_terrain: bool = False
+    preview_with_pipeline: bool = False
+
     @property
     def map_size_x(self) -> int:
         return self.tiles_x * self.cell_size
@@ -231,4 +234,5 @@ class GUIConfigModel:
             custom_nf_base_x=self.custom_nf_base_x,
             custom_nf_base_y=self.custom_nf_base_y,
             custom_resources=self.custom_resources,
+            manual_terrain=self.manual_terrain,
         )

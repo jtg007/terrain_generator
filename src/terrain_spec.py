@@ -90,6 +90,8 @@ class TerrainSpec:
     minimal_map: bool = False
     terrain_only: bool = False
 
+    manual_terrain: bool = False
+
     def default_imp_base(self) -> Tuple[float, float]:
         """
         Get the default imperial base spawn position (25% of map size).

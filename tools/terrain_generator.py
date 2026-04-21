@@ -21,7 +21,6 @@ if not getattr(sys, "frozen", False):
 
 from PySide6.QtWidgets import (
     QApplication,
-    QButtonGroup,
     QMainWindow,
     QWidget,
     QVBoxLayout,
@@ -38,15 +37,11 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QSplitter,
     QScrollArea,
-    QTabWidget,
 )
 from PySide6.QtCore import Qt, QThread, Signal, QTimer
 from PySide6.QtGui import (
     QIcon,
     QImage,
-    QColor,
-    QPainter,
-    QPixmap,
     QShortcut,
     QKeySequence,
 )
@@ -54,7 +49,12 @@ from tools.preview_widget import MapPreviewWidget
 
 
 from src.config_model import GUIConfigModel, MAX_MAP_DISPINFO, MAX_MAP_WORLD_SIZE
-from src.terrain_pipeline import run_pipeline
+from src.terrain_pipeline import (
+    run_pipeline,
+    calculate_slopes,
+    export_minimap,
+    apply_pipeline_for_preview,
+)
 from src.export_utils import export_vmf, get_versioned_path
 from src.vmf_gen import (
     SAFE_EMPIRES_SKYBOXES,
@@ -181,21 +181,31 @@ class GenerationWorker(QThread):
                 target_w = grid.cols
 
                 try:
-                    # Fix Mirroring: Flip overlay to match the bottom-to-top grid
-                    overlay_to_apply = np.flipud(self.height_overlay)
+                    # Overlay is now natively matched to bottom-to-top grid
+                    overlay_to_apply = self.height_overlay
 
                     if (h, w) != (target_h, target_w):
                         # Rescale overlay to match the final height grid dimensions
                         scale_y = target_h / h
                         scale_x = target_w / w
-                        rescaled_overlay = zoom(overlay_to_apply, (scale_y, scale_x), order=1)
+                        rescaled_overlay = zoom(
+                            overlay_to_apply, (scale_y, scale_x), order=1
+                        )
                     else:
                         rescaled_overlay = overlay_to_apply
 
                     # Add overlay to the height grid
-                    grid_heights = np.array(grid.heights)
+                    grid_heights = np.array(grid.heights, dtype=np.float64)
                     grid_heights += rescaled_overlay
                     grid.heights = grid_heights.tolist()
+
+                    # CRITICAL: Recalculate slopes so rock textures appear on steep sculpted terrain
+                    calculate_slopes(grid)
+                    
+                    # CRITICAL: Re-export the minimap so the mountain appears in-game
+                    export_minimap(spec, grid, self.output_filename, self.project_root)
+                    
+                    print(f"DEBUG: Grid max height after sculpting: {grid.max_height()}")
                 except Exception as e:
                     sculpt_warning = f"Manual sculpting application failed: {e}"
 
@@ -568,7 +578,7 @@ class TerrainGeneratorGUI(QMainWindow):
         lbl_hs.setToolTip("Maximum terrain height in world units")
         dim_grid.addWidget(lbl_hs, 1, 2)
         self.spin_height = QSpinBox()
-        self.spin_height.setRange(128, 4096)
+        self.spin_height.setRange(1, 999999)
         dim_grid.addWidget(self.spin_height, 1, 3)
 
         lbl_pw = QLabel("Detail")
@@ -658,7 +668,9 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_lane_node_radius.setValue(512)
         self.lbl_lane_node_radius_val = QLabel("512")
         lnr_row.addWidget(
-            make_slider_row(self.slider_lane_node_radius, self.lbl_lane_node_radius_val),
+            make_slider_row(
+                self.slider_lane_node_radius, self.lbl_lane_node_radius_val
+            ),
             1,
         )
         config_layout.addLayout(lnr_row)
@@ -867,6 +879,8 @@ class TerrainGeneratorGUI(QMainWindow):
         self.chk_minimal_map = QCheckBox("Minimal (No Props)")
         self.chk_terrain_only = QCheckBox("Terrain Only")
         self.chk_nodetail = QCheckBox("Use nodetail texture")
+        self.chk_manual_terrain = QCheckBox("Manual terrain")
+        self.chk_preview_pipeline = QCheckBox("Preview with pipeline")
 
         self.chk_disable_commander.toggled.connect(self.sync_to_model)
         self.chk_disable_buildings.toggled.connect(self.sync_to_model)
@@ -875,6 +889,8 @@ class TerrainGeneratorGUI(QMainWindow):
         self.chk_minimal_map.toggled.connect(self.sync_to_model)
         self.chk_terrain_only.toggled.connect(self.sync_to_model)
         self.chk_nodetail.toggled.connect(self.on_nodetail_changed)
+        self.chk_manual_terrain.toggled.connect(self.sync_to_model)
+        self.chk_preview_pipeline.toggled.connect(self.sync_to_model)
 
         def update_spawn_checks():
             minimal = self.chk_minimal_map.isChecked()
@@ -904,6 +920,18 @@ class TerrainGeneratorGUI(QMainWindow):
         spawn_grid.addWidget(self.chk_terrain_only, 2, 1)
         spawn_grid.addWidget(self.chk_nodetail, 3, 0, 1, 2)
         config_layout.addLayout(spawn_grid)
+
+        preview_grid = QGridLayout()
+        preview_grid.setSpacing(4)
+        lbl_preview_opts = QLabel("Preview Options")
+        lbl_preview_opts.setObjectName("FieldLabel")
+        lbl_preview_opts.setToolTip(
+            "Control how the preview displays terrain"
+        )
+        preview_grid.addWidget(lbl_preview_opts, 0, 0, 1, 2)
+        preview_grid.addWidget(self.chk_manual_terrain, 1, 0, 1, 2)
+        preview_grid.addWidget(self.chk_preview_pipeline, 2, 0, 1, 2)
+        config_layout.addLayout(preview_grid)
 
         # ─── VALIDATION ───
         config_layout.addWidget(make_divider())
@@ -956,15 +984,13 @@ class TerrainGeneratorGUI(QMainWindow):
         self._root_splitter.setSizes([220, 930])
 
     def validate_current_layout(self):
-        """Validates layout and returns set of invalid entity IDs for UI highlighting."""
+        """Validates layout and returns (invalid_entity_ids, error_messages)."""
         try:
             spec = self.config_model.make_spec()
             layout_result = spec.validate_layout()
-            # We don't update lbl_validation here because sync_to_model handles it,
-            # but we return the invalid entities for the editor icons.
-            return layout_result.invalid_entities
+            return layout_result.invalid_entities, layout_result.errors
         except Exception:
-            return set()
+            return set(), []
 
     def clear_resources(self):
         reply = QMessageBox.question(
@@ -977,7 +1003,7 @@ class TerrainGeneratorGUI(QMainWindow):
             return
 
         self.config_model.custom_resources = []
-        invalid_entities = self.validate_current_layout()
+        invalid_entities, _ = self.validate_current_layout()
         self.preview_widget.set_entities(
             (self.config_model.custom_imp_base_x, self.config_model.custom_imp_base_y),
             (self.config_model.custom_nf_base_x, self.config_model.custom_nf_base_y),
@@ -1002,7 +1028,7 @@ class TerrainGeneratorGUI(QMainWindow):
             self.config_model.custom_nf_base_x = val_x
             self.config_model.custom_nf_base_y = val_y
 
-        invalid_entities = self.validate_current_layout()
+        invalid_entities, _ = self.validate_current_layout()
         # Ensure we sync invalid entities to canvas without wiping it out completely via set_entities
         # which creates a feedback loop with base_moved / layout_changed
         self.preview_widget.invalid_entities = invalid_entities
@@ -1014,7 +1040,7 @@ class TerrainGeneratorGUI(QMainWindow):
             self.config_model.custom_resources
         ):
             self.config_model.custom_resources[index] = (x, y)
-        invalid_entities = self.validate_current_layout()
+        invalid_entities, _ = self.validate_current_layout()
         self.preview_widget.invalid_entities = invalid_entities
         self.preview_widget.redraw_fixed_entities()
         # Resource positions do not affect the terrain heightmap itself,
@@ -1045,7 +1071,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.custom_resources = list(self.preview_widget.resources)
 
         # Sync the invalid entities back
-        invalid_entities = self.validate_current_layout()
+        invalid_entities, _ = self.validate_current_layout()
         self.preview_widget.invalid_entities = invalid_entities
         self.preview_widget.redraw_fixed_entities()
 
@@ -1062,22 +1088,24 @@ class TerrainGeneratorGUI(QMainWindow):
                 return
 
         self.config_model.custom_resources.append((x, y))
-        invalid_entities = self.validate_current_layout()
+        invalid_entities, _ = self.validate_current_layout()
         self.preview_widget.invalid_entities = invalid_entities
         self.preview_widget.redraw_fixed_entities()
         self.preview_timer.start(500)
 
     def run_preview(self):
-        if not hasattr(self, "preview_worker") or not self.preview_worker.isRunning():
-            nodes, connections, resources, _ = self.preview_widget.get_layout_from_editor()
-            self.preview_worker = PreviewWorker(
-                self.config_model,
-                custom_nodes=nodes if nodes else None,
-                custom_connections=connections if connections else None,
-                custom_resources=resources,
-            )
-            self.preview_worker.finished.connect(self.on_preview_finished)
-            self.preview_worker.start()
+        if hasattr(self, "preview_worker") and self.preview_worker.isRunning():
+            self.preview_worker.wait(1000)
+
+        nodes, connections, resources, _ = self.preview_widget.get_layout_from_editor()
+        self.preview_worker = PreviewWorker(
+            self.config_model,
+            custom_nodes=nodes if nodes else None,
+            custom_connections=connections if connections else None,
+            custom_resources=resources,
+        )
+        self.preview_worker.finished.connect(self.on_preview_finished)
+        self.preview_worker.start()
 
     def on_preview_finished(self, grid, spec):
         if getattr(sys, "frozen", False) and not grid:
@@ -1088,7 +1116,11 @@ class TerrainGeneratorGUI(QMainWindow):
         if grid and spec:
             import numpy as np
 
-            heights = np.array(grid.heights)
+            display_grid = grid
+            if self.config_model.preview_with_pipeline:
+                display_grid = apply_pipeline_for_preview(grid, spec)
+
+            heights = np.array(display_grid.heights)
             min_h = heights.min()
             max_h = heights.max()
             if max_h > min_h:
@@ -1099,9 +1131,7 @@ class TerrainGeneratorGUI(QMainWindow):
             img_data = (normalized * 255).astype(np.uint8)
             h, w = img_data.shape
 
-            # Create QImage from numpy array
             bytes_per_line = w
-            # Must keep a reference to img_data so it isn't garbage collected
             self._current_preview_data = img_data
             qimg = QImage(
                 self._current_preview_data.data,
@@ -1135,7 +1165,7 @@ class TerrainGeneratorGUI(QMainWindow):
                 if self.config_model.custom_resources
                 else []
             )
-            invalid_entities = self.validate_current_layout()
+            invalid_entities, _ = self.validate_current_layout()
             self.preview_widget.set_entities(
                 imp_pos, nf_pos, res, invalid_entities=invalid_entities
             )
@@ -1740,7 +1770,9 @@ class TerrainGeneratorGUI(QMainWindow):
                 topology_map.get(self.config_model.topology, 0)
             )
             self.slider_lane_node_radius.setValue(self.config_model.lane_node_radius)
-            self.lbl_lane_node_radius_val.setText(str(self.config_model.lane_node_radius))
+            self.lbl_lane_node_radius_val.setText(
+                str(self.config_model.lane_node_radius)
+            )
             self.slider_lane_width.setValue(
                 int(self.config_model.lane_width_scale * 100)
             )
@@ -1776,9 +1808,7 @@ class TerrainGeneratorGUI(QMainWindow):
             self.chk_disable_resources.setChecked(
                 self.config_model.disable_resource_nodes
             )
-            self.chk_disable_flags.setChecked(
-                self.config_model.disable_capture_points
-            )
+            self.chk_disable_flags.setChecked(self.config_model.disable_capture_points)
             self.chk_minimal_map.setChecked(self.config_model.minimal_map)
             self.chk_terrain_only.setChecked(self.config_model.terrain_only)
             self.chk_nodetail.setChecked(self.config_model.use_nodetail_texture)
@@ -1849,6 +1879,8 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.minimal_map = self.chk_minimal_map.isChecked()
         self.config_model.terrain_only = self.chk_terrain_only.isChecked()
         self.config_model.use_nodetail_texture = self.chk_nodetail.isChecked()
+        self.config_model.manual_terrain = self.chk_manual_terrain.isChecked()
+        self.config_model.preview_with_pipeline = self.chk_preview_pipeline.isChecked()
 
         self.update_validation_status()
         if hasattr(self, "preview_timer"):
@@ -1990,8 +2022,25 @@ class TerrainGeneratorGUI(QMainWindow):
         )
 
     def generate_map(self):
+        if (
+            hasattr(self, "worker")
+            and getattr(self.worker, "isRunning", lambda: False)()
+        ):
+            self.worker.wait(1000)
+
         is_valid, msg = self.config_model.validate()
         if not is_valid:
+            QMessageBox.warning(self, "Invalid Configuration", msg)
+            return
+
+        spec = self.config_model.make_spec()
+        layout_result = spec.validate_layout()
+        if layout_result.errors:
+            QMessageBox.warning(
+                self,
+                "Invalid Layout",
+                "Cannot generate:\n" + "\n".join(layout_result.errors),
+            )
             return
 
         self.btn_generate.setEnabled(False)
@@ -2022,14 +2071,24 @@ class TerrainGeneratorGUI(QMainWindow):
             map_name = self.txt_map_name.text().strip() or "gui_terrain"
             project_root = getattr(self.worker, "project_root", None)
             if project_root:
-                self._last_vmf_path = str(project_root / "mapsrc" / f"{map_name}.vmf")
-            
+                vmf_path = project_root / "mapsrc" / f"{map_name}.vmf"
+                self._last_vmf_path = str(vmf_path)
+                print(f"DEBUG: VMF path set to: {self._last_vmf_path}, exists={vmf_path.exists()}")
+            else:
+                print("DEBUG: project_root is None!")
+                self._last_vmf_path = None
+
             self._last_custom_project_root = None
 
             # If auto-copy is false and custom folder is set, copy the whole project to the custom folder
             auto_copy = self.config.get("auto_copy_to_empires", True)
             custom_folder = self.config.get("custom_output_folder", "")
-            if not auto_copy and custom_folder and Path(custom_folder).exists() and project_root:
+            if (
+                not auto_copy
+                and custom_folder
+                and Path(custom_folder).exists()
+                and project_root
+            ):
                 try:
                     import shutil
 
@@ -2043,7 +2102,9 @@ class TerrainGeneratorGUI(QMainWindow):
                     msg += f"\nWarning: Failed to copy to custom folder: {e}"
 
             if warning:
-                QMessageBox.warning(self, "Generation Warning", f"{msg}\n\nWARNING:\n{warning}")
+                QMessageBox.warning(
+                    self, "Generation Warning", f"{msg}\n\nWARNING:\n{warning}"
+                )
             else:
                 QMessageBox.information(self, "Success", msg)
         else:
@@ -2062,12 +2123,12 @@ class TerrainGeneratorGUI(QMainWindow):
 
         empires_path = self.config.get("empires_path", "")
         auto_copy = self.config.get("auto_copy_to_empires", True)
-        
+
         # Use the specific project root if it was just generated
         custom_folder = getattr(self, "_last_custom_project_root", None)
         if not custom_folder:
             custom_folder = self.config.get("custom_output_folder", "")
-            
+
         nodetail = self.config.get("nodetail", False)
 
         self.compile_worker = CompileWorker(

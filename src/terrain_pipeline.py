@@ -22,6 +22,8 @@ import random
 import sys
 from typing import List, Tuple, Optional
 
+import numpy as np
+
 if getattr(sys, "frozen", False):
     from terrain_spec import (
         TerrainSpec,
@@ -943,20 +945,28 @@ def flatten_base_areas(
     base_radius = spec.base_clear_radius
     flatness = spec.base_flatness
 
-    imp_base_x, imp_base_y = (
-        (spec.custom_imp_base_x, spec.custom_imp_base_y)
-        if spec.custom_imp_base_x is not None and spec.custom_imp_base_y is not None
-        else spec.default_imp_base()
-    )
-
-    nf_base_x, nf_base_y = (
-        (spec.custom_nf_base_x, spec.custom_nf_base_y)
-        if spec.custom_nf_base_x is not None and spec.custom_nf_base_y is not None
-        else spec.default_nf_base()
-    )
+    # In manual mode, only use custom positions. In procedural mode, use defaults if not set.
+    if spec.manual_terrain:
+        imp_base_x = spec.custom_imp_base_x
+        imp_base_y = spec.custom_imp_base_y
+        nf_base_x = spec.custom_nf_base_x
+        nf_base_y = spec.custom_nf_base_y
+    else:
+        imp_base_x, imp_base_y = (
+            (spec.custom_imp_base_x, spec.custom_imp_base_y)
+            if spec.custom_imp_base_x is not None and spec.custom_imp_base_y is not None
+            else spec.default_imp_base()
+        )
+        nf_base_x, nf_base_y = (
+            (spec.custom_nf_base_x, spec.custom_nf_base_y)
+            if spec.custom_nf_base_x is not None and spec.custom_nf_base_y is not None
+            else spec.default_nf_base()
+        )
 
     # Determine local average heights for the bases instead of global floor height
     def get_local_avg(bx: float, by: float, r_area: float) -> float:
+        if bx is None or by is None:
+            return 0.0
         heights = []
         for r_ in range(rows):
             wy = spec.origin_y + r_ * vertex_spacing
@@ -975,13 +985,8 @@ def flatten_base_areas(
     imp_avg_height = get_local_avg(imp_base_x, imp_base_y, base_radius)
     nf_avg_height = get_local_avg(nf_base_x, nf_base_y, base_radius)
 
-    floor_h = spec.terrain_max_height * 0.15
-    blend_to_floor = max(0.0, (spec.base_flatness - 0.5) * 2.0)
-
-    imp_target_height = (
-        imp_avg_height * (1.0 - blend_to_floor) + floor_h * blend_to_floor
-    )
-    nf_target_height = nf_avg_height * (1.0 - blend_to_floor) + floor_h * blend_to_floor
+    imp_target_height = imp_avg_height
+    nf_target_height = nf_avg_height
 
     # We want the plateau to be perfectly flat for the inner 60% of the radius.
     plateau_radius = base_radius * 0.6
@@ -993,12 +998,17 @@ def flatten_base_areas(
         for c in range(cols):
             world_x = spec.origin_x + c * vertex_spacing
 
-            dist_to_imp = math.sqrt(
-                (world_x - imp_base_x) ** 2 + (world_y - imp_base_y) ** 2
-            )
-            dist_to_nf = math.sqrt(
-                (world_x - nf_base_x) ** 2 + (world_y - nf_base_y) ** 2
-            )
+            dist_to_imp = 999999.0
+            if imp_base_x is not None and imp_base_y is not None:
+                dist_to_imp = math.sqrt(
+                    (world_x - imp_base_x) ** 2 + (world_y - imp_base_y) ** 2
+                )
+            
+            dist_to_nf = 999999.0
+            if nf_base_x is not None and nf_base_y is not None:
+                dist_to_nf = math.sqrt(
+                    (world_x - nf_base_x) ** 2 + (world_y - nf_base_y) ** 2
+                )
 
             if dist_to_imp < base_radius:
                 dist = dist_to_imp
@@ -1018,7 +1028,7 @@ def flatten_base_areas(
             t = t * flatness
 
             current = grid.heights[r][c]
-            grid.heights[r][c] = current * (1.0 - t) + target_height * t
+            grid.heights[r][c] = float(current * (1.0 - t) + target_height * t)
 
     avg_height = spec.terrain_max_height * 0.15  # Fallback for resource nodes
     # Flatten resource nodes
@@ -1135,6 +1145,8 @@ def quantize_heights(grid: HeightGrid, step: int) -> HeightGrid:
             grid.heights[r][c] = round(grid.heights[r][c] / step) * step
 
     return grid
+
+
 
 
 def simulate_hydraulic_erosion(grid: HeightGrid, spec: TerrainSpec) -> HeightGrid:
@@ -1562,6 +1574,169 @@ def get_cell_slopes(
     return slopes
 
 
+def apply_pipeline_for_preview(grid: HeightGrid, spec: TerrainSpec) -> HeightGrid:
+    """
+    Apply pipeline post-processing steps for preview accuracy.
+
+    Runs erosion, smoothing, clamping, and quantization to show
+    what the final export will look like. Used for WYSIWYG preview.
+    In manual_terrain mode, returns the grid as-is (no modifications).
+    """
+    if spec.manual_terrain:
+        return grid
+
+    rows = grid.rows
+    cols = grid.cols
+
+    heights = np.array(grid.heights, dtype=np.float64)
+
+    terrain_copy = HeightGrid(
+        heights=heights.tolist(),
+        origin_x=grid.origin_x,
+        origin_y=grid.origin_y,
+        cell_size=grid.cell_size,
+    )
+
+    if spec.erosion_iterations > 0:
+        import random as rng_module
+
+        rng = rng_module.Random(spec.seed + 1000)
+        iterations = min(spec.erosion_iterations, 5000)
+        lifetime = spec.erosion_droplet_lifetime
+
+        initial_min = float(np.min(heights))
+        initial_max = float(np.max(heights))
+        height_range = initial_max - initial_min
+
+        sediment_capacity = 0.01
+        erosion_rate = 0.005
+        deposition_rate = 0.01
+        evaporation_rate = 0.01
+        max_erosion_per_step = height_range * 0.001
+        max_deposition_per_step = height_range * 0.001
+
+        playability_mask = getattr(grid, "playability_mask", None)
+
+        for _ in range(iterations):
+            start_r = rng.randint(1, rows - 2)
+            start_c = rng.randint(1, cols - 2)
+
+            if playability_mask is not None and playability_mask[start_r, start_c] > 0.5:
+                continue
+
+            pos_r = float(start_r)
+            pos_c = float(start_c)
+            sediment = 0.0
+            speed = 0.0
+
+            for step_idx in range(lifetime):
+                ir = int(pos_r)
+                ic = int(pos_c)
+
+                if ir <= 0 or ir >= rows - 1 or ic <= 0 or ic >= cols - 1:
+                    break
+
+                if playability_mask is not None and playability_mask[ir, ic] > 0.5:
+                    break
+
+                fx = pos_c - ic
+                fy = pos_r - ir
+
+                h00 = float(terrain_copy.heights[ir][ic])
+                h01 = float(terrain_copy.heights[ir][ic + 1])
+                h10 = float(terrain_copy.heights[ir + 1][ic])
+                h11 = float(terrain_copy.heights[ir + 1][ic + 1])
+
+                h_top = h00 * (1.0 - fx) + h01 * fx
+                h_bot = h10 * (1.0 - fx) + h11 * fx
+                height = h_top * (1.0 - fy) + h_bot * fy
+
+                dx = (h00 * (1.0 - fy) + h10 * fy) - (h01 * (1.0 - fy) + h11 * fy)
+                dy = (h00 * (1.0 - fx) + h01 * fx) - (h10 * (1.0 - fx) + h11 * fx)
+
+                grad_len = math.sqrt(dx * dx + dy * dy)
+                if grad_len < 1e-6:
+                    break
+
+                nx = dx / grad_len
+                ny = dy / grad_len
+
+                pos_c += nx * 0.5
+                pos_r += ny * 0.5
+
+                new_ir = int(pos_r)
+                new_ic = int(pos_c)
+
+                if new_ir <= 0 or new_ir >= rows - 1 or new_ic <= 0 or new_ic >= cols - 1:
+                    break
+
+                new_fx = pos_c - new_ic
+                new_fy = pos_r - new_ir
+
+                new_h00 = float(terrain_copy.heights[new_ir][new_ic])
+                new_h01 = float(terrain_copy.heights[new_ir][new_ic + 1])
+                new_h10 = float(terrain_copy.heights[new_ir + 1][new_ic])
+                new_h11 = float(terrain_copy.heights[new_ir + 1][new_ic + 1])
+
+                new_h_top = new_h00 * (1.0 - new_fx) + new_h01 * new_fx
+                new_h_bot = new_h10 * (1.0 - new_fx) + new_h11 * new_fx
+                new_height = new_h_top * (1.0 - new_fy) + new_h_bot * new_fy
+
+                delta_h = new_height - height
+                speed = max(speed * 0.3, abs(delta_h))
+
+                if delta_h > 0:
+                    deposit_amount = min(sediment * deposition_rate, delta_h * 0.3)
+                    deposit_amount = min(deposit_amount, max_deposition_per_step)
+                    if deposit_amount > 0:
+                        terrain_copy.heights[new_ir][new_ic] += (
+                            deposit_amount * (1.0 - new_fx) * (1.0 - new_fy)
+                        )
+                        terrain_copy.heights[new_ir][new_ic + 1] += (
+                            deposit_amount * new_fx * (1.0 - new_fy)
+                        )
+                        terrain_copy.heights[new_ir + 1][new_ic] += (
+                            deposit_amount * (1.0 - new_fx) * new_fy
+                        )
+                        terrain_copy.heights[new_ir + 1][new_ic + 1] += (
+                            deposit_amount * new_fx * new_fy
+                        )
+                        sediment -= deposit_amount
+                else:
+                    max_sediment = sediment_capacity * speed * abs(delta_h)
+                    available_sediment = max_sediment - sediment
+                    if available_sediment > 0:
+                        erode_amount = min(
+                            erosion_rate * available_sediment, abs(delta_h) * 0.5
+                        )
+                        erode_amount = min(erode_amount, max_erosion_per_step)
+                        if erode_amount > 0:
+                            terrain_copy.heights[new_ir][new_ic] -= (
+                                erode_amount * (1.0 - new_fx) * (1.0 - new_fy)
+                            )
+                            terrain_copy.heights[new_ir][new_ic + 1] -= (
+                                erode_amount * new_fx * (1.0 - new_fy)
+                            )
+                            terrain_copy.heights[new_ir + 1][new_ic] -= (
+                                erode_amount * (1.0 - new_fx) * new_fy
+                            )
+                            terrain_copy.heights[new_ir + 1][new_ic + 1] -= (
+                                erode_amount * new_fx * new_fy
+                            )
+                            sediment += erode_amount
+
+                sediment *= 1.0 - evaporation_rate
+
+                if sediment < 1e-6 and speed < 1e-6:
+                    break
+
+    terrain_copy = smooth_heights(terrain_copy, iterations=2)
+    terrain_copy = clamp_slope(terrain_copy, spec.max_slope_step)
+    terrain_copy = quantize_heights(terrain_copy, spec.height_quantization)
+
+    return terrain_copy
+
+
 def slope_to_alpha(
     slope: float,
     flat_threshold: float = 0.005,
@@ -1669,6 +1844,8 @@ def export_minimap(
     img = Image.fromarray(img_rgb, mode="RGB")
     img = img.resize((1024, 1024), Image.LANCZOS)
 
+    img = img.transpose(Image.FLIP_TOP_BOTTOM)
+
     # Native VTF Export (v7.2, BGR888)
     bgr_data = np.array(img)[..., ::-1].copy()
 
@@ -1754,6 +1931,9 @@ def run_pipeline(
     if spec.custom_image_path:
         print(f"  Step 2: Loading custom heightmap from {spec.custom_image_path}")
         grid = load_custom_heights(spec, grid)
+    elif spec.manual_terrain:
+        print("  Step 2: Manual terrain mode (flat base, user controls everything)")
+        grid.playability_mask = None
     else:
         if spec.generate_lanes:
             print("  Step 2a: Generate playability mask (Smoothstep distance field)")
@@ -1785,36 +1965,41 @@ def run_pipeline(
         )
         grid = flatten_base_areas(grid, spec)
 
-    print(
-        f"  Step 3: Simulate hydraulic erosion ({spec.erosion_iterations} droplets, lifetime={spec.erosion_droplet_lifetime})"
-    )
-    grid = simulate_hydraulic_erosion(grid, spec)
-    print(
-        f"    Height range after erosion: {grid.min_height():.1f} to {grid.max_height():.1f}"
-    )
-
-    print("  Step 4: Calculate slopes")
-    grid = calculate_slopes(grid)
-
-    print("  Step 5: Smooth heights")
-    grid = smooth_heights(grid, iterations=2)
-
-    if spec.base_clear_radius > 0 and spec.base_flatness > 0.5:
-        print("  Step 5b: Light touch-up for base areas after erosion")
-        import copy
-
-        spec_light = copy.copy(spec)
-        spec_light.base_flatness = spec.base_flatness * 0.3
-        grid = flatten_base_areas(grid, spec_light)
+    if spec.manual_terrain:
+        print("  Step 3-6: Manual terrain mode (no modifications)")
+        grid = calculate_slopes(grid)
+    else:
         print(
-            f"    Height range after base flatten touch-up: {grid.min_height():.1f} to {grid.max_height():.1f}"
+            f"  Step 3: Simulate hydraulic erosion ({spec.erosion_iterations} droplets, lifetime={spec.erosion_droplet_lifetime})"
+        )
+        grid = simulate_hydraulic_erosion(grid, spec)
+        print(
+            f"    Height range after erosion: {grid.min_height():.1f} to {grid.max_height():.1f}"
         )
 
-    print(f"  Step 6: Clamp slope (max step={spec.max_slope_step})")
-    grid = clamp_slope(grid, spec.max_slope_step)
+        print("  Step 4: Calculate slopes")
+        grid = calculate_slopes(grid)
 
-    print(f"  Step 7: Quantize heights (step={spec.height_quantization})")
-    grid = quantize_heights(grid, spec.height_quantization)
+        print("  Step 5: Smooth heights")
+        grid = smooth_heights(grid, iterations=2)
+
+        if spec.base_clear_radius > 0 and spec.base_flatness > 0.5:
+            print("  Step 5b: Light touch-up for base areas after erosion")
+            import copy
+
+            spec_light = copy.copy(spec)
+            spec_light.base_flatness = spec.base_flatness * 0.3
+            grid = flatten_base_areas(grid, spec_light)
+            print(
+                f"    Height range after base flatten touch-up: {grid.min_height():.1f} to {grid.max_height():.1f}"
+            )
+
+    if not spec.manual_terrain:
+        print(f"  Step 6: Clamp slope (max step={spec.max_slope_step})")
+        grid = clamp_slope(grid, spec.max_slope_step)
+
+        print(f"  Step 7: Quantize heights (step={spec.height_quantization})")
+        grid = quantize_heights(grid, spec.height_quantization)
 
     print("  Step 8: Build cells")
     cells = build_cells(spec, grid)

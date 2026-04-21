@@ -280,10 +280,10 @@ def main():
 	"max_image_y"	"1024"
 	
 	"min_bounds_x"	"{origin_x}"
-	"min_bounds_y"	"{origin_y}"
+	"min_bounds_y"	"{origin_y + map_height}"
 
 	"max_bounds_x"	"{origin_x + map_width}"
-	"max_bounds_y"	"{origin_y + map_height}"
+	"max_bounds_y"	"{origin_y}"
 
 	"sector_width"	"512"
 	"sector_height"	"512"

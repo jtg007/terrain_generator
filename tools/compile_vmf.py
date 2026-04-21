@@ -231,6 +231,13 @@ def compile_vmf(
                     shutil.copy2(str(txt_path), final_txt)
                     print(f"TXT script copied to: {final_txt}")
 
+                    # Also copy to download/resource/maps
+                    txt_download_dir = os.path.join(empires_path, "download", "resource", "maps")
+                    os.makedirs(txt_download_dir, exist_ok=True)
+                    final_txt_download = os.path.join(txt_download_dir, f"{vmf_path.stem}.txt")
+                    shutil.copy2(str(txt_path), final_txt_download)
+                    print(f"TXT script copied to download: {final_txt_download}")
+
                 # Copy minimap VMT and VTF to materials
                 vmt_dest_dir = os.path.join(empires_path, "materials", "maps")
                 os.makedirs(vmt_dest_dir, exist_ok=True)
@@ -241,11 +248,25 @@ def compile_vmf(
                     shutil.copy2(str(vmt_src), final_vmt)
                     print(f"VMT minimap material copied to: {final_vmt}")
 
+                    # Also copy to download/materials/maps
+                    vmt_download_dir = os.path.join(empires_path, "download", "materials", "maps")
+                    os.makedirs(vmt_download_dir, exist_ok=True)
+                    final_vmt_download = os.path.join(vmt_download_dir, f"{vmf_path.stem}.vmt")
+                    shutil.copy2(str(vmt_src), final_vmt_download)
+                    print(f"VMT copied to download: {final_vmt_download}")
+
                 vtf_src = project_root / "materials" / "maps" / f"{vmf_path.stem}.vtf"
                 if vtf_src.exists():
                     final_vtf = os.path.join(vmt_dest_dir, f"{vmf_path.stem}.vtf")
                     shutil.copy2(str(vtf_src), final_vtf)
                     print(f"VTF minimap texture copied to: {final_vtf}")
+
+                    # Also copy to download/materials/maps
+                    vtf_download_dir = os.path.join(empires_path, "download", "materials", "maps")
+                    os.makedirs(vtf_download_dir, exist_ok=True)
+                    final_vtf_download = os.path.join(vtf_download_dir, f"{vmf_path.stem}.vtf")
+                    shutil.copy2(str(vtf_src), final_vtf_download)
+                    print(f"VTF copied to download: {final_vtf_download}")
 
             elif not auto_copy and custom_output:
                 custom_path = Path(custom_output)

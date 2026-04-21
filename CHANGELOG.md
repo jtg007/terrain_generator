@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.4] - 2026-04-21
+### UI & Experience
+- Fixed in-game minimap orientation to correctly show North at the top
+- Synchronized the strategy editor with the 3D world for perfect 1:1 alignment
+- Corrected the visual orientation of base and resource icons in the editor
+- Added 'No Flags' option to settings and disabled capture points by default
+- Improved GUI stability by preventing overlapping background tasks
+- Added proactive layout validation for misplaced entities
+- Standardized project output folder structure
+- Increased height input limit to 999999 for taller terrain
+
+### Terrain & Pipeline
+- Fixed critical alignment bug: bases/resources spawn on flattened valleys
+- Resolved displacement "diamond" distortion and visual seams
+- Improved terrain sculpting logic and fixed mirroring issues
+- Refined displacement normal calculations for smoother lighting
+- Fixed coordinate mapping for editor/BSP alignment
+- Fixed duplicate commanders and barracks appearing in maps
+- Adjusted entity height offsets for better ground placement
+- Raised map_overview camera height to minimum 1087 for better zoom
+- Skybox wall height now calculated from terrain height for better fit
+- Removed world coordinate limits for flexible skybox placement
+
+
 ## [0.9.3] - 2026-04-20
 ### UI & Pipeline
 - Decoupled `Lane Node Radius` from `Base Clear Radius`

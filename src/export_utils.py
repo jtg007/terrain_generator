@@ -45,14 +45,14 @@ def choose_compile_safe_material(
         defaults = [
             "common/nature/blend_grass_mountainwall_000",
             "nature/terrain/blend_dirt_grass_dmz_sscale",
-            "common/stene/grass02"
+            "common/stene/grass02",
         ]
         if requested_material in defaults:
             return COMPILE_SAFE_NODETAIL_MATERIAL, None
-            
+
         if requested_material.endswith("_nodetail"):
             return requested_material, None
-            
+
         # User picked a custom texture but "nodetail" is checked.
         # We allow it, but provide a warning.
         warning = (
@@ -60,7 +60,7 @@ def choose_compile_safe_material(
             "Large maps may hit the detail prop limit."
         )
         return requested_material, warning
-        
+
     return requested_material, None
 
 
@@ -82,7 +82,9 @@ def get_versioned_path(base_dir: Path, name: str) -> Path:
         counter += 1
 
 
-def export_vmf(grid, config_model, project_root: Path, output_filename: str) -> Tuple[str, Optional[str]]:
+def export_vmf(
+    grid, config_model, project_root: Path, output_filename: str
+) -> Tuple[str, Optional[str]]:
     """Exports the given height grid and config to a VMF file, returns (success_msg, warning_msg)."""
     spec = config_model.make_spec()
     tile_size = config_model.cell_size
@@ -112,10 +114,7 @@ def export_vmf(grid, config_model, project_root: Path, output_filename: str) -> 
     heightmap = heightgrid_to_heightmap(grid, vertex_rows, vertex_cols)
 
     hm_array = (heightmap * 255).astype(np.uint8)
-    
-    # Fix Mirroring: Source Y is bottom-to-top, Image Y is top-to-bottom.
-    hm_array = np.flipud(hm_array)
-    
+
     hm_img = Image.fromarray(hm_array, mode="L")
     hm_path = mapsrc_dir / f"{output_filename}_temp.png"
     hm_img.save(hm_path)
@@ -125,7 +124,7 @@ def export_vmf(grid, config_model, project_root: Path, output_filename: str) -> 
     vmf_spec = PipelineSpec(
         map_name=output_filename,
         heightmap_path=str(hm_path),
-        terrain_max_height=calculated_max_height,
+        terrain_max_height=grid.max_height(),
         terrain_actual_max=grid.max_height(),
         terrain_tile_size=tile_size,
         terrain_power=config_model.displacement_power,
@@ -137,6 +136,7 @@ def export_vmf(grid, config_model, project_root: Path, output_filename: str) -> 
         rules_file="map_rules.json",
         use_enhanced_spawning=True,
         base_clear_radius=config_model.base_clear_radius,
+        base_flatness=config_model.base_flatness,
         disable_commander=config_model.disable_commander,
         disable_buildings=config_model.disable_buildings,
         disable_resource_nodes=config_model.disable_resource_nodes,
@@ -147,6 +147,7 @@ def export_vmf(grid, config_model, project_root: Path, output_filename: str) -> 
         custom_nf_base_x=config_model.custom_nf_base_x,
         custom_nf_base_y=config_model.custom_nf_base_y,
         custom_resources=config_model.custom_resources,
+        manual_terrain=config_model.manual_terrain,
     )
 
     vmf_gen = DisplacementVMF(vmf_spec)
@@ -168,10 +169,10 @@ def export_vmf(grid, config_model, project_root: Path, output_filename: str) -> 
 	"max_image_y"	"1024"
 
 	"min_bounds_x"	"{origin_x}"
-	"min_bounds_y"	"{origin_y}"
+	"min_bounds_y"	"{origin_y + map_height}"
 
 	"max_bounds_x"	"{origin_x + map_width}"
-	"max_bounds_y"	"{origin_y + map_height}"
+	"max_bounds_y"	"{origin_y}"
 
 	"sector_width"	"512"
 	"sector_height"	"512"

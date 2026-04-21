@@ -68,6 +68,11 @@ class ValveVMFWriter:
         normals = get_cell_normals(heights, power)
         alphas = get_cell_alphas(cell, grid, power)
 
+        # Flip the cell block vertically to match North-West startposition!
+        heights.reverse()
+        normals.reverse()
+        alphas.reverse()
+
         tile_col = cell.grid_col // vertices_per_tile
         tile_row = cell.grid_row // vertices_per_tile
 
@@ -102,13 +107,11 @@ class ValveVMFWriter:
         disp.allowed_verts = {}
         grid_size = len(heights)
         for row_idx in range(grid_size):
-            # Sample heights from top to bottom (row 0 is at max Y)
-            py = (grid_size - 1) - row_idx
-            h_str = " ".join(str(int(round(h))) for h in heights[py])
+            h_str = " ".join(str(int(round(h))) for h in heights[row_idx])
             disp.distances[f"row{row_idx}"] = h_str
-            n_str = " ".join(f"{nx} {ny} {nz}" for nx, ny, nz in normals[py])
+            n_str = " ".join(f"{nx} {ny} {nz}" for nx, ny, nz in normals[row_idx])
             disp.normals[f"row{row_idx}"] = n_str
-            a_str = " ".join(str(int(alpha)) for alpha in alphas[py])
+            a_str = " ".join(str(int(alpha)) for alpha in alphas[row_idx])
             disp.alphas[f"row{row_idx}"] = a_str
 
         # Empires expects exactly the key "10" for all displacement allowed_verts
