@@ -873,8 +873,12 @@ class MapPreviewWidget(QWidget):
 
         self.view_3d.clear()
 
+        h, w = z_data.shape
+        x = np.linspace(0, w * step_w, w)
+        y = np.linspace(0, h * step_h, h)
+
         surface = gl.GLSurfacePlotItem(
-            z=z_data,
+            x=x, y=y, z=z_data,
             colors=colors,
             computeNormals=False,
             smooth=True
