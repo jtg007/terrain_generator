@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QSlider,
     QSizePolicy,
     QScrollArea,
+    QMessageBox,
 )
 from PySide6.QtCore import Qt, Signal, QPoint, QRectF, QPointF
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QImage, QPixmap, QPolygon
@@ -924,6 +925,16 @@ class MapPreviewWidget(QWidget):
                     item.setFlag(QGraphicsItem.ItemIsSelectable, False)
 
     def clear_scene_nodes(self):
+        reply = QMessageBox.question(
+            self,
+            "Confirm Clear",
+            "Are you sure you want to clear all nodes and layout elements?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply == QMessageBox.No:
+            return
+
         # 1. Collect all layout items (Nodes, Edges, Paths)
         items_to_remove = []
         for item in self.scene.items():

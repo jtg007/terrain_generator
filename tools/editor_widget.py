@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QGraphicsEllipseItem,
     QGraphicsLineItem,
     QGraphicsItem,
+    QMessageBox,
 )
 from PySide6.QtCore import Qt, QPointF, QRectF
 from PySide6.QtGui import QPen, QBrush, QColor, QPainter
@@ -196,6 +197,16 @@ class MapEditorWidget(QWidget):
                     item.setFlag(QGraphicsItem.ItemIsSelectable, False)
 
     def clear_scene(self):
+        reply = QMessageBox.question(
+            self,
+            "Confirm Clear",
+            "Are you sure you want to clear all nodes and layout elements?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply == QMessageBox.No:
+            return
+
         self.scene.clear()
         self.draw_grid()
         self.link_start_node = None
