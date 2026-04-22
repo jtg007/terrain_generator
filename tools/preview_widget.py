@@ -841,9 +841,9 @@ class MapPreviewWidget(QWidget):
 
         # Downsample. The VMF grids can be quite large (e.g. 1024x1024).
         # We want around max 128x128 for smooth performance.
-        h, w = z_data.shape
-        step_h = max(1, h // 128)
-        step_w = max(1, w // 128)
+        orig_h, orig_w = z_data.shape
+        step_h = max(1, orig_h // 128)
+        step_w = max(1, orig_w // 128)
 
         z_data = z_data[::step_h, ::step_w]
 
@@ -874,8 +874,15 @@ class MapPreviewWidget(QWidget):
         self.view_3d.clear()
 
         h, w = z_data.shape
-        x = np.linspace(0, w * step_w, w)
-        y = np.linspace(0, h * step_h, h)
+
+        # Use real map dimensions if available, otherwise fallback to array bounds
+        map_w = getattr(self, 'map_size_x', orig_w)
+        map_h = getattr(self, 'map_size_y', orig_h)
+
+        # Center x and y
+        # pyqtgraph expects x to align with z.shape[0] and y to align with z.shape[1]
+        x = np.linspace(-map_w / 2, map_w / 2, h)
+        y = np.linspace(-map_h / 2, map_h / 2, w)
 
         surface = gl.GLSurfacePlotItem(
             x=x, y=y, z=z_data,
@@ -886,9 +893,9 @@ class MapPreviewWidget(QWidget):
 
         self.view_3d.addItem(surface)
 
-        # Adjust camera
-        max_dim = max(z_data.shape)
-        self.view_3d.setCameraPosition(distance=max_dim * 1.5)
+        # Adjust camera using map size
+        max_dim = max(map_w, map_h)
+        self.view_3d.setCameraPosition(distance=max_dim * 1.2)
 
     def set_raw_heights(self, heights: np.ndarray):
 
