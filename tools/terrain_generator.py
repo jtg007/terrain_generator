@@ -181,7 +181,7 @@ class GenerationWorker(QThread):
             sculpt_warning = None
             if self.height_overlay is not None and self.height_overlay.any():
                 import numpy as np
-                from scipy.ndimage import zoom
+                from src.compat_utils import scipy_zoom_equivalent
 
                 h, w = self.height_overlay.shape
                 target_h = grid.rows
@@ -195,8 +195,8 @@ class GenerationWorker(QThread):
                         # Rescale overlay to match the final height grid dimensions
                         scale_y = target_h / h
                         scale_x = target_w / w
-                        rescaled_overlay = zoom(
-                            overlay_to_apply, (scale_y, scale_x), order=1
+                        rescaled_overlay = scipy_zoom_equivalent(
+                            overlay_to_apply, (scale_y, scale_x)
                         )
                     else:
                         rescaled_overlay = overlay_to_apply

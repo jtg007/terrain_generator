@@ -52,11 +52,11 @@ def heightgrid_to_heightmap(
     normalized = np.clip(normalized, 0.0, 1.0)
 
     if target_rows > grid.rows or target_cols > grid.cols:
-        from scipy.ndimage import zoom
+        from src.compat_utils import scipy_zoom_equivalent
 
         scale_y = target_rows / grid.rows
         scale_x = target_cols / grid.cols
-        normalized = zoom(normalized, (scale_y, scale_x), order=1)
+        normalized = scipy_zoom_equivalent(normalized, (scale_y, scale_x))
 
     return normalized
 

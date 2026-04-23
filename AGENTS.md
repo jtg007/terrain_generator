@@ -478,7 +478,7 @@ Learned rules from analyzing Empires Mod maps (28 maps analyzed):
 ## Implementation Notes
 
 ### Heightmap Resolution
-The terrain pipeline generates a grid (e.g., 257x257 for 32x32 tiles with power=3), but entity spawning (resource nodes) requires heightmap sampling. Always upsample the grid to displacement resolution using `scipy.ndimage.zoom` before passing to VMF generation.
+The terrain pipeline generates a grid (e.g., 257x257 for 32x32 tiles with power=3), but entity spawning (resource nodes) requires heightmap sampling. Always upsample the grid to displacement resolution using `src.compat_utils.scipy_zoom_equivalent` before passing to VMF generation.
 
 ### Base Terrain Clearing
 Bases should NOT be deeply flattened — real Empires maps have natural terrain variation near bases. Use a small gentle clearing radius (128-384 units based on map scale) with soft blending toward average terrain height, not zero.
