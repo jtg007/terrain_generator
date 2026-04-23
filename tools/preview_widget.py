@@ -21,7 +21,9 @@ from PySide6.QtWidgets import (
     QSlider,
     QSizePolicy,
     QScrollArea,
+    QStackedWidget,
 )
+import pyqtgraph.opengl as gl
 from PySide6.QtCore import Qt, Signal, QPoint, QRectF, QPointF
 from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QImage, QPixmap, QPolygon
 from PySide6.QtSvg import QSvgRenderer
@@ -483,6 +485,11 @@ class MapPreviewWidget(QWidget):
         self.btn_clear.clicked.connect(self.clear_scene_nodes)
         self.tools_row.addWidget(self.btn_clear)
 
+        self.btn_toggle_3d = QPushButton("3D View")
+        self.btn_toggle_3d.setObjectName("SmallButton")
+        self.btn_toggle_3d.clicked.connect(self.toggle_3d_view)
+        self.tools_row.addWidget(self.btn_toggle_3d)
+
         # Action history for Undo/Redo
         self.history = []
         self.redo_history = []
@@ -532,7 +539,13 @@ class MapPreviewWidget(QWidget):
         self.view.setDragMode(QGraphicsView.NoDrag)
         self.view.setStyleSheet("background-color: #0d0d10; border: 1px solid #2e2e36;")
 
-        layout.addWidget(self.view)
+        self.view_3d = gl.GLViewWidget()
+
+        self.view_stack = QStackedWidget()
+        self.view_stack.addWidget(self.view)
+        self.view_stack.addWidget(self.view_3d)
+
+        layout.addWidget(self.view_stack)
 
         # State
         self.map_image = None
@@ -885,6 +898,53 @@ class MapPreviewWidget(QWidget):
         )
         self.map_image = qimg
         self.update_pixmap()
+        self.update_3d_view(combined)
+
+    def update_3d_view(self, heights):
+        if heights is None:
+            return
+
+        # Downsample heights array to roughly 128x128 max
+        step_h = max(1, heights.shape[0] // 128)
+        step_w = max(1, heights.shape[1] // 128)
+        z_data = heights[::step_h, ::step_w]
+
+        # Calculate x and y coordinates matching physical map size
+        x_start = -self.map_size_x / 2.0
+        x_end = self.map_size_x / 2.0
+        y_start = -self.map_size_y / 2.0
+        y_end = self.map_size_y / 2.0
+
+        x = np.linspace(x_start, x_end, z_data.shape[0])
+        y = np.linspace(y_start, y_end, z_data.shape[1])
+
+        # Normalize z for colormap
+        z_min = z_data.min()
+        z_max = z_data.max()
+        z_range = z_max - z_min
+        if z_range == 0:
+            z_norm = np.zeros_like(z_data)
+        else:
+            z_norm = (z_data - z_min) / z_range
+
+        colors = np.empty(z_data.shape + (4,), dtype=np.float32)
+
+        # Basic height-based colormap
+        colors[..., 0] = np.clip(z_norm * 1.5 - 0.2, 0, 1) # R
+        colors[..., 1] = np.clip(1.0 - np.abs(z_norm - 0.5) * 2, 0.2, 0.8) # G
+        colors[..., 2] = np.clip(1.0 - z_norm * 2.0, 0, 1) # B
+        colors[..., 3] = 1.0 # A
+
+        surface = gl.GLSurfacePlotItem(
+            x=x, y=y, z=z_data, colors=colors, computeNormals=False, smooth=True
+        )
+
+        self.view_3d.clear()
+        self.view_3d.addItem(surface)
+
+        # Determine a reasonable camera distance
+        cam_dist = max(self.map_size_x, self.map_size_y) * 1.2
+        self.view_3d.setCameraPosition(distance=cam_dist, elevation=45, azimuth=-45)
 
     def _on_thickness_slider_changed(self, value):
         self.thickness_label.setText(f"Width: {value}")
@@ -1382,6 +1442,15 @@ class MapPreviewWidget(QWidget):
 
         # Resources are now exclusively tracked by self.resources, not VisualNodes
         return nodes, connections, list(self.resources), self._height_overlay.copy() if self._height_overlay is not None else None
+
+    def toggle_3d_view(self):
+        current_idx = self.view_stack.currentIndex()
+        if current_idx == 0:
+            self.view_stack.setCurrentIndex(1)
+            self.btn_toggle_3d.setText("2D View")
+        else:
+            self.view_stack.setCurrentIndex(0)
+            self.btn_toggle_3d.setText("3D View")
 
     def update_clear_radii(self, base_radius, resource_radius, lane_radius=None):
         """Update clear_radius on all VisualNode and FixedEntityItem items."""
