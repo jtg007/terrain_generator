@@ -1325,6 +1325,7 @@ class MapPreviewWidget(QWidget):
                 be_color,
                 classname="emp_building_imp_barracks",
                 allow_fallback=False,
+                z_offset=16.0,
             )
 
         if has_nf_base:
@@ -1336,6 +1337,7 @@ class MapPreviewWidget(QWidget):
                 nf_color,
                 classname="emp_building_nf_barracks",
                 allow_fallback=False,
+                z_offset=16.0,
             )
 
         for res in self.resources:
