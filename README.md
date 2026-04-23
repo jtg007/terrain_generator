@@ -55,4 +55,5 @@ The Terrain Generator bridges the gap between procedural noise generation and th
    * Manually sculpt terrain details using the **Raise** and **Lower** tools.
    * Review all elements mapped onto your heightmap with **Undo/Redo** support.
 3. **Generate VMF:** Ensure your **COMPILE PATH** is correct, then click **Generate VMF**.
+   * *Note: If you do not specify a custom output folder, the generated files will be saved in your user `Documents/TerrainGenerator/output/` directory on Windows (or `./output/` when running from source).*
 4. **Compile Map:** Click **Compile (VBSP)** to process and deploy the map to your game directories.
