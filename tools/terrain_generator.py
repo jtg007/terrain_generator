@@ -1105,7 +1105,11 @@ class TerrainGeneratorGUI(QMainWindow):
 
     def run_preview(self):
         if hasattr(self, "preview_worker") and self.preview_worker.isRunning():
-            self.preview_worker.wait(1000)
+            # If a preview is still generating, skip starting a new one
+            # and reschedule another attempt shortly to prevent garbage
+            # collection of a running QThread which causes PySide6 crashes.
+            self.preview_timer.start(500)
+            return
 
         nodes, connections, resources, _ = self.preview_widget.get_layout_from_editor()
         self.preview_worker = PreviewWorker(

@@ -1149,7 +1149,8 @@ class MapPreviewWidget(QWidget):
         map_w = getattr(self, "map_size_x", orig_w)
         map_h = getattr(self, "map_size_y", orig_h)
         x = np.linspace(-map_w / 2, map_w / 2, x_count)
-        y = np.linspace(-map_h / 2, map_h / 2, y_count)
+        # Reverse Y linspace so lower index maps to the top (+y), matching 2D coordinate view
+        y = np.linspace(map_h / 2, -map_h / 2, y_count)
 
         surface = gl.GLSurfacePlotItem(
             x=x, y=y, z=z_data, colors=colors, computeNormals=False, smooth=True
