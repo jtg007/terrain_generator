@@ -1,0 +1,186 @@
+{
+    "emp_building_imp_barracks": [
+        {
+            "classname": "emp_building_imp_barracks",
+            "position": {
+                "x": 8632.0,
+                "y": -3824.81,
+                "z": 128.0
+            },
+            "rotation": {
+                "pitch": 0.0,
+                "yaw": 255.0,
+                "roll": 0.0
+            },
+            "raw_origin": "8632 -3824.81 128"
+        }
+    ],
+    "emp_building_nf_barracks": [
+        {
+            "classname": "emp_building_nf_barracks",
+            "position": {
+                "x": -7024.0,
+                "y": 7152.0,
+                "z": 128.0
+            },
+            "rotation": {
+                "pitch": 0.0,
+                "yaw": 240.0,
+                "roll": 0.0
+            },
+            "raw_origin": "-7024 7152 128"
+        }
+    ],
+    "emp_building_imp_mgturret": [
+        {
+            "classname": "emp_building_imp_mgturret",
+            "position": {
+                "x": 6830.0,
+                "y": -6924.0,
+                "z": 536.0
+            },
+            "rotation": {
+                "pitch": 0.0,
+                "yaw": 210.0,
+                "roll": 0.0
+            },
+            "raw_origin": "6830 -6924 536"
+        },
+        {
+            "classname": "emp_building_imp_mgturret",
+            "position": {
+                "x": 7214.62,
+                "y": 10664.0,
+                "z": 174.0
+            },
+            "rotation": {
+                "pitch": 0.0,
+                "yaw": 135.0,
+                "roll": 0.0
+            },
+            "raw_origin": "7214.62 10664 174"
+        }
+    ],
+    "emp_building_imp_mlturret": [
+        {
+            "classname": "emp_building_imp_mlturret",
+            "position": {
+                "x": 7751.34,
+                "y": -8468.0,
+                "z": 536.0
+            },
+            "rotation": {
+                "pitch": 0.0,
+                "yaw": 165.0,
+                "roll": 0.0
+            },
+            "raw_origin": "7751.34 -8468 536"
+        },
+        {
+            "classname": "emp_building_imp_mlturret",
+            "position": {
+                "x": 7430.12,
+                "y": 11842.0,
+                "z": 156.0
+            },
+            "rotation": {
+                "pitch": 0.802129,
+                "yaw": 165.013,
+                "roll": -2.8028
+            },
+            "raw_origin": "7430.12 11842 156"
+        }
+    ],
+    "emp_building_nf_mgturret": [
+        {
+            "classname": "emp_building_nf_mgturret",
+            "position": {
+                "x": -4108.0,
+                "y": 10550.0,
+                "z": 384.0
+            },
+            "rotation": {
+                "pitch": 0.0,
+                "yaw": 333.0,
+                "roll": -8.0
+            },
+            "raw_origin": "-4108 10550 384"
+        },
+        {
+            "classname": "emp_building_nf_mgturret",
+            "position": {
+                "x": -6212.0,
+                "y": -7624.0,
+                "z": 488.0
+            },
+            "rotation": {
+                "pitch": 0.0,
+                "yaw": 331.0,
+                "roll": 6.5
+            },
+            "raw_origin": "-6212 -7624 488"
+        }
+    ],
+    "emp_building_nf_mlturret": [
+        {
+            "classname": "emp_building_nf_mlturret",
+            "position": {
+                "x": -3868.0,
+                "y": 11840.0,
+                "z": 386.0
+            },
+            "rotation": {
+                "pitch": 0.0,
+                "yaw": 0.0,
+                "roll": 6.5
+            },
+            "raw_origin": "-3868 11840 386"
+        },
+        {
+            "classname": "emp_building_nf_mlturret",
+            "position": {
+                "x": -7172.0,
+                "y": -9130.0,
+                "z": 482.0
+            },
+            "rotation": {
+                "pitch": 0.0,
+                "yaw": 0.0,
+                "roll": -0.999998
+            },
+            "raw_origin": "-7172 -9130 482"
+        }
+    ],
+    "emp_building_imp_refinery": [
+        {
+            "classname": "emp_building_imp_refinery",
+            "position": {
+                "x": 9819.0,
+                "y": -2776.0,
+                "z": 128.0
+            },
+            "rotation": {
+                "pitch": 0.0,
+                "yaw": 0.0,
+                "roll": 0.0
+            },
+            "raw_origin": "9819 -2776 128"
+        }
+    ],
+    "emp_building_nf_refinery": [
+        {
+            "classname": "emp_building_nf_refinery",
+            "position": {
+                "x": -8486.0,
+                "y": 6022.0,
+                "z": 138.0
+            },
+            "rotation": {
+                "pitch": 0.0,
+                "yaw": 0.0,
+                "roll": 0.0
+            },
+            "raw_origin": "-8486 6022 138"
+        }
+    ]
+}

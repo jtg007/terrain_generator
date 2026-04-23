@@ -1,7 +1,7 @@
 import math
 import sys
 from pathlib import Path
-from typing import List, Optional, Tuple, Set
+from typing import Dict, List, Optional, Set, Tuple
 
 
 import numpy as np
@@ -29,7 +29,16 @@ from PySide6.QtWidgets import (
 )
 import pyqtgraph.opengl as gl
 from PySide6.QtCore import Qt, Signal, QPoint, QRectF, QPointF
-from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QImage, QPixmap, QPolygon
+from PySide6.QtGui import (
+    QPainter,
+    QColor,
+    QPen,
+    QBrush,
+    QImage,
+    QPixmap,
+    QPolygon,
+    QVector3D,
+)
 from PySide6.QtSvg import QSvgRenderer
 
 from src.terrain_spec import ZoneType, LayoutNode, LayoutConnection
@@ -56,6 +65,82 @@ SVG_RENDERERS = {
     "nf": _load_svg(ICONS_DIR / "nf base.svg"),
     "res": _load_svg(ICONS_DIR / "resource_node.svg"),
 }
+
+MODELS_DIR = PROJECT_ROOT / "models"
+MESH_CACHE: Dict[str, Optional[Tuple[np.ndarray, np.ndarray]]] = {}
+
+
+def load_obj_mesh(filepath: Path) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+    cache_key = str(filepath)
+    if cache_key in MESH_CACHE:
+        return MESH_CACHE[cache_key]
+
+    if not filepath.exists():
+        MESH_CACHE[cache_key] = None
+        return None
+
+    vertices: List[Tuple[float, float, float]] = []
+    faces: List[Tuple[int, int, int]] = []
+
+    try:
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            for raw_line in f:
+                line = raw_line.strip()
+                if not line or line.startswith("#"):
+                    continue
+
+                if line.startswith("v "):
+                    parts = line.split()
+                    if len(parts) >= 4:
+                        vertices.append(
+                            (float(parts[1]), float(parts[2]), float(parts[3]))
+                        )
+                    continue
+
+                if not line.startswith("f "):
+                    continue
+
+                parts = line.split()[1:]
+                if len(parts) < 3:
+                    continue
+
+                face_indices: List[int] = []
+                for token in parts:
+                    idx_token = token.split("/")[0]
+                    if not idx_token:
+                        continue
+
+                    idx = int(idx_token)
+                    if idx < 0:
+                        idx = len(vertices) + idx
+                    else:
+                        idx -= 1
+                    face_indices.append(idx)
+
+                if len(face_indices) < 3:
+                    continue
+
+                for i in range(1, len(face_indices) - 1):
+                    faces.append(
+                        (face_indices[0], face_indices[i], face_indices[i + 1])
+                    )
+    except (OSError, ValueError):
+        MESH_CACHE[cache_key] = None
+        return None
+
+    if not vertices or not faces:
+        MESH_CACHE[cache_key] = None
+        return None
+
+    verts_arr = np.array(vertices, dtype=np.float32)
+    faces_arr = np.array(faces, dtype=np.int32)
+
+    if faces_arr.min() < 0 or faces_arr.max() >= len(verts_arr):
+        MESH_CACHE[cache_key] = None
+        return None
+
+    MESH_CACHE[cache_key] = (verts_arr, faces_arr)
+    return MESH_CACHE[cache_key]
 
 
 class VisualFreehandEdge(QGraphicsItem):
@@ -834,16 +919,40 @@ class MapPreviewWidget(QWidget):
             self.map_pixmap_item.setPixmap(QPixmap())
 
 
-    def _update_3d_view(self):
+    def _camera_from_2d_view(self):
+        viewport_rect = self.view.viewport().rect()
+        center_scene = self.view.mapToScene(viewport_rect.center())
+        top_left = self.view.mapToScene(viewport_rect.topLeft())
+        bottom_right = self.view.mapToScene(viewport_rect.bottomRight())
+
+        visible_w = max(1.0, abs(bottom_right.x() - top_left.x()))
+        visible_h = max(1.0, abs(bottom_right.y() - top_left.y()))
+
+        center_x = center_scene.x() - self.origin_x - (self.map_size_x / 2.0)
+        center_y = center_scene.y() - self.origin_y - (self.map_size_y / 2.0)
+
+        visible_extent = max(visible_w, visible_h)
+        distance = max(512.0, visible_extent * 0.9)
+
+        return {
+            "pos": QVector3D(float(center_x), float(center_y), 0.0),
+            "distance": float(distance),
+            "elevation": 90.0,
+            "azimuth": -90.0,
+        }
+
+    def _update_3d_view(self, camera_override=None):
         if self._base_heights is None:
             self._render_markers_only()
+            if camera_override is not None:
+                self.view_3d.setCameraPosition(**camera_override)
             return
 
         heights = self._base_heights
         if self._height_overlay is not None:
             heights = heights + self._height_overlay
 
-        self.update_3d_view(heights)
+        self.update_3d_view(heights, camera_override=camera_override)
 
     def _render_markers_only(self):
         self.view_3d.clear()
@@ -934,14 +1043,16 @@ class MapPreviewWidget(QWidget):
 
         combined = self._base_heights + self._height_overlay
 
-        min_h = min(self._base_min, float(combined.min()))
-        max_h = max(self._base_max, float(combined.max()))
+        # Keep preview exposure anchored to the original terrain so sculpting does not
+        # brighten/darken the whole map as local edits change extreme min/max values.
+        min_h = float(self._base_min)
+        max_h = float(self._base_max)
 
-        # Stabilize range if it's too small (prevents sudden color jumps/flashes)
-        # This ensures height 0 stays near neutral gray if the total range is under 512 units.
+        # Stabilize very flat maps to avoid flicker and preserve usable contrast.
         if max_h - min_h < 512.0:
-            min_h = min(min_h, -256.0)
-            max_h = max(max_h, 256.0)
+            mid_h = (min_h + max_h) * 0.5
+            min_h = mid_h - 256.0
+            max_h = mid_h + 256.0
 
         if max_h > min_h:
             normalized = (combined - min_h) / (max_h - min_h)
@@ -963,39 +1074,82 @@ class MapPreviewWidget(QWidget):
         self.update_pixmap()
         self.update_3d_view(combined)
 
-    def update_3d_view(self, heights):
+    def update_3d_view(self, heights, camera_override=None):
         if heights is None:
             return
 
-        # Downsample. Keep the original preview style to match legacy appearance.
+        BE_BARRACKS_SIZE = (512.0, 512.0, 256.0)
+        NF_BARRACKS_SIZE = (384.0, 384.0, 384.0)
+        CV_SIZE = (192.0, 256.0, 128.0)
+        REFINERY_SIZE = (256.0, 256.0, 384.0)
+
+        # Downsample and transpose to keep world axes consistent:
+        # heights is [row(y), col(x)] -> GLSurface expects z[x, y].
         orig_h, orig_w = heights.shape
         step_h = max(1, orig_h // 128)
         step_w = max(1, orig_w // 128)
-        z_data = heights[::step_h, ::step_w]
+        z_data = heights[::step_h, ::step_w].T
 
-        # Old renderer centered the terrain around zero for stable visual contrast.
+        # Center terrain around zero for camera stability/visibility.
         mean_h = float(np.mean(heights))
         z_data = z_data - mean_h
 
-        # Old-style discrete terrain colors (less noisy than gradient heatmap).
-        z_min = z_data.min()
-        z_max = z_data.max()
-        z_range = z_max - z_min if z_max > z_min else 1.0
-        normalized_z = (z_data - z_min) / z_range
+        # Material-style preview: emulate blend alpha behavior used for VMF terrain.
+        # This is slope-based (grass<->rock), with subtle height tinting for readability.
+        height_min = float(np.min(heights))
+        height_max = float(np.max(heights))
+        height_range = max(1e-6, height_max - height_min)
+        height_norm_full = (heights - height_min) / height_range
 
-        colors = np.zeros((normalized_z.shape[0], normalized_z.shape[1], 4), dtype=np.float32)
-        low_mask = normalized_z < 0.3
-        mid_mask = (normalized_z >= 0.3) & (normalized_z < 0.7)
-        high_mask = normalized_z >= 0.7
-        colors[low_mask] = [0.2, 0.4, 0.8, 1.0]
-        colors[mid_mask] = [0.2, 0.6, 0.2, 1.0]
-        colors[high_mask] = [0.6, 0.5, 0.4, 1.0]
+        cell_w = self.map_size_x / max(1, orig_w - 1)
+        cell_h = self.map_size_y / max(1, orig_h - 1)
+        dz_dy, dz_dx = np.gradient(heights, cell_h, cell_w)
+        slope_full = np.sqrt(dz_dx * dz_dx + dz_dy * dz_dy)
 
-        h, w = z_data.shape
+        slope_ds = slope_full[::step_h, ::step_w].T
+        height_norm = height_norm_full[::step_h, ::step_w].T
+
+        # Match pipeline defaults from terrain_pipeline.slope_to_alpha
+        flat_threshold = 0.005
+        steep_threshold = 0.03
+        slope_t = np.clip(
+            (slope_ds - flat_threshold) / (steep_threshold - flat_threshold),
+            0.0,
+            1.0,
+        )
+        slope_t = slope_t * slope_t * (3.0 - 2.0 * slope_t)  # smoothstep
+
+        grass = np.array([0.22, 0.60, 0.24], dtype=np.float32)
+        rock = np.array([0.57, 0.51, 0.43], dtype=np.float32)
+        dirt = np.array([0.38, 0.30, 0.22], dtype=np.float32)
+        peak = np.array([0.70, 0.67, 0.60], dtype=np.float32)
+
+        rgb = (
+            grass[np.newaxis, np.newaxis, :] * (1.0 - slope_t)[..., np.newaxis]
+            + rock[np.newaxis, np.newaxis, :] * slope_t[..., np.newaxis]
+        )
+
+        low_blend = np.clip((0.18 - height_norm) / 0.18, 0.0, 1.0)
+        rgb = (
+            rgb * (1.0 - low_blend[..., np.newaxis])
+            + dirt[np.newaxis, np.newaxis, :] * low_blend[..., np.newaxis]
+        )
+
+        high_blend = np.clip((height_norm - 0.75) / 0.25, 0.0, 1.0)
+        rgb = (
+            rgb * (1.0 - high_blend[..., np.newaxis])
+            + peak[np.newaxis, np.newaxis, :] * high_blend[..., np.newaxis]
+        )
+
+        colors = np.empty((rgb.shape[0], rgb.shape[1], 4), dtype=np.float32)
+        colors[..., :3] = np.clip(rgb, 0.0, 1.0)
+        colors[..., 3] = 1.0
+
+        x_count, y_count = z_data.shape
         map_w = getattr(self, "map_size_x", orig_w)
         map_h = getattr(self, "map_size_y", orig_h)
-        x = np.linspace(-map_w / 2, map_w / 2, h)
-        y = np.linspace(-map_h / 2, map_h / 2, w)
+        x = np.linspace(-map_w / 2, map_w / 2, x_count)
+        y = np.linspace(-map_h / 2, map_h / 2, y_count)
 
         surface = gl.GLSurfacePlotItem(
             x=x, y=y, z=z_data, colors=colors, computeNormals=False, smooth=True
@@ -1004,52 +1158,205 @@ class MapPreviewWidget(QWidget):
         self.view_3d.clear()
         self.view_3d.addItem(surface)
 
-        # Add entity markers
-        marker_positions = []
-        marker_colors = []
+        box_faces = np.array(
+            [
+                [0, 1, 2],
+                [0, 2, 3],
+                [4, 5, 6],
+                [4, 6, 7],
+                [0, 1, 5],
+                [0, 5, 4],
+                [1, 2, 6],
+                [1, 6, 5],
+                [2, 3, 7],
+                [2, 7, 6],
+                [3, 0, 4],
+                [3, 4, 7],
+            ],
+            dtype=np.uint32,
+        )
 
-        def add_marker(world_x, world_y, r, g, b, a=1.0):
+        def sample_terrain_height(world_x, world_y):
             if world_x is None or world_y is None:
-                return
-            # Map world coords to grid indices
-            gy = int((world_y - self.origin_y) / self.map_size_y * heights.shape[0])
-            gx = int((world_x - self.origin_x) / self.map_size_x * heights.shape[1])
-            gy = max(0, min(heights.shape[0] - 1, gy))
+                return None
+            if self.map_size_x <= 0 or self.map_size_y <= 0:
+                return None
+
+            gx_ratio = (world_x - self.origin_x) / float(self.map_size_x)
+            gy_ratio = (world_y - self.origin_y) / float(self.map_size_y)
+
+            gx = int(round(gx_ratio * (heights.shape[1] - 1)))
+            gy = int(round(gy_ratio * (heights.shape[0] - 1)))
             gx = max(0, min(heights.shape[1] - 1, gx))
+            gy = max(0, min(heights.shape[0] - 1, gy))
+            return float(heights[gy, gx])
 
-            z_val = (heights[gy, gx] - mean_h) + 200.0  # offset to float above terrain
-
-            # Map world coords to the linspace coords of the surface plot
+        def to_preview_xy(world_x, world_y):
             sx = (world_x - self.origin_x) - (self.map_size_x / 2.0)
             sy = (world_y - self.origin_y) - (self.map_size_y / 2.0)
+            return sx, sy
 
-            marker_positions.append([sx, sy, z_val])
-            marker_colors.append([r, g, b, a])
+        def add_box(world_x, world_y, size_xyz, color_rgba, z_offset=0.0):
+            terrain_z = sample_terrain_height(world_x, world_y)
+            if terrain_z is None:
+                return
 
-        # BE Base (Blue)
-        if self.imp_base and self.imp_base[0] is not None:
-            add_marker(self.imp_base[0], self.imp_base[1], 0.0, 0.4, 1.0)
+            sx, sy = to_preview_xy(world_x, world_y)
+            size_x, size_y, size_z = size_xyz
 
-        # NF Base (Red)
-        if self.nf_base and self.nf_base[0] is not None:
-            add_marker(self.nf_base[0], self.nf_base[1], 1.0, 0.2, 0.2)
-
-        # Resources (Green)
-        for res in self.resources:
-            add_marker(res[0], res[1], 0.2, 1.0, 0.2)
-
-        if marker_positions:
-            scatter = gl.GLScatterPlotItem(
-                pos=np.array(marker_positions),
-                color=np.array(marker_colors),
-                size=15,
-                pxMode=True
+            verts = np.array(
+                [
+                    [0.0, 0.0, 0.0],
+                    [size_x, 0.0, 0.0],
+                    [size_x, size_y, 0.0],
+                    [0.0, size_y, 0.0],
+                    [0.0, 0.0, size_z],
+                    [size_x, 0.0, size_z],
+                    [size_x, size_y, size_z],
+                    [0.0, size_y, size_z],
+                ],
+                dtype=np.float32,
             )
-            self.view_3d.addItem(scatter)
+            mesh = gl.MeshData(vertexes=verts, faces=box_faces)
+            box = gl.GLMeshItem(
+                meshdata=mesh,
+                smooth=False,
+                drawFaces=True,
+                drawEdges=True,
+                color=color_rgba,
+                edgeColor=(1.0, 1.0, 1.0, 0.35),
+            )
+            box.setGLOptions("translucent")
+            box.translate(
+                sx - (size_x / 2.0),
+                sy - (size_y / 2.0),
+                (terrain_z - mean_h) + z_offset,
+            )
+            self.view_3d.addItem(box)
 
-        # Determine a reasonable camera distance
-        cam_dist = max(self.map_size_x, self.map_size_y) * 1.2
-        self.view_3d.setCameraPosition(distance=cam_dist, elevation=45, azimuth=-45)
+        def add_mesh(world_x, world_y, classname, color_rgba, z_offset=0.0):
+            terrain_z = sample_terrain_height(world_x, world_y)
+            if terrain_z is None:
+                return False
+
+            model_path = MODELS_DIR / f"{classname}.obj"
+            loaded = load_obj_mesh(model_path)
+            if loaded is None:
+                return False
+
+            model_vertices, model_faces = loaded
+            # Convert OBJ coordinates (Y-up) to preview coordinates (Z-up).
+            # Keep right-handed orientation: x' = x, y' = -z, z' = y.
+            vertices = np.empty_like(model_vertices)
+            vertices[:, 0] = model_vertices[:, 0]
+            vertices[:, 1] = -model_vertices[:, 2]
+            vertices[:, 2] = model_vertices[:, 1]
+
+            min_vals = vertices.min(axis=0)
+            max_vals = vertices.max(axis=0)
+            center_x = (min_vals[0] + max_vals[0]) * 0.5
+            center_y = (min_vals[1] + max_vals[1]) * 0.5
+            min_z = min_vals[2]
+
+            vertices[:, 0] -= center_x
+            vertices[:, 1] -= center_y
+            vertices[:, 2] -= min_z
+
+            mesh = gl.MeshData(vertexes=vertices, faces=model_faces)
+            mesh_item = gl.GLMeshItem(
+                meshdata=mesh,
+                smooth=True,
+                drawFaces=True,
+                drawEdges=False,
+                computeNormals=True,
+                color=color_rgba,
+            )
+            mesh_item.setGLOptions("translucent")
+
+            sx, sy = to_preview_xy(world_x, world_y)
+            mesh_item.translate(sx, sy, (terrain_z - mean_h) + z_offset)
+            self.view_3d.addItem(mesh_item)
+            return True
+
+        def add_entity(
+            world_x,
+            world_y,
+            size_xyz,
+            color_rgba,
+            classname=None,
+            allow_fallback=True,
+            z_offset=0.0,
+        ):
+            if classname and add_mesh(
+                world_x, world_y, classname, color_rgba, z_offset=z_offset
+            ):
+                return
+            if allow_fallback:
+                add_box(world_x, world_y, size_xyz, color_rgba, z_offset=z_offset)
+
+        be_color = (0.0, 0.5, 1.0, 0.5)
+        nf_color = (1.0, 0.0, 0.0, 0.5)
+        res_color = (0.8, 0.8, 0.0, 0.5)
+
+        has_imp_base = (
+            self.imp_base
+            and len(self.imp_base) == 2
+            and self.imp_base[0] is not None
+            and self.imp_base[1] is not None
+        )
+        if has_imp_base:
+            imp_x, imp_y = self.imp_base
+
+        has_nf_base = (
+            self.nf_base
+            and len(self.nf_base) == 2
+            and self.nf_base[0] is not None
+            and self.nf_base[1] is not None
+        )
+        if has_nf_base:
+            nf_x, nf_y = self.nf_base
+
+        if has_imp_base:
+            add_entity(imp_x, imp_y, CV_SIZE, be_color, allow_fallback=False)
+            add_entity(
+                imp_x + 400.0,
+                imp_y,
+                BE_BARRACKS_SIZE,
+                be_color,
+                classname="emp_building_imp_barracks",
+                allow_fallback=False,
+            )
+
+        if has_nf_base:
+            add_entity(nf_x, nf_y, CV_SIZE, nf_color, allow_fallback=False)
+            add_entity(
+                nf_x + 400.0,
+                nf_y,
+                NF_BARRACKS_SIZE,
+                nf_color,
+                classname="emp_building_nf_barracks",
+                allow_fallback=False,
+            )
+
+        for res in self.resources:
+            if res and len(res) == 2:
+                add_entity(
+                    res[0],
+                    res[1],
+                    REFINERY_SIZE,
+                    res_color,
+                    classname="emp_resource_point",
+                )
+
+        if camera_override is not None:
+            self.view_3d.setCameraPosition(**camera_override)
+        elif self.view_stack.currentIndex() != 1:
+            cam_dist = max(self.map_size_x, self.map_size_y) * 1.2
+            self.view_3d.setCameraPosition(
+                distance=cam_dist,
+                elevation=45,
+                azimuth=-45,
+            )
 
     def _on_thickness_slider_changed(self, value):
         self.thickness_label.setText(f"Width: {value}")
@@ -1553,7 +1860,7 @@ class MapPreviewWidget(QWidget):
         if current_idx == 0:
             self.view_stack.setCurrentIndex(1)
             self.btn_toggle_3d.setText("2D View")
-            self._update_3d_view()
+            self._update_3d_view(camera_override=self._camera_from_2d_view())
         else:
             self.view_stack.setCurrentIndex(0)
             self.btn_toggle_3d.setText("3D View")
