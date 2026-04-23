@@ -836,67 +836,47 @@ class MapPreviewWidget(QWidget):
 
     def _update_3d_view(self):
         if self._base_heights is None:
+            self._render_markers_only()
             return
 
-        z_data = self._base_heights.copy()
+        heights = self._base_heights
+        if self._height_overlay is not None:
+            heights = heights + self._height_overlay
 
-        # Downsample. The VMF grids can be quite large (e.g. 1024x1024).
-        # We want around max 128x128 for smooth performance.
-        orig_h, orig_w = z_data.shape
-        step_h = max(1, orig_h // 128)
-        step_w = max(1, orig_w // 128)
+        self.update_3d_view(heights)
 
-        z_data = z_data[::step_h, ::step_w]
-
-        # Center the data
-        z_data = z_data - np.mean(z_data)
-
-        # Generate colors based on height
-        z_min = z_data.min()
-        z_max = z_data.max()
-        z_range = z_max - z_min if z_max > z_min else 1.0
-
-        normalized_z = (z_data - z_min) / z_range
-
-        colors = np.zeros((normalized_z.shape[0], normalized_z.shape[1], 4), dtype=np.float32)
-
-        # Simple color map:
-        # Low (<0.3): Blue-ish
-        # Mid (0.3-0.7): Green-ish
-        # High (>0.7): Brown-ish
-        low_mask = normalized_z < 0.3
-        mid_mask = (normalized_z >= 0.3) & (normalized_z < 0.7)
-        high_mask = normalized_z >= 0.7
-
-        colors[low_mask] = [0.2, 0.4, 0.8, 1.0]
-        colors[mid_mask] = [0.2, 0.6, 0.2, 1.0]
-        colors[high_mask] = [0.6, 0.5, 0.4, 1.0]
-
+    def _render_markers_only(self):
         self.view_3d.clear()
 
-        h, w = z_data.shape
+        marker_positions = []
+        marker_colors = []
 
-        # Use real map dimensions if available, otherwise fallback to array bounds
-        map_w = getattr(self, 'map_size_x', orig_w)
-        map_h = getattr(self, 'map_size_y', orig_h)
+        def add_marker_fallback(world_x, world_y, r, g, b, a=1.0):
+            if world_x is None or world_y is None:
+                return
+            sx = world_x - self.origin_x - (self.map_size_x / 2.0)
+            sy = world_y - self.origin_y - (self.map_size_y / 2.0)
+            marker_positions.append([sx, sy, 100.0])
+            marker_colors.append([r, g, b, a])
 
-        # Center x and y
-        # pyqtgraph expects x to align with z.shape[0] and y to align with z.shape[1]
-        x = np.linspace(-map_w / 2, map_w / 2, h)
-        y = np.linspace(-map_h / 2, map_h / 2, w)
+        if self.imp_base and self.imp_base[0] is not None:
+            add_marker_fallback(self.imp_base[0], self.imp_base[1], 0.0, 0.4, 1.0)
+        if self.nf_base and self.nf_base[0] is not None:
+            add_marker_fallback(self.nf_base[0], self.nf_base[1], 1.0, 0.2, 0.2)
+        for res in self.resources:
+            add_marker_fallback(res[0], res[1], 0.2, 1.0, 0.2)
 
-        surface = gl.GLSurfacePlotItem(
-            x=x, y=y, z=z_data,
-            colors=colors,
-            computeNormals=False,
-            smooth=True
-        )
+        if marker_positions:
+            scatter = gl.GLScatterPlotItem(
+                pos=np.array(marker_positions),
+                color=np.array(marker_colors),
+                size=15,
+                pxMode=True
+            )
+            self.view_3d.addItem(scatter)
 
-        self.view_3d.addItem(surface)
-
-        # Adjust camera using map size
-        max_dim = max(map_w, map_h)
-        self.view_3d.setCameraPosition(distance=max_dim * 1.2)
+        cam_dist = max(self.map_size_x, self.map_size_y) * 1.2
+        self.view_3d.setCameraPosition(distance=cam_dist, elevation=45, azimuth=-45)
 
     def set_raw_heights(self, heights: np.ndarray):
 
@@ -987,38 +967,35 @@ class MapPreviewWidget(QWidget):
         if heights is None:
             return
 
-        # Downsample heights array to roughly 128x128 max
-        step_h = max(1, heights.shape[0] // 128)
-        step_w = max(1, heights.shape[1] // 128)
-        # Transpose to fix pyqtgraph axes (it maps array axis 0 to X, axis 1 to Y)
-        # heights is (Y, X), so .T makes it (X, Y)
-        z_data = heights[::step_h, ::step_w].T
+        # Downsample. Keep the original preview style to match legacy appearance.
+        orig_h, orig_w = heights.shape
+        step_h = max(1, orig_h // 128)
+        step_w = max(1, orig_w // 128)
+        z_data = heights[::step_h, ::step_w]
 
-        # Calculate x and y coordinates matching physical map size
-        x_start = -self.map_size_x / 2.0
-        x_end = self.map_size_x / 2.0
-        y_start = -self.map_size_y / 2.0
-        y_end = self.map_size_y / 2.0
+        # Old renderer centered the terrain around zero for stable visual contrast.
+        mean_h = float(np.mean(heights))
+        z_data = z_data - mean_h
 
-        x = np.linspace(x_start, x_end, z_data.shape[0])
-        y = np.linspace(y_start, y_end, z_data.shape[1])
-
-        # Normalize z for colormap
+        # Old-style discrete terrain colors (less noisy than gradient heatmap).
         z_min = z_data.min()
         z_max = z_data.max()
-        z_range = z_max - z_min
-        if z_range == 0:
-            z_norm = np.zeros_like(z_data)
-        else:
-            z_norm = (z_data - z_min) / z_range
+        z_range = z_max - z_min if z_max > z_min else 1.0
+        normalized_z = (z_data - z_min) / z_range
 
-        colors = np.empty(z_data.shape + (4,), dtype=np.float32)
+        colors = np.zeros((normalized_z.shape[0], normalized_z.shape[1], 4), dtype=np.float32)
+        low_mask = normalized_z < 0.3
+        mid_mask = (normalized_z >= 0.3) & (normalized_z < 0.7)
+        high_mask = normalized_z >= 0.7
+        colors[low_mask] = [0.2, 0.4, 0.8, 1.0]
+        colors[mid_mask] = [0.2, 0.6, 0.2, 1.0]
+        colors[high_mask] = [0.6, 0.5, 0.4, 1.0]
 
-        # Basic height-based colormap
-        colors[..., 0] = np.clip(z_norm * 1.5 - 0.2, 0, 1) # R
-        colors[..., 1] = np.clip(1.0 - np.abs(z_norm - 0.5) * 2, 0.2, 0.8) # G
-        colors[..., 2] = np.clip(1.0 - z_norm * 2.0, 0, 1) # B
-        colors[..., 3] = 1.0 # A
+        h, w = z_data.shape
+        map_w = getattr(self, "map_size_x", orig_w)
+        map_h = getattr(self, "map_size_y", orig_h)
+        x = np.linspace(-map_w / 2, map_w / 2, h)
+        y = np.linspace(-map_h / 2, map_h / 2, w)
 
         surface = gl.GLSurfacePlotItem(
             x=x, y=y, z=z_data, colors=colors, computeNormals=False, smooth=True
@@ -1037,14 +1014,14 @@ class MapPreviewWidget(QWidget):
             # Map world coords to grid indices
             gy = int((world_y - self.origin_y) / self.map_size_y * heights.shape[0])
             gx = int((world_x - self.origin_x) / self.map_size_x * heights.shape[1])
-            gy = max(0, min(heights.shape[0]-1, gy))
-            gx = max(0, min(heights.shape[1]-1, gx))
+            gy = max(0, min(heights.shape[0] - 1, gy))
+            gx = max(0, min(heights.shape[1] - 1, gx))
 
-            z_val = heights[gy, gx] + 200.0 # offset to float above terrain
+            z_val = (heights[gy, gx] - mean_h) + 200.0  # offset to float above terrain
 
             # Map world coords to the linspace coords of the surface plot
-            sx = (world_x - self.origin_x) / self.map_size_x * self.map_size_x - (self.map_size_x/2.0)
-            sy = (world_y - self.origin_y) / self.map_size_y * self.map_size_y - (self.map_size_y/2.0)
+            sx = (world_x - self.origin_x) - (self.map_size_x / 2.0)
+            sy = (world_y - self.origin_y) - (self.map_size_y / 2.0)
 
             marker_positions.append([sx, sy, z_val])
             marker_colors.append([r, g, b, a])
