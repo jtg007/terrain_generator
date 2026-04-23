@@ -708,12 +708,18 @@ class MapPreviewWidget(QWidget):
                 # Emit only on release to prevent constant synchronous rebuilds while dragging
                 if self.entity_type == "imp":
                     if isinstance(self.scene().views()[0].parent(), MapPreviewWidget):
-                        self.scene().views()[0].parent().base_moved.emit(
+                        pw = self.scene().views()[0].parent()
+                        if pw._base_heights is not None:
+                            pw.update_3d_view(pw._base_heights + (pw._height_overlay if pw._height_overlay is not None else 0))
+                        pw.base_moved.emit(
                             "imp", self.x(), self.y()
                         )
                 elif self.entity_type == "nf":
                     if isinstance(self.scene().views()[0].parent(), MapPreviewWidget):
-                        self.scene().views()[0].parent().base_moved.emit(
+                        pw = self.scene().views()[0].parent()
+                        if pw._base_heights is not None:
+                            pw.update_3d_view(pw._base_heights + (pw._height_overlay if pw._height_overlay is not None else 0))
+                        pw.base_moved.emit(
                             "nf", self.x(), self.y()
                         )
                 elif self.entity_type == "res":
@@ -727,6 +733,8 @@ class MapPreviewWidget(QWidget):
                             new_res_list[self.index] = (self.x(), self.y())
                         pw.record_action("set_res", (old_res_list, new_res_list))
                         pw.resources = new_res_list
+                        if pw._base_heights is not None:
+                            pw.update_3d_view(pw._base_heights + (pw._height_overlay if pw._height_overlay is not None else 0))
                         pw.resource_moved.emit(self.index, self.x(), self.y())
 
             def paint(self, painter, option, widget):
@@ -797,6 +805,9 @@ class MapPreviewWidget(QWidget):
                     invalid=invalid,
                 )
             )
+
+        if self._base_heights is not None:
+            self.update_3d_view(self._base_heights + (self._height_overlay if self._height_overlay is not None else 0))
 
     def update_pixmap(self):
         if self.map_image:
@@ -907,7 +918,9 @@ class MapPreviewWidget(QWidget):
         # Downsample heights array to roughly 128x128 max
         step_h = max(1, heights.shape[0] // 128)
         step_w = max(1, heights.shape[1] // 128)
-        z_data = heights[::step_h, ::step_w]
+        # Transpose to fix pyqtgraph axes (it maps array axis 0 to X, axis 1 to Y)
+        # heights is (Y, X), so .T makes it (X, Y)
+        z_data = heights[::step_h, ::step_w].T
 
         # Calculate x and y coordinates matching physical map size
         x_start = -self.map_size_x / 2.0
@@ -941,6 +954,49 @@ class MapPreviewWidget(QWidget):
 
         self.view_3d.clear()
         self.view_3d.addItem(surface)
+
+        # Add entity markers
+        marker_positions = []
+        marker_colors = []
+
+        def add_marker(world_x, world_y, r, g, b, a=1.0):
+            if world_x is None or world_y is None:
+                return
+            # Map world coords to grid indices
+            gy = int((world_y - self.origin_y) / self.map_size_y * heights.shape[0])
+            gx = int((world_x - self.origin_x) / self.map_size_x * heights.shape[1])
+            gy = max(0, min(heights.shape[0]-1, gy))
+            gx = max(0, min(heights.shape[1]-1, gx))
+
+            z_val = heights[gy, gx] + 200.0 # offset to float above terrain
+
+            # Map world coords to the linspace coords of the surface plot
+            sx = (world_x - self.origin_x) / self.map_size_x * self.map_size_x - (self.map_size_x/2.0)
+            sy = (world_y - self.origin_y) / self.map_size_y * self.map_size_y - (self.map_size_y/2.0)
+
+            marker_positions.append([sx, sy, z_val])
+            marker_colors.append([r, g, b, a])
+
+        # BE Base (Blue)
+        if self.imp_base and self.imp_base[0] is not None:
+            add_marker(self.imp_base[0], self.imp_base[1], 0.0, 0.4, 1.0)
+
+        # NF Base (Red)
+        if self.nf_base and self.nf_base[0] is not None:
+            add_marker(self.nf_base[0], self.nf_base[1], 1.0, 0.2, 0.2)
+
+        # Resources (Green)
+        for res in self.resources:
+            add_marker(res[0], res[1], 0.2, 1.0, 0.2)
+
+        if marker_positions:
+            scatter = gl.GLScatterPlotItem(
+                pos=np.array(marker_positions),
+                color=np.array(marker_colors),
+                size=15,
+                pxMode=True
+            )
+            self.view_3d.addItem(scatter)
 
         # Determine a reasonable camera distance
         cam_dist = max(self.map_size_x, self.map_size_y) * 1.2
