@@ -201,11 +201,13 @@ class GenerationWorker(QThread):
 
                     # CRITICAL: Recalculate slopes so rock textures appear on steep sculpted terrain
                     calculate_slopes(grid)
-                    
+
                     # CRITICAL: Re-export the minimap so the mountain appears in-game
                     export_minimap(spec, grid, self.output_filename, self.project_root)
-                    
-                    print(f"DEBUG: Grid max height after sculpting: {grid.max_height()}")
+
+                    print(
+                        f"DEBUG: Grid max height after sculpting: {grid.max_height()}"
+                    )
                 except Exception as e:
                     sculpt_warning = f"Manual sculpting application failed: {e}"
 
@@ -925,11 +927,9 @@ class TerrainGeneratorGUI(QMainWindow):
 
         preview_grid = QGridLayout()
         preview_grid.setSpacing(4)
-        lbl_preview_opts = QLabel("Preview Options")
+        lbl_preview_opts = QLabel("Advanced Settings")
         lbl_preview_opts.setObjectName("FieldLabel")
-        lbl_preview_opts.setToolTip(
-            "Control how the preview displays terrain"
-        )
+        lbl_preview_opts.setToolTip("Control how the preview displays terrain")
         preview_grid.addWidget(lbl_preview_opts, 0, 0, 1, 2)
         preview_grid.addWidget(self.chk_manual_terrain, 1, 0, 1, 2)
         preview_grid.addWidget(self.chk_invert_lanes, 2, 0, 1, 2)
@@ -1817,7 +1817,9 @@ class TerrainGeneratorGUI(QMainWindow):
             self.chk_nodetail.setChecked(self.config_model.use_nodetail_texture)
             self.chk_manual_terrain.setChecked(self.config_model.manual_terrain)
             self.chk_invert_lanes.setChecked(self.config_model.invert_lanes)
-            self.chk_preview_pipeline.setChecked(self.config_model.preview_with_pipeline)
+            self.chk_preview_pipeline.setChecked(
+                self.config_model.preview_with_pipeline
+            )
 
         if self.config_model.custom_image_path:
             self.chk_custom_image.setChecked(True)
@@ -2080,7 +2082,9 @@ class TerrainGeneratorGUI(QMainWindow):
             if project_root:
                 vmf_path = project_root / "mapsrc" / f"{map_name}.vmf"
                 self._last_vmf_path = str(vmf_path)
-                print(f"DEBUG: VMF path set to: {self._last_vmf_path}, exists={vmf_path.exists()}")
+                print(
+                    f"DEBUG: VMF path set to: {self._last_vmf_path}, exists={vmf_path.exists()}"
+                )
             else:
                 print("DEBUG: project_root is None!")
                 self._last_vmf_path = None
