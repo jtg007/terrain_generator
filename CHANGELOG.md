@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 
 ## [0.9.5] - 2026-04-23
+### Editor Features & Fixes
+- Added a new "Flatten ▬" sculpt tool for easier base building
+- Fixed an issue where digging holes wouldn't show up on the 2D heightmap (they are now visible as contours)
+- Fixed the 3D view showing bases and resources flipped on the wrong side of the map
+
 ### Windows & Cross-Platform
 - Fixed VBSP path resolution for non-default Steam libraries
 - Fixed map output to use Documents folder in frozen builds

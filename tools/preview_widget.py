@@ -517,6 +517,12 @@ class MapPreviewWidget(QWidget):
         self.tool_group.addButton(btn_lower, 9)
         self.tools_row.addWidget(btn_lower)
 
+        btn_flatten = QPushButton("Flatten ▬")
+        btn_flatten.setCheckable(True)
+        btn_flatten.setObjectName("ToolButtonBlue")
+        self.tool_group.addButton(btn_flatten, 10)
+        self.tools_row.addWidget(btn_flatten)
+
         # Brush controls (shown for sculpt tools)
         self.brush_widget = QWidget()
         brush_layout = QHBoxLayout(self.brush_widget)
@@ -678,6 +684,7 @@ class MapPreviewWidget(QWidget):
         self._base_heights = None  # numpy float64 from pipeline
         self._height_overlay = None  # numpy float64 additive delta
         self._sculpting = False
+        self._flatten_target_height = None
 
         # Clear radii for entity zones
         self.base_clear_radius = 512
@@ -964,7 +971,7 @@ class MapPreviewWidget(QWidget):
             if world_x is None or world_y is None:
                 return
             sx = world_x - self.origin_x - (self.map_size_x / 2.0)
-            sy = world_y - self.origin_y - (self.map_size_y / 2.0)
+            sy = (self.map_size_y / 2.0) - (world_y - self.origin_y)
             marker_positions.append([sx, sy, 100.0])
             marker_colors.append([r, g, b, a])
 
@@ -999,7 +1006,7 @@ class MapPreviewWidget(QWidget):
         self._rerender_heightmap()
         self._update_3d_view()
 
-    def _apply_brush(self, scene_x: float, scene_y: float, raise_terrain: bool):
+    def _apply_brush(self, scene_x: float, scene_y: float, mode: int):
         if self._base_heights is None:
             return
 
@@ -1032,8 +1039,16 @@ class MapPreviewWidget(QWidget):
         mask = dist_sq < radius_sq
         falloff = np.exp(-dist_sq / (radius_sq * 0.3)) * mask
 
-        delta = falloff * strength * (1.0 if raise_terrain else -1.0)
-        self._height_overlay[r_min:r_max, c_min:c_max] += delta
+        if mode in (8, 9):
+            raise_terrain = (mode == 8)
+            delta = falloff * strength * (1.0 if raise_terrain else -1.0)
+            self._height_overlay[r_min:r_max, c_min:c_max] += delta
+        elif mode == 10 and self._flatten_target_height is not None:
+            current_heights = self._base_heights[r_min:r_max, c_min:c_max] + self._height_overlay[r_min:r_max, c_min:c_max]
+            # Interpolate towards target height based on strength and falloff
+            blend_factor = np.clip(falloff * (strength / 20.0), 0.0, 1.0)
+            diff = self._flatten_target_height - current_heights
+            self._height_overlay[r_min:r_max, c_min:c_max] += diff * blend_factor
 
         self._rerender_heightmap()
 
@@ -1058,6 +1073,11 @@ class MapPreviewWidget(QWidget):
             normalized = (combined - min_h) / (max_h - min_h)
         else:
             normalized = np.full_like(combined, 0.5)
+
+        # To make dug holes visible without changing the overall map brightness,
+        # we wrap negative normalized values (which represent depths below the original min)
+        # back into the positive range using absolute value.
+        normalized = np.abs(normalized)
 
         img_data = (np.clip(normalized, 0, 1) * 255).astype(np.uint8)
         h, w = img_data.shape
@@ -1194,7 +1214,7 @@ class MapPreviewWidget(QWidget):
 
         def to_preview_xy(world_x, world_y):
             sx = (world_x - self.origin_x) - (self.map_size_x / 2.0)
-            sy = (world_y - self.origin_y) - (self.map_size_y / 2.0)
+            sy = (self.map_size_y / 2.0) - (world_y - self.origin_y)
             return sx, sy
 
         def add_box(world_x, world_y, size_xyz, color_rgba, z_offset=0.0):
@@ -1385,7 +1405,7 @@ class MapPreviewWidget(QWidget):
         # Show thickness slider only for Draw Lane mode (6) or Link Nodes (4)
         show_thickness = tid in [4, 6]
         self.thickness_widget.setVisible(show_thickness)
-        self.brush_widget.setVisible(tid in [8, 9])
+        self.brush_widget.setVisible(tid in [8, 9, 10])
 
         if tid == 0:
             for item in self.scene.items():
@@ -1674,8 +1694,17 @@ class MapPreviewWidget(QWidget):
             self.resources = new_res_list
             self.redraw_fixed_entities()
             self.resource_added.emit(scene_pos.x(), scene_pos.y())
-        elif self.current_mode in (8, 9):  # Raise / Lower
+        elif self.current_mode in (8, 9, 10):  # Raise / Lower / Flatten
             self._sculpting = True
+            if self.current_mode == 10 and self._base_heights is not None:
+                # Sample target height for flatten tool at initial click
+                h, w = self._base_heights.shape
+                gx = int((scene_pos.x() - self.origin_x) / self.map_size_x * w)
+                gy = int((scene_pos.y() - self.origin_y) / self.map_size_y * h)
+                gx = max(0, min(w - 1, gx))
+                gy = max(0, min(h - 1, gy))
+                self._flatten_target_height = float(self._base_heights[gy, gx] + (self._height_overlay[gy, gx] if self._height_overlay is not None else 0))
+
             # Save overlay snapshot for undo
             snapshot = (
                 self._height_overlay.copy()
@@ -1684,7 +1713,7 @@ class MapPreviewWidget(QWidget):
             )
             self.history.append(("sculpt", snapshot))
             self.redo_history.clear()
-            self._apply_brush(scene_pos.x(), scene_pos.y(), self.current_mode == 8)
+            self._apply_brush(scene_pos.x(), scene_pos.y(), self.current_mode)
         elif self.current_mode == 6:  # Draw Lane
             self.drawing_lane = True
             self.current_freehand_path = [scene_pos]
@@ -1738,9 +1767,9 @@ class MapPreviewWidget(QWidget):
                 self.current_freehand_item.update()
             return
 
-        if self._sculpting and self.current_mode in (8, 9):
+        if self._sculpting and self.current_mode in (8, 9, 10):
             scene_pos = self.view.mapToScene(event.pos())
-            self._apply_brush(scene_pos.x(), scene_pos.y(), self.current_mode == 8)
+            self._apply_brush(scene_pos.x(), scene_pos.y(), self.current_mode)
             return
 
         if self.panning:
