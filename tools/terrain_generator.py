@@ -63,14 +63,21 @@ from src.vmf_gen import (
 from src.steam_paths import validate_empires_path
 from config import Config
 
-# Ensure OUTPUT_DIR is outside of _internal when bundled
+# Ensure OUTPUT_DIR is writable. In bundled mode, avoid the executable's directory
+# as it may be installed in a protected location like Program Files.
 if getattr(sys, "frozen", False):
-    OUTPUT_DIR = Path(sys.executable).parent / "output"
+    # Use user's Documents folder instead
+    OUTPUT_DIR = Path.home() / "Documents" / "TerrainGenerator" / "output"
 else:
     OUTPUT_DIR = PROJECT_ROOT / "output"
 
 # Make sure it exists
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+except PermissionError:
+    # Fallback to local app data if Documents is somehow not writable
+    OUTPUT_DIR = Path.home() / ".local" / "share" / "TerrainGenerator" / "output"
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class PreviewWorker(QThread):

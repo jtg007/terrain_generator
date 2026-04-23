@@ -122,9 +122,9 @@ def compile_vmf(
 
     def build_cmd(use_nodetail: bool) -> list:
         if is_windows():
-            cmd = [vbsp_exe, "-game", "..\\empires"]
+            cmd = [vbsp_exe, "-game", empires_path]
         else:
-            cmd = ["wine", "vbsp.exe", "-game", "../empires"]
+            cmd = ["wine", "vbsp.exe", "-game", empires_path]
         if use_nodetail:
             cmd.append("-nodetail")
         cmd.append(vmf_name)

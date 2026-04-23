@@ -21,9 +21,12 @@ def expand_steam_path(path: str) -> str:
     return os.path.realpath(os.path.expanduser(path))
 
 
+import re
+
 def _get_windows_steam_paths() -> List[str]:
-    """Get Windows Steam library paths from registry."""
+    """Get Windows Steam library paths from registry and libraryfolders.vdf."""
     paths = []
+    steam_install_paths = []
 
     # Try to get Steam path from registry
     try:
@@ -35,6 +38,7 @@ def _get_windows_steam_paths() -> List[str]:
         try:
             steam_path, _ = winreg.QueryValueEx(key, "InstallPath")
             if steam_path and os.path.exists(steam_path):
+                steam_install_paths.append(steam_path)
                 common_path = os.path.join(steam_path, "steamapps", "common")
                 if os.path.exists(common_path):
                     paths.append(common_path)
@@ -50,6 +54,8 @@ def _get_windows_steam_paths() -> List[str]:
         try:
             steam_path, _ = winreg.QueryValueEx(key, "SteamPath")
             if steam_path and os.path.exists(steam_path):
+                if steam_path not in steam_install_paths:
+                    steam_install_paths.append(steam_path)
                 common_path = os.path.join(steam_path, "steamapps", "common")
                 if os.path.exists(common_path) and common_path not in paths:
                     paths.append(common_path)
@@ -58,6 +64,26 @@ def _get_windows_steam_paths() -> List[str]:
         winreg.CloseKey(key)
     except OSError:
         pass
+
+    # Read libraryfolders.vdf to find all Steam libraries
+    for steam_path in steam_install_paths:
+        vdf_path = os.path.join(steam_path, "steamapps", "libraryfolders.vdf")
+        if os.path.exists(vdf_path):
+            try:
+                with open(vdf_path, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+
+                # Match "path" "C:\\SteamLibrary" or similar
+                # VDF uses double backslashes which might be escaped, so match carefully
+                matches = re.finditer(r'"path"\s+"([^"]+)"', content)
+                for match in matches:
+                    # Replace double backslashes with single backslash
+                    lib_path = match.group(1).replace("\\\\", "\\")
+                    common_path = os.path.join(lib_path, "steamapps", "common")
+                    if os.path.exists(common_path) and common_path not in paths:
+                        paths.append(common_path)
+            except OSError:
+                pass
 
     return paths
 
