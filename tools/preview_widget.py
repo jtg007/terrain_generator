@@ -355,16 +355,7 @@ class MapPreviewWidget(QWidget):
         self.tool_group.addButton(btn_remove, 5)
         self.tools_row.addWidget(btn_remove)
 
-        # View Mode
-        add_separator("VIEW")
-
-        self.btn_toggle_3d = QPushButton("3D Preview")
-        self.btn_toggle_3d.setCheckable(True)
-        self.btn_toggle_3d.setObjectName("ToolButton")
-        self.btn_toggle_3d.clicked.connect(self._toggle_3d_view)
-        self.tools_row.addWidget(self.btn_toggle_3d)
-
-        # 2. Layout
+        # 1. Layout
         add_separator("LAYOUT")
 
         btn_link = QPushButton("Link")
@@ -608,13 +599,6 @@ class MapPreviewWidget(QWidget):
         self.resource_clear_radius = 256
         self.lane_node_radius = 512
 
-
-    def _toggle_3d_view(self, checked):
-        if checked:
-            self.stacked_widget.setCurrentIndex(1)
-            self._update_3d_view()
-        else:
-            self.stacked_widget.setCurrentIndex(0)
 
     def draw_grid(self):
         for item in self.grid_items:
@@ -1592,6 +1576,7 @@ class MapPreviewWidget(QWidget):
         if current_idx == 0:
             self.view_stack.setCurrentIndex(1)
             self.btn_toggle_3d.setText("2D View")
+            self._update_3d_view()
         else:
             self.view_stack.setCurrentIndex(0)
             self.btn_toggle_3d.setText("3D View")
