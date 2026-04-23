@@ -3,7 +3,11 @@ import sys
 from pathlib import Path
 from typing import List, Optional, Tuple, Set
 
+
 import numpy as np
+import pyqtgraph.opengl as gl
+from PySide6.QtWidgets import QStackedWidget
+
 
 from PySide6.QtWidgets import (
     QWidget,
@@ -349,6 +353,15 @@ class MapPreviewWidget(QWidget):
         self.tool_group.addButton(btn_remove, 5)
         self.tools_row.addWidget(btn_remove)
 
+        # View Mode
+        add_separator("VIEW")
+
+        self.btn_toggle_3d = QPushButton("3D Preview")
+        self.btn_toggle_3d.setCheckable(True)
+        self.btn_toggle_3d.setObjectName("ToolButton")
+        self.btn_toggle_3d.clicked.connect(self._toggle_3d_view)
+        self.tools_row.addWidget(self.btn_toggle_3d)
+
         # 2. Layout
         add_separator("LAYOUT")
 
@@ -532,7 +545,14 @@ class MapPreviewWidget(QWidget):
         self.view.setDragMode(QGraphicsView.NoDrag)
         self.view.setStyleSheet("background-color: #0d0d10; border: 1px solid #2e2e36;")
 
-        layout.addWidget(self.view)
+        self.view_3d = gl.GLViewWidget()
+        self.view_3d.setBackgroundColor((13, 13, 16))
+
+        self.stacked_widget = QStackedWidget()
+        self.stacked_widget.addWidget(self.view)
+        self.stacked_widget.addWidget(self.view_3d)
+
+        layout.addWidget(self.stacked_widget)
 
         # State
         self.map_image = None
@@ -581,6 +601,14 @@ class MapPreviewWidget(QWidget):
         self.base_clear_radius = 512
         self.resource_clear_radius = 256
         self.lane_node_radius = 512
+
+
+    def _toggle_3d_view(self, checked):
+        if checked:
+            self.stacked_widget.setCurrentIndex(1)
+            self._update_3d_view()
+        else:
+            self.stacked_widget.setCurrentIndex(0)
 
     def draw_grid(self):
         for item in self.grid_items:
@@ -804,7 +832,73 @@ class MapPreviewWidget(QWidget):
         else:
             self.map_pixmap_item.setPixmap(QPixmap())
 
+
+    def _update_3d_view(self):
+        if self._base_heights is None:
+            return
+
+        z_data = self._base_heights.copy()
+
+        # Downsample. The VMF grids can be quite large (e.g. 1024x1024).
+        # We want around max 128x128 for smooth performance.
+        orig_h, orig_w = z_data.shape
+        step_h = max(1, orig_h // 128)
+        step_w = max(1, orig_w // 128)
+
+        z_data = z_data[::step_h, ::step_w]
+
+        # Center the data
+        z_data = z_data - np.mean(z_data)
+
+        # Generate colors based on height
+        z_min = z_data.min()
+        z_max = z_data.max()
+        z_range = z_max - z_min if z_max > z_min else 1.0
+
+        normalized_z = (z_data - z_min) / z_range
+
+        colors = np.zeros((normalized_z.shape[0], normalized_z.shape[1], 4), dtype=np.float32)
+
+        # Simple color map:
+        # Low (<0.3): Blue-ish
+        # Mid (0.3-0.7): Green-ish
+        # High (>0.7): Brown-ish
+        low_mask = normalized_z < 0.3
+        mid_mask = (normalized_z >= 0.3) & (normalized_z < 0.7)
+        high_mask = normalized_z >= 0.7
+
+        colors[low_mask] = [0.2, 0.4, 0.8, 1.0]
+        colors[mid_mask] = [0.2, 0.6, 0.2, 1.0]
+        colors[high_mask] = [0.6, 0.5, 0.4, 1.0]
+
+        self.view_3d.clear()
+
+        h, w = z_data.shape
+
+        # Use real map dimensions if available, otherwise fallback to array bounds
+        map_w = getattr(self, 'map_size_x', orig_w)
+        map_h = getattr(self, 'map_size_y', orig_h)
+
+        # Center x and y
+        # pyqtgraph expects x to align with z.shape[0] and y to align with z.shape[1]
+        x = np.linspace(-map_w / 2, map_w / 2, h)
+        y = np.linspace(-map_h / 2, map_h / 2, w)
+
+        surface = gl.GLSurfacePlotItem(
+            x=x, y=y, z=z_data,
+            colors=colors,
+            computeNormals=False,
+            smooth=True
+        )
+
+        self.view_3d.addItem(surface)
+
+        # Adjust camera using map size
+        max_dim = max(map_w, map_h)
+        self.view_3d.setCameraPosition(distance=max_dim * 1.2)
+
     def set_raw_heights(self, heights: np.ndarray):
+
         self._base_heights = heights.astype(np.float64).copy()
         self._base_min = float(self._base_heights.min())
         self._base_max = float(self._base_heights.max())
@@ -813,6 +907,7 @@ class MapPreviewWidget(QWidget):
 
         # Always re-render to ensure consistent normalization (e.g. neutral gray for flat maps)
         self._rerender_heightmap()
+        self._update_3d_view()
 
     def _apply_brush(self, scene_x: float, scene_y: float, raise_terrain: bool):
         if self._base_heights is None:
