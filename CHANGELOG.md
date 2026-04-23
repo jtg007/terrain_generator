@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.5] - 2026-04-23
+### Windows & Cross-Platform
+- Fixed VBSP path resolution for non-default Steam libraries
+- Fixed map output to use Documents folder in frozen builds
+
+### 3D Preview
+- Added interactive 3D terrain preview using pyqtgraph
+- Added 3D markers for bases and resources
+- Improved preview alignment with 3D world
+- Added building model rendering (Imperial/NF barracks)
+
 ## [0.9.4] - 2026-04-21
 ### UI & Experience
 - Fixed in-game minimap orientation to correctly show North at the top
