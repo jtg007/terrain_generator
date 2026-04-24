@@ -407,26 +407,32 @@ class MapPreviewWidget(QWidget):
         toolbar_scroll.setFrameShape(QScrollArea.NoFrame)
         toolbar_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         toolbar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        toolbar_scroll.setFixedHeight(40)  # Keep it compact
+        toolbar_scroll.setFixedHeight(40)
 
         toolbar_widget = QWidget()
-        self.tools_row = QHBoxLayout(toolbar_widget)
+        toolbar_layout = QVBoxLayout(toolbar_widget)
+        toolbar_layout.setSpacing(0)
+        toolbar_layout.setContentsMargins(4, 0, 4, 0)
+
+        self.tools_row = QHBoxLayout()
         self.tools_row.setSpacing(6)
-        self.tools_row.setContentsMargins(4, 0, 4, 0)
+        self.tools_row.setContentsMargins(0, 0, 0, 0)
+        self.actions_row = self.tools_row
+        toolbar_layout.addLayout(self.tools_row)
 
         self.tool_group = QButtonGroup(self)
         self.modes = {}
 
         # Helper to add section labels
-        def add_separator(text):
+        def add_separator(target_row, text):
             lbl = QLabel(text)
             lbl.setStyleSheet(
                 "color: #888; font-weight: bold; font-size: 9px; margin-left: 4px; margin-right: 2px;"
             )
-            self.tools_row.addWidget(lbl)
+            target_row.addWidget(lbl)
 
         # 1. Selection & Manipulation
-        add_separator("TOOLS")
+        add_separator(self.tools_row, "TOOLS")
 
         btn_move = QPushButton("Move")
         btn_move.setCheckable(True)
@@ -441,7 +447,7 @@ class MapPreviewWidget(QWidget):
         self.tools_row.addWidget(btn_remove)
 
         # 1. Layout
-        add_separator("LAYOUT")
+        add_separator(self.tools_row, "LAYOUT")
 
         btn_link = QPushButton("Link")
         btn_link.setCheckable(True)
@@ -476,10 +482,10 @@ class MapPreviewWidget(QWidget):
 
         # Hide them initially
         self.thickness_widget.setVisible(False)
-        self.tools_row.addWidget(self.thickness_widget)
+        self.actions_row.addWidget(self.thickness_widget)
 
         # 3. Entities
-        add_separator("ENTITIES")
+        add_separator(self.tools_row, "ENTITIES")
 
         btn_be = QPushButton("Set BE")
         btn_be.setCheckable(True)
@@ -503,7 +509,7 @@ class MapPreviewWidget(QWidget):
         self.tools_row.addWidget(btn_res)
 
         # 4. Sculpting
-        add_separator("SCULPT")
+        add_separator(self.tools_row, "SCULPT")
 
         btn_mask = QPushButton("Mask")
         btn_mask.setCheckable(True)
@@ -560,46 +566,60 @@ class MapPreviewWidget(QWidget):
         brush_layout.addWidget(self.brush_strength_label)
         brush_layout.addWidget(self.brush_strength_slider)
         self.brush_widget.setVisible(False)
-        self.tools_row.addWidget(self.brush_widget)
+        self.actions_row.addWidget(self.brush_widget)
 
         self.tool_group.button(0).setChecked(True)
         self.current_mode = 0
         self.tool_group.idClicked.connect(self.on_tool_changed)
 
-        self.tools_row.addStretch()
+        self.mask_section_label = QLabel("MASK")
+        self.mask_section_label.setStyleSheet(
+            "color: #888; font-weight: bold; font-size: 9px; margin-left: 4px; margin-right: 2px;"
+        )
+        self.mask_section_label.setVisible(False)
+        self.actions_row.addWidget(self.mask_section_label)
 
-        # 4. Actions
-        add_separator("ACTIONS")
+        self.mask_actions_widget = QWidget()
+        mask_actions_layout = QHBoxLayout(self.mask_actions_widget)
+        mask_actions_layout.setContentsMargins(0, 0, 0, 0)
+        mask_actions_layout.setSpacing(4)
 
-        self.btn_reset_mask = QPushButton("Reset Mask")
+        self.btn_reset_mask = QPushButton("Reset")
         self.btn_reset_mask.setObjectName("SmallButton")
         self.btn_reset_mask.clicked.connect(self.reset_mask)
-        self.tools_row.addWidget(self.btn_reset_mask)
+        mask_actions_layout.addWidget(self.btn_reset_mask)
 
-        self.btn_clear_mask = QPushButton("Clear Mask")
+        self.btn_clear_mask = QPushButton("Clear")
         self.btn_clear_mask.setObjectName("SmallButton")
         self.btn_clear_mask.clicked.connect(self.clear_mask)
-        self.tools_row.addWidget(self.btn_clear_mask)
+        mask_actions_layout.addWidget(self.btn_clear_mask)
+        self.mask_actions_widget.setVisible(False)
+        self.actions_row.addWidget(self.mask_actions_widget)
+
+        self.actions_row.addStretch()
+
+        # 4. Actions
+        add_separator(self.actions_row, "ACTIONS")
 
         self.btn_undo = QPushButton("Undo")
         self.btn_undo.setObjectName("SmallButton")
         self.btn_undo.clicked.connect(self.undo)
-        self.tools_row.addWidget(self.btn_undo)
+        self.actions_row.addWidget(self.btn_undo)
 
         self.btn_redo = QPushButton("Redo")
         self.btn_redo.setObjectName("SmallButton")
         self.btn_redo.clicked.connect(self.redo)
-        self.tools_row.addWidget(self.btn_redo)
+        self.actions_row.addWidget(self.btn_redo)
 
         self.btn_clear = QPushButton("Clear All")
         self.btn_clear.setObjectName("SmallButton")
         self.btn_clear.clicked.connect(self.clear_scene_nodes)
-        self.tools_row.addWidget(self.btn_clear)
+        self.actions_row.addWidget(self.btn_clear)
 
         self.btn_toggle_3d = QPushButton("3D View")
         self.btn_toggle_3d.setObjectName("SmallButton")
         self.btn_toggle_3d.clicked.connect(self.toggle_3d_view)
-        self.tools_row.addWidget(self.btn_toggle_3d)
+        self.actions_row.addWidget(self.btn_toggle_3d)
 
         # Action history for Undo/Redo
         self.history = []
@@ -1012,7 +1032,7 @@ class MapPreviewWidget(QWidget):
         cam_dist = max(self.map_size_x, self.map_size_y) * 1.2
         self.view_3d.setCameraPosition(distance=cam_dist, elevation=45, azimuth=-45)
 
-    def set_raw_heights(self, heights: np.ndarray):
+    def set_raw_heights(self, heights: np.ndarray, mask: Optional[np.ndarray] = None):
 
         self._base_heights = heights.astype(np.float64).copy()
         self._base_min = float(self._base_heights.min())
@@ -1020,8 +1040,20 @@ class MapPreviewWidget(QWidget):
         if self._height_overlay is None or self._height_overlay.shape != heights.shape:
             self._height_overlay = np.zeros_like(self._base_heights)
 
-        if self._global_selection_mask is None or self._global_selection_mask.shape != heights.shape:
+        # Only reset mask if explicitly None (not just shape mismatch)
+        # Preserve existing mask when new heights arrive from pipeline
+        if mask is not None:
+            self._global_selection_mask = mask.copy()
+        elif self._global_selection_mask is None:
             self._global_selection_mask = np.ones(heights.shape, dtype=bool)
+        elif self._global_selection_mask.shape != heights.shape:
+            # Resize existing mask to match new shape
+            from src.compat_utils import scipy_zoom_equivalent
+            scale_y = heights.shape[0] / self._global_selection_mask.shape[0]
+            scale_x = heights.shape[1] / self._global_selection_mask.shape[1]
+            self._global_selection_mask = scipy_zoom_equivalent(
+                self._global_selection_mask.astype(np.float32), (scale_y, scale_x)
+            ) > 0.5
 
         # Always re-render to ensure consistent normalization (e.g. neutral gray for flat maps)
         self._rerender_heightmap()
@@ -1074,9 +1106,9 @@ class MapPreviewWidget(QWidget):
 
         if mode == 11 and self._global_selection_mask is not None:
             # Mask brush mode
-            paint_value = True
+            paint_value = False
             if self._active_mouse_button == Qt.RightButton:
-                paint_value = False
+                paint_value = True
             # Only paint where mask is > threshold (like a hard brush)
             paint_area = mask > 0.5
             self._global_selection_mask[r_min:r_max, c_min:c_max][paint_area] = paint_value
@@ -1086,10 +1118,17 @@ class MapPreviewWidget(QWidget):
             if self._global_selection_mask is not None:
                 delta *= self._global_selection_mask[r_min:r_max, c_min:c_max]
             self._height_overlay[r_min:r_max, c_min:c_max] += delta
-        elif mode == 10 and self._flatten_target_height is not None:
+        elif mode == 10:
+            if self._flatten_target_height is None:
+                cx = max(0, min(w - 1, int(round(gx))))
+                cy = max(0, min(h - 1, int(round(gy))))
+                self._flatten_target_height = float(
+                    self._base_heights[cy, cx] + self._height_overlay[cy, cx]
+                )
             current_heights = self._base_heights[r_min:r_max, c_min:c_max] + self._height_overlay[r_min:r_max, c_min:c_max]
-            # Interpolate towards target height based on strength and falloff
-            blend_factor = np.clip(falloff * (strength / 20.0), 0.0, 1.0)
+            # Flatten should blend smoothly to avoid hard contour rings at brush edges.
+            strength_scale = np.clip(strength / 25.0, 0.1, 6.0)
+            blend_factor = np.clip((falloff ** 0.8) * strength_scale, 0.0, 1.0)
             diff = self._flatten_target_height - current_heights
             delta = diff * blend_factor
             if self._global_selection_mask is not None:
@@ -1104,8 +1143,8 @@ class MapPreviewWidget(QWidget):
 
         combined = self._base_heights + self._height_overlay
 
-        # Keep preview exposure anchored to the original terrain so sculpting does not
-        # brighten/darken the whole map as local edits change extreme min/max values.
+        # Keep preview exposure anchored to the original terrain so sculpt strokes
+        # don't globally brighten/darken the map while still avoiding hard clipping.
         min_h = float(self._base_min)
         max_h = float(self._base_max)
 
@@ -1115,15 +1154,11 @@ class MapPreviewWidget(QWidget):
             min_h = mid_h - 256.0
             max_h = mid_h + 256.0
 
-        if max_h > min_h:
-            normalized = (combined - min_h) / (max_h - min_h)
-        else:
-            normalized = np.full_like(combined, 0.5)
+        mid_h = (min_h + max_h) * 0.5
+        half_range = max((max_h - min_h) * 0.5, 1.0)
 
-        # To make dug holes visible without changing the overall map brightness,
-        # we wrap negative normalized values (which represent depths below the original min)
-        # back into the positive range using absolute value.
-        normalized = np.abs(normalized)
+        # Soft tone mapping: linear near the center, compresses extreme edits smoothly.
+        normalized = (np.arctan((combined - mid_h) / half_range) / np.pi) + 0.5
         normalized_heights = (np.clip(normalized, 0, 1) * 255).astype(np.uint8)
 
         h, w = normalized_heights.shape
@@ -1134,12 +1169,16 @@ class MapPreviewWidget(QWidget):
         rgba_array[..., 2] = normalized_heights # B
         rgba_array[..., 3] = 255                # Alpha
 
-        if self._global_selection_mask is not None:
-            # Where mask is True, tint the Red channel up, and tint Green/Blue down
+        if (
+            self.current_mode == 11
+            and self._global_selection_mask is not None
+            and np.any(~self._global_selection_mask)
+        ):
+            # Show a subtle mask preview only while Mask tool is active.
             s_mask = self._global_selection_mask
-            rgba_array[s_mask, 0] = np.clip(rgba_array[s_mask, 0] + 100, 0, 255) # Boost Red
-            rgba_array[s_mask, 1] = np.clip(rgba_array[s_mask, 1] * 0.5, 0, 255) # Reduce Green
-            rgba_array[s_mask, 2] = np.clip(rgba_array[s_mask, 2] * 0.5, 0, 255) # Reduce Blue
+            protected = ~s_mask
+            rgba_array[protected, 2] = np.clip(rgba_array[protected, 2] + 25, 0, 255)
+            rgba_array[protected, 1] = np.clip(rgba_array[protected, 1] * 0.9, 0, 255)
 
         self._preview_img_data = rgba_array
         bytes_per_line = 4 * w
@@ -1461,11 +1500,15 @@ class MapPreviewWidget(QWidget):
     def on_tool_changed(self, tid):
         self.current_mode = tid
         self.link_start_node = None
+        if tid != 10:
+            self._flatten_target_height = None
 
         # Show thickness slider only for Draw Lane mode (6) or Link Nodes (4)
         show_thickness = tid in [4, 6]
         self.thickness_widget.setVisible(show_thickness)
         self.brush_widget.setVisible(tid in [8, 9, 10, 11])
+        self.mask_section_label.setVisible(tid == 11)
+        self.mask_actions_widget.setVisible(tid == 11)
 
         if tid == 0:
             for item in self.scene.items():
@@ -1789,7 +1832,7 @@ class MapPreviewWidget(QWidget):
             self.resources = new_res_list
             self.redraw_fixed_entities()
             self.resource_added.emit(scene_pos.x(), scene_pos.y())
-        elif self.current_mode in (8, 9, 10):  # Raise / Lower / Flatten
+        elif self.current_mode in (8, 9, 10, 11):  # Raise / Lower / Flatten / Mask
             self._sculpting = True
             if self.current_mode == 10 and self._base_heights is not None:
                 # Sample target height for flatten tool at initial click
@@ -1800,13 +1843,21 @@ class MapPreviewWidget(QWidget):
                 gy = max(0, min(h - 1, gy))
                 self._flatten_target_height = float(self._base_heights[gy, gx] + (self._height_overlay[gy, gx] if self._height_overlay is not None else 0))
 
-            # Save overlay snapshot for undo
-            snapshot = (
-                self._height_overlay.copy()
-                if self._height_overlay is not None
-                else None
-            )
-            self.history.append(("sculpt", snapshot))
+            if self.current_mode == 11:
+                snapshot = (
+                    self._global_selection_mask.copy()
+                    if self._global_selection_mask is not None
+                    else None
+                )
+                self.history.append(("mask_change", snapshot))
+            else:
+                # Save overlay snapshot for undo
+                snapshot = (
+                    self._height_overlay.copy()
+                    if self._height_overlay is not None
+                    else None
+                )
+                self.history.append(("sculpt", snapshot))
             self.redo_history.clear()
             self._apply_brush(scene_pos.x(), scene_pos.y(), self.current_mode)
         elif self.current_mode == 6:  # Draw Lane
@@ -1862,7 +1913,7 @@ class MapPreviewWidget(QWidget):
                 self.current_freehand_item.update()
             return
 
-        if self._sculpting and self.current_mode in (8, 9, 10):
+        if self._sculpting and self.current_mode in (8, 9, 10, 11):
             scene_pos = self.view.mapToScene(event.pos())
             self._apply_brush(scene_pos.x(), scene_pos.y(), self.current_mode)
             return
@@ -1885,6 +1936,7 @@ class MapPreviewWidget(QWidget):
 
         if self._sculpting:
             self._sculpting = False
+            self._flatten_target_height = None
             return
 
         if self.drawing_lane:

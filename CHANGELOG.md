@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.8] - 2026-04-24
+### Editor UX
+- Reworked the editor toolbar into two rows (tool modes on top, context/actions below) to reduce
+  clutter and improve readability.
+- Collapsed the toolbar back to a compact single-line layout with horizontal scrolling.
+- Made mask actions contextual: `Reset` and `Clear` for mask now appear only in Mask mode.
+
+### Preview & Sculpting Fixes
+- Fixed sculpt tool input routing so the `Mask` brush applies correctly.
+- Fixed flatten brush behavior to reliably apply per stroke.
+- Improved 2D sculpt visibility: sculpt edits are now highlighted, and mask tint is only
+  shown when masking is actively used.
+
 ## [0.9.7] - 2026-04-24
 ### Terrain Masking & Sculpting
 - **Universal Masking (Stencil):** Added a global selection mask system! Use the new Mask tool in the 2D view to protect or edit specific areas. Paint with Left-Click to unfreeze areas (editable, shown in red), and Right-Click to freeze them (protected). This global stencil natively affects all operations—from procedural generation sliders (e.g. erosion) to manual SCULPT tools. Includes Reset and Clear mask buttons.

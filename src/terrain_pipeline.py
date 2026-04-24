@@ -1409,6 +1409,84 @@ def calculate_slopes(grid: HeightGrid) -> HeightGrid:
     return grid
 
 
+def feather_mask_edges(grid: HeightGrid, feather_radius: int = 3) -> HeightGrid:
+    """
+    Apply feathering to mask edges to prevent sharp height discontinuities.
+
+    Blends heights at mask boundaries over a specified radius to ensure
+    smooth transitions and avoid seam validation errors.
+
+    Args:
+        grid: HeightGrid with global_selection_mask set
+        feather_radius: Number of pixels to blend over at mask edges
+
+    Returns:
+        HeightGrid with feathered heights at mask boundaries
+    """
+    if grid.global_selection_mask is None or np.all(grid.global_selection_mask):
+        return grid
+
+    rows, cols = grid.rows, grid.cols
+    mask = grid.global_selection_mask.astype(np.float32)
+    heights = np.array(grid.heights, dtype=np.float32)
+
+    # Compute distance transform: distance to nearest False pixel
+    # Invert mask so True (selected) = 0 distance, False = positive distance
+    inverted_mask = 1.0 - mask
+
+    # Simple iterative distance computation (no scipy dependency)
+    distance = np.zeros((rows, cols), dtype=np.float32)
+    max_dist = rows + cols
+
+    # Initialize: False pixels have distance 0, True pixels have max distance
+    distance[inverted_mask > 0.5] = 0.0
+    distance[mask > 0.5] = max_dist
+
+    # Pass 1: top-left to bottom-right
+    for r in range(rows):
+        for c in range(cols):
+            if distance[r, c] > 0:
+                min_neighbor = distance[r, c]
+                if r > 0:
+                    min_neighbor = min(min_neighbor, distance[r - 1, c] + 1)
+                if c > 0:
+                    min_neighbor = min(min_neighbor, distance[r, c - 1] + 1)
+                distance[r, c] = min_neighbor
+
+    # Pass 2: bottom-right to top-left
+    for r in range(rows - 1, -1, -1):
+        for c in range(cols - 1, -1, -1):
+            if distance[r, c] > 0:
+                min_neighbor = distance[r, c]
+                if r < rows - 1:
+                    min_neighbor = min(min_neighbor, distance[r + 1, c] + 1)
+                if c < cols - 1:
+                    min_neighbor = min(min_neighbor, distance[r, c + 1] + 1)
+                distance[r, c] = min_neighbor
+
+    # Create feathering weight: 1.0 inside mask, 0.0 outside, smooth transition at edges
+    feather_weight = np.clip(distance / feather_radius, 0.0, 1.0)
+
+    # Apply feathering: blend heights toward original at edges
+    # We need the original heights before any mask operations
+    # Since we can't easily get that here, we'll smooth the transition
+    # by averaging with neighbors at the feather boundary
+
+    for r in range(1, rows - 1):
+        for c in range(1, cols - 1):
+            weight = feather_weight[r, c]
+            if 0.0 < weight < 1.0:
+                # At feather boundary, blend with neighbors
+                neighbor_avg = (
+                    heights[r - 1, c] + heights[r + 1, c] +
+                    heights[r, c - 1] + heights[r, c + 1]
+                ) / 4.0
+                heights[r, c] = heights[r, c] * weight + neighbor_avg * (1.0 - weight)
+
+    grid.heights = heights.tolist()
+    return grid
+
+
 def build_cells(spec: TerrainSpec, grid: HeightGrid) -> List[TerrainCell]:
     """
     Step 6: Build terrain cells from shared vertex grid.
@@ -2085,6 +2163,11 @@ def run_pipeline(
 
         print(f"  Step 7: Quantize heights (step={spec.height_quantization})")
         grid = quantize_heights(grid, spec.height_quantization)
+
+    # Apply feathering to mask edges if mask is present to prevent seam errors
+    if grid.global_selection_mask is not None and not np.all(grid.global_selection_mask):
+        print("  Step 7.5: Feather mask edges")
+        grid = feather_mask_edges(grid, feather_radius=3)
 
     print("  Step 8: Build cells")
     cells = build_cells(spec, grid)

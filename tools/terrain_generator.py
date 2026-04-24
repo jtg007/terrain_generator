@@ -89,12 +89,14 @@ class PreviewWorker(QThread):
         custom_nodes=None,
         custom_connections=None,
         custom_resources=None,
+        global_selection_mask=None,
     ):
         super().__init__()
         self.config_model = config_model
         self.custom_nodes = custom_nodes
         self.custom_connections = custom_connections
         self.custom_resources = custom_resources
+        self.global_selection_mask = global_selection_mask
 
     def run(self):
         try:
@@ -119,7 +121,7 @@ class PreviewWorker(QThread):
                 spec.custom_resources = self.custom_resources
 
             # Skip layout validation during preview to prevent crashes while dragging
-            result = run_pipeline(spec, skip_layout_validation=True)
+            result = run_pipeline(spec, skip_layout_validation=True, global_selection_mask=self.global_selection_mask)
             self.finished.emit(result["grid"], result["spec"])
         except Exception:
             import traceback
@@ -1128,12 +1130,13 @@ class TerrainGeneratorGUI(QMainWindow):
             self.preview_timer.start(500)
             return
 
-        nodes, connections, resources, _, _ = self.preview_widget.get_layout_from_editor()
+        nodes, connections, resources, _, global_mask = self.preview_widget.get_layout_from_editor()
         self.preview_worker = PreviewWorker(
             self.config_model,
             custom_nodes=nodes if nodes else None,
             custom_connections=connections if connections else None,
             custom_resources=resources,
+            global_selection_mask=global_mask,
         )
         self.preview_worker.finished.connect(self.on_preview_finished)
         self.preview_worker.start()
@@ -1180,7 +1183,9 @@ class TerrainGeneratorGUI(QMainWindow):
                 spec.size_y,
                 spec.cell_size,
             )
-            self.preview_widget.set_raw_heights(heights)
+            # Pass the mask from the grid to preserve it through preview updates
+            grid_mask = grid.global_selection_mask if hasattr(grid, 'global_selection_mask') else None
+            self.preview_widget.set_raw_heights(heights, mask=grid_mask)
 
             imp_pos = (
                 self.config_model.custom_imp_base_x,
