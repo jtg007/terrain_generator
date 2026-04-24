@@ -543,7 +543,12 @@ class MapPreviewWidget(QWidget):
         layout_t.addLayout(sliders_layout)
         layout_t.addWidget(create_divider())
 
-        self.btn_invert_mask = QPushButton("🔄\nInvert")
+        self.btn_invert_terrain = QPushButton("⛰️\nInvert Terrain")
+        self.btn_invert_terrain.setObjectName("GlobalActionBtn")
+        self.btn_invert_terrain.clicked.connect(self.invert_terrain)
+        layout_t.addWidget(self.btn_invert_terrain)
+
+        self.btn_invert_mask = QPushButton("🔄\nInvert Mask")
         self.btn_invert_mask.setObjectName("GlobalActionBtn")
         self.btn_invert_mask.clicked.connect(self.invert_mask)
         layout_t.addWidget(self.btn_invert_mask)
@@ -569,8 +574,8 @@ class MapPreviewWidget(QWidget):
         self.btn_move_ent = add_tool(layout_e, "🖱️\nMove", 200)
         self.btn_remove_ent = add_tool(layout_e, "❌\nRemove", 201)
         layout_e.addWidget(create_divider())
-        self.btn_set_be = add_tool(layout_e, "🟡\nSet BE", 2)
-        self.btn_set_nf = add_tool(layout_e, "🟢\nSet NF", 7)
+        self.btn_set_be = add_tool(layout_e, "🔵\nSet BE", 2)
+        self.btn_set_nf = add_tool(layout_e, "🔴\nSet NF", 7)
         self.btn_add_res = add_tool(layout_e, "💎\nAdd Res", 3)
 
         layout_e.addStretch()
@@ -1054,6 +1059,24 @@ class MapPreviewWidget(QWidget):
             self.record_action("mask_change", self._global_selection_mask.copy())
             self._global_selection_mask[:] = False
             self._rerender_heightmap()
+
+    def invert_terrain(self):
+        if self._base_heights is None or self._height_overlay is None:
+            return
+            
+        self.record_action("heights", self._height_overlay.copy())
+        
+        combined = self._base_heights + self._height_overlay
+        mid_h = (np.max(combined) + np.min(combined)) / 2.0
+        
+        delta = 2 * mid_h - 2 * self._base_heights - 2 * self._height_overlay
+        
+        if self._global_selection_mask is not None:
+            self._height_overlay[self._global_selection_mask] += delta[self._global_selection_mask]
+        else:
+            self._height_overlay += delta
+            
+        self._rerender_heightmap()
 
     def invert_mask(self):
         if self._global_selection_mask is not None:

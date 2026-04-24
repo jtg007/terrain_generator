@@ -213,7 +213,7 @@ class GenerationWorker(QThread):
                     # Add overlay to the height grid
                     grid_heights = np.array(grid.heights, dtype=np.float64)
                     grid_heights += rescaled_overlay
-                    grid.heights = grid_heights.tolist()
+                    grid.heights = grid_heights.astype(np.float32)
 
                     # CRITICAL: Recalculate slopes so rock textures appear on steep sculpted terrain
                     calculate_slopes(grid)

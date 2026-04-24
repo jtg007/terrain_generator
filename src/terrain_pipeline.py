@@ -1116,7 +1116,7 @@ def flatten_base_areas(
     return grid
 
 
-def clamp_slope(grid: HeightGrid, max_step: int) -> HeightGrid:
+def clamp_slope(grid: HeightGrid, max_step: int, use_mask: bool = True) -> HeightGrid:
     """
     Step 4: Clamp height differences between adjacent vertices.
 
@@ -1176,12 +1176,15 @@ def clamp_slope(grid: HeightGrid, max_step: int) -> HeightGrid:
     if passes >= max_passes:
         print(f"Warning: slope clamping reached max passes ({max_passes})")
 
-    grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
+    if use_mask:
+        grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
+    else:
+        grid.heights = new_heights
 
     return grid
 
 
-def quantize_heights(grid: HeightGrid, step: int) -> HeightGrid:
+def quantize_heights(grid: HeightGrid, step: int, use_mask: bool = True) -> HeightGrid:
     """
     Step 7: Quantize heights to grid step.
 
@@ -1193,7 +1196,10 @@ def quantize_heights(grid: HeightGrid, step: int) -> HeightGrid:
     original_heights = grid.heights.copy()
     new_heights = np.round(grid.heights / step) * step
 
-    grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
+    if use_mask:
+        grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
+    else:
+        grid.heights = new_heights
 
     return grid
 
@@ -1472,6 +1478,9 @@ def feather_mask_edges(grid: HeightGrid, feather_radius: int = 3) -> HeightGrid:
     # Since we can't easily get that here, we'll smooth the transition
     # by averaging with neighbors at the feather boundary
 
+    # We'll use a temporary array to store smoothed values
+    smoothed_heights = heights.copy()
+
     for r in range(1, rows - 1):
         for c in range(1, cols - 1):
             weight = feather_weight[r, c]
@@ -1481,9 +1490,9 @@ def feather_mask_edges(grid: HeightGrid, feather_radius: int = 3) -> HeightGrid:
                     heights[r - 1, c] + heights[r + 1, c] +
                     heights[r, c - 1] + heights[r, c + 1]
                 ) / 4.0
-                heights[r, c] = heights[r, c] * weight + neighbor_avg * (1.0 - weight)
+                smoothed_heights[r, c] = heights[r, c] * weight + neighbor_avg * (1.0 - weight)
 
-    grid.heights = heights.tolist()
+    grid.heights = smoothed_heights
     return grid
 
 
@@ -1873,11 +1882,18 @@ def apply_pipeline_for_preview(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
                     break
 
     if terrain_copy.global_selection_mask is not None:
+        if terrain_copy.global_selection_mask.shape != terrain_copy.heights.shape:
+            from src.compat_utils import scipy_zoom_equivalent
+            scale_y = terrain_copy.heights.shape[0] / terrain_copy.global_selection_mask.shape[0]
+            scale_x = terrain_copy.heights.shape[1] / terrain_copy.global_selection_mask.shape[1]
+            terrain_copy.global_selection_mask = scipy_zoom_equivalent(
+                terrain_copy.global_selection_mask.astype(np.float32), (scale_y, scale_x)
+            ) > 0.5
         terrain_copy.heights = np.where(terrain_copy.global_selection_mask, terrain_copy.heights, heights)
 
     terrain_copy = smooth_heights(terrain_copy, iterations=2)
-    terrain_copy = clamp_slope(terrain_copy, spec.max_slope_step)
-    terrain_copy = quantize_heights(terrain_copy, spec.height_quantization)
+    terrain_copy = clamp_slope(terrain_copy, spec.max_slope_step, use_mask=False)
+    terrain_copy = quantize_heights(terrain_copy, spec.height_quantization, use_mask=False)
 
     return terrain_copy
 
@@ -2087,7 +2103,15 @@ def run_pipeline(
             grid.heights = initial_heights.astype(np.float32).copy()
 
     if global_selection_mask is not None:
-        grid.global_selection_mask = global_selection_mask.copy()
+        if global_selection_mask.shape != grid.heights.shape:
+            from src.compat_utils import scipy_zoom_equivalent
+            scale_y = grid.heights.shape[0] / global_selection_mask.shape[0]
+            scale_x = grid.heights.shape[1] / global_selection_mask.shape[1]
+            grid.global_selection_mask = scipy_zoom_equivalent(
+                global_selection_mask.astype(np.float32), (scale_y, scale_x)
+            ) > 0.5
+        else:
+            grid.global_selection_mask = global_selection_mask.copy()
 
     if spec.custom_image_path:
         print(f"  Step 2: Loading custom heightmap from {spec.custom_image_path}")
@@ -2180,6 +2204,13 @@ def run_pipeline(
     if grid.global_selection_mask is not None and not np.all(grid.global_selection_mask):
         print("  Step 7.5: Feather mask edges")
         grid = feather_mask_edges(grid, feather_radius=3)
+        
+        # FINAL STEP: Run a global slope clamp WITHOUT mask restriction to resolve
+        # any remaining discontinuities introduced by the mask or feathering.
+        # This ensures the map is 100% compile-safe (slope < 100).
+        print("  Step 7.6: Final global slope clamp for seam safety")
+        grid = clamp_slope(grid, spec.max_slope_step, use_mask=False)
+        grid = quantize_heights(grid, spec.height_quantization, use_mask=False)
 
     print("  Step 8: Build cells")
     cells = build_cells(spec, grid)
