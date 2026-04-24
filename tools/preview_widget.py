@@ -1117,10 +1117,19 @@ class MapPreviewWidget(QWidget):
         falloff = np.exp(-dist_sq / (radius_sq * 0.3)) * mask
 
         if mode == 11 and self._global_selection_mask is not None:
-            # Mask brush mode
-            paint_value = False
+            # Mask brush mode:
+            # Left-click (True) paints the editable selection.
+            # Right-click (False) paints the protected area.
+            paint_value = True
             if self._active_mouse_button == Qt.RightButton:
-                paint_value = True
+                paint_value = False
+
+            # If the user is starting to paint an editable area (True) and the map is
+            # currently entirely editable (True everywhere), assume they want to start a
+            # fresh selection. Set the map to protected (False) first.
+            if paint_value and np.all(self._global_selection_mask):
+                self._global_selection_mask[:] = False
+
             # Only paint where mask is > threshold (like a hard brush)
             paint_area = mask > 0.5
             self._global_selection_mask[r_min:r_max, c_min:c_max][paint_area] = paint_value
