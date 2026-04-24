@@ -593,6 +593,12 @@ class MapPreviewWidget(QWidget):
         self.btn_clear_mask.setObjectName("SmallButton")
         self.btn_clear_mask.clicked.connect(self.clear_mask)
         mask_actions_layout.addWidget(self.btn_clear_mask)
+
+        self.btn_invert_mask = QPushButton("Invert")
+        self.btn_invert_mask.setObjectName("SmallButton")
+        self.btn_invert_mask.clicked.connect(self.invert_mask)
+        mask_actions_layout.addWidget(self.btn_invert_mask)
+
         self.mask_actions_widget.setVisible(False)
         self.actions_row.addWidget(self.mask_actions_widget)
 
@@ -1069,6 +1075,12 @@ class MapPreviewWidget(QWidget):
         if self._global_selection_mask is not None:
             self.record_action("mask_change", self._global_selection_mask.copy())
             self._global_selection_mask[:] = False
+            self._rerender_heightmap()
+
+    def invert_mask(self):
+        if self._global_selection_mask is not None:
+            self.record_action("mask_change", self._global_selection_mask.copy())
+            self._global_selection_mask = ~self._global_selection_mask
             self._rerender_heightmap()
 
     def _apply_brush(self, scene_x: float, scene_y: float, mode: int):
