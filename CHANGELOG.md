@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.7] - 2026-04-24
+### Terrain Masking & Sculpting
+- **Universal Masking (Stencil):** Added a global selection mask system! Use the new Mask tool in the 2D view to protect or edit specific areas. Paint with Left-Click to unfreeze areas (editable, shown in red), and Right-Click to freeze them (protected). This global stencil natively affects all operations—from procedural generation sliders (e.g. erosion) to manual SCULPT tools. Includes Reset and Clear mask buttons.
+
 ## [0.9.6] - 2026-04-24
 ### Terrain Shaping
 - Introduced **Lane-Aware Terrain Shaping**: Terrain near lanes is now significantly flatter and smoother to ensure vehicle traversability, while areas farther away feature increased elevation variation, sharp ridges, and natural noise detail.

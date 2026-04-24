@@ -13,6 +13,7 @@ The Terrain Generator bridges the gap between procedural noise generation and th
 
 *   **Interactive Strategy Canvas:** A dedicated editor tab with a professional canvas for visually planning your map. Place bases, resource nodes, and connect them with lanes.
 *   **Interactive Terrain Sculpting:** Real-time terrain manipulation tools. Use the **Raise** and **Lower** brushes with smooth Gaussian falloff to manually sculpt tactical features.
+*   **Universal Masking (Stencil):** A global 2D selection mask allows you to freeze or unfreeze specific areas of the map. Painted areas (red) are fully editable, while unpainted areas are protected from all procedural generation sliders and manual sculpting tools.
 *   **Procedural Landscape Engine:** Combines rolling hills, sharp mountain ridges, and hydraulic erosion to create natural-looking, continuous terrain grids.
 *   **Lane-Aware Shaping:** Intelligently shapes terrain based on distance to paths, keeping vehicle lanes wide and smooth while generating sharper, rougher mountain ridges farther away.
 *   **Intelligent Auto-Balancing:** Built-in algorithms flatten the terrain gently at base locations to ensure builders have a level playing field.
