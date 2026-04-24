@@ -90,6 +90,7 @@ class PreviewWorker(QThread):
         custom_connections=None,
         custom_resources=None,
         global_selection_mask=None,
+        initial_heights=None,
     ):
         super().__init__()
         self.config_model = config_model
@@ -97,6 +98,7 @@ class PreviewWorker(QThread):
         self.custom_connections = custom_connections
         self.custom_resources = custom_resources
         self.global_selection_mask = global_selection_mask
+        self.initial_heights = initial_heights
 
     def run(self):
         try:
@@ -121,7 +123,7 @@ class PreviewWorker(QThread):
                 spec.custom_resources = self.custom_resources
 
             # Skip layout validation during preview to prevent crashes while dragging
-            result = run_pipeline(spec, skip_layout_validation=True, global_selection_mask=self.global_selection_mask)
+            result = run_pipeline(spec, skip_layout_validation=True, global_selection_mask=self.global_selection_mask, initial_heights=self.initial_heights)
             self.finished.emit(result["grid"], result["spec"])
         except Exception:
             import traceback
@@ -147,6 +149,7 @@ class GenerationWorker(QThread):
         output_filename="gui_terrain",
         height_overlay=None,
         global_selection_mask=None,
+        initial_heights=None,
     ):
         super().__init__()
         self.config_model = config_model
@@ -156,6 +159,7 @@ class GenerationWorker(QThread):
         self.output_filename = output_filename
         self.height_overlay = height_overlay
         self.global_selection_mask = global_selection_mask
+        self.initial_heights = initial_heights
         self.project_root = None
 
     def run(self):
@@ -172,24 +176,10 @@ class GenerationWorker(QThread):
             if self.custom_resources is not None:
                 spec.custom_resources = self.custom_resources
 
-            # Apply mask to spec before generation if it exists so pipeline respects it
-            # To do this safely, we wait for grid generation, but pipeline does all steps.
-            # We can't easily inject it before generate_vertex_grid without altering run_pipeline.
-            # Wait, run_pipeline returns grid, but applies erosion etc.
-            # We should probably set grid.global_selection_mask BEFORE the pipeline steps.
-            # Actually, we can just let pipeline do its thing, and then apply the height overlay afterwards?
-            # No, pipeline erosion respects the mask now. We need to pass it in.
-
-            # The easiest way is to modify run_pipeline to accept an optional mask
-            # But we can also just run it, the initial mask logic uses `np.where`.
-            # Let's check `run_pipeline` in `src/terrain_pipeline.py`.
-            # We can't inject `grid.global_selection_mask` into the pipeline because it creates the grid internally.
-            pass
-
             # Run pipeline
             result = run_pipeline(
                 spec, map_name=self.output_filename, output_dir=str(self.project_root),
-                global_selection_mask=self.global_selection_mask
+                global_selection_mask=self.global_selection_mask, initial_heights=self.initial_heights
             )
             if result["errors"]:
                 raise Exception(f"Pipeline errors: {result['errors']}")
@@ -1131,12 +1121,18 @@ class TerrainGeneratorGUI(QMainWindow):
             return
 
         nodes, connections, resources, _, global_mask = self.preview_widget.get_layout_from_editor()
+
+        initial_heights = None
+        if hasattr(self.preview_widget, "_base_heights"):
+            initial_heights = self.preview_widget._base_heights
+
         self.preview_worker = PreviewWorker(
             self.config_model,
             custom_nodes=nodes if nodes else None,
             custom_connections=connections if connections else None,
             custom_resources=resources,
             global_selection_mask=global_mask,
+            initial_heights=initial_heights,
         )
         self.preview_worker.finished.connect(self.on_preview_finished)
         self.preview_worker.start()
@@ -2094,6 +2090,10 @@ class TerrainGeneratorGUI(QMainWindow):
             self.preview_widget.get_layout_from_editor()
         )
 
+        initial_heights = None
+        if hasattr(self.preview_widget, "_base_heights"):
+            initial_heights = self.preview_widget._base_heights
+
         self.worker = GenerationWorker(
             self.config_model,
             custom_nodes=layout_nodes if layout_nodes else None,
@@ -2102,6 +2102,7 @@ class TerrainGeneratorGUI(QMainWindow):
             output_filename=map_name,
             height_overlay=height_overlay,
             global_selection_mask=global_mask,
+            initial_heights=initial_heights,
         )
         self.worker.finished.connect(self.on_generation_finished)
         self.worker.start()
