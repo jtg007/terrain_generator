@@ -1196,10 +1196,10 @@ class MapPreviewWidget(QWidget):
             and np.any(~self._global_selection_mask)
         ):
             # Show a subtle mask preview only while Mask tool is active.
-            s_mask = self._global_selection_mask
-            protected = ~s_mask
-            rgba_array[protected, 2] = np.clip(rgba_array[protected, 2] + 25, 0, 255)
-            rgba_array[protected, 1] = np.clip(rgba_array[protected, 1] * 0.9, 0, 255)
+            # The user wants the selected (editable) area to be tinted blue.
+            editable = self._global_selection_mask
+            rgba_array[editable, 2] = np.clip(rgba_array[editable, 2] + 25, 0, 255)
+            rgba_array[editable, 1] = np.clip(rgba_array[editable, 1] * 0.9, 0, 255)
 
         self._preview_img_data = rgba_array
         bytes_per_line = 4 * w
