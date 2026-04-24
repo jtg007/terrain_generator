@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [0.9.8] - 2026-04-24
 ### Editor UX
+- Redesigned the top toolbar into a modern, context-aware, two-level layout utilizing tabs (`Terrain`, `Entities`, `Layout`) instead of a cluttered single row.
+- Re-styled the UI to a clean, flat dark theme using minimalist icons and blue accent highlights.
+- Global actions (`Undo`, `Redo`, `3D View`, `Clear Map`) are now permanently visible on the top level.
+- Contextual tools (like `Raise`, `Move`, `Link`, brush sliders, mask tools) dynamically appear on the second level based on the selected tab.
 - Reworked the editor toolbar into two rows (tool modes on top, context/actions below) to reduce
   clutter and improve readability.
 - Collapsed the toolbar back to a compact single-line layout with horizontal scrolling.

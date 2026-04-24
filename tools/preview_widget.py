@@ -401,238 +401,175 @@ class MapPreviewWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 6, 6, 6)
 
-        # ── Toolbar (Scrollable) ──
-        toolbar_scroll = QScrollArea()
-        toolbar_scroll.setWidgetResizable(True)
-        toolbar_scroll.setFrameShape(QScrollArea.NoFrame)
-        toolbar_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        toolbar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        toolbar_scroll.setFixedHeight(40)
+        from PySide6.QtWidgets import QFrame
 
-        toolbar_widget = QWidget()
-        toolbar_layout = QVBoxLayout(toolbar_widget)
-        toolbar_layout.setSpacing(0)
-        toolbar_layout.setContentsMargins(4, 0, 4, 0)
+        def create_divider():
+            line = QFrame()
+            line.setFrameShape(QFrame.VLine)
+            line.setFrameShadow(QFrame.Sunken)
+            line.setStyleSheet("color: #333333;")
+            return line
 
-        self.tools_row = QHBoxLayout()
-        self.tools_row.setSpacing(6)
-        self.tools_row.setContentsMargins(0, 0, 0, 0)
-        self.actions_row = self.tools_row
-        toolbar_layout.addLayout(self.tools_row)
-
-        self.tool_group = QButtonGroup(self)
-        self.modes = {}
-
-        # Helper to add section labels
-        def add_separator(target_row, text):
-            lbl = QLabel(text)
-            lbl.setStyleSheet(
-                "color: #888; font-weight: bold; font-size: 9px; margin-left: 4px; margin-right: 2px;"
-            )
-            target_row.addWidget(lbl)
-
-        # 1. Selection & Manipulation
-        add_separator(self.tools_row, "TOOLS")
-
-        btn_move = QPushButton("Move")
-        btn_move.setCheckable(True)
-        btn_move.setObjectName("ToolButton")
-        self.tool_group.addButton(btn_move, 0)
-        self.tools_row.addWidget(btn_move)
-
-        btn_remove = QPushButton("Remove")
-        btn_remove.setCheckable(True)
-        btn_remove.setObjectName("ToolButtonRed")
-        self.tool_group.addButton(btn_remove, 5)
-        self.tools_row.addWidget(btn_remove)
-
-        # 1. Layout
-        add_separator(self.tools_row, "LAYOUT")
-
-        btn_link = QPushButton("Link")
-        btn_link.setCheckable(True)
-        btn_link.setObjectName("ToolButton")
-        self.tool_group.addButton(btn_link, 4)
-        self.tools_row.addWidget(btn_link)
-
-        btn_draw = QPushButton("Lane")
-        btn_draw.setCheckable(True)
-        btn_draw.setObjectName("ToolButton")
-        self.tool_group.addButton(btn_draw, 6)
-        self.tools_row.addWidget(btn_draw)
-
-        # Thickness selector for drawing lanes
-        # Wrapped in a sub-layout for tighter grouping
-        self.thickness_widget = QWidget()
-        thick_layout = QHBoxLayout(self.thickness_widget)
-        thick_layout.setContentsMargins(0, 0, 0, 0)
-        thick_layout.setSpacing(2)
-
-        self.thickness_label = QLabel("Width: 600")
-        self.thickness_label.setStyleSheet("color: #ccc; font-size: 11px;")
-
-        self.thickness_slider = QSlider(Qt.Horizontal)
-        self.thickness_slider.setRange(0, 800)
-        self.thickness_slider.setValue(600)
-        self.thickness_slider.setFixedWidth(80)
-        self.thickness_slider.valueChanged.connect(self._on_thickness_slider_changed)
-
-        thick_layout.addWidget(self.thickness_label)
-        thick_layout.addWidget(self.thickness_slider)
-
-        # Hide them initially
-        self.thickness_widget.setVisible(False)
-        self.actions_row.addWidget(self.thickness_widget)
-
-        # 3. Entities
-        add_separator(self.tools_row, "ENTITIES")
-
-        btn_be = QPushButton("Set BE")
-        btn_be.setCheckable(True)
-        btn_be.setObjectName("ToolButtonBlue")
-        self.tool_group.addButton(btn_be, 2)
-        self.tools_row.addWidget(btn_be)
-
-        # We need a new ID for NF Base since previous code overwrote it or merged it incorrectly
-        # Old map: 1: Add Node, 2: Add Base, 3: Add Resource
-        # Let's use 7 for Set NF Base
-        btn_nf = QPushButton("Set NF")
-        btn_nf.setCheckable(True)
-        btn_nf.setObjectName("ToolButtonRed")  # NF is typically red in this UI
-        self.tool_group.addButton(btn_nf, 7)
-        self.tools_row.addWidget(btn_nf)
-
-        btn_res = QPushButton("Add Res")
-        btn_res.setCheckable(True)
-        btn_res.setObjectName("ToolButtonGreen")
-        self.tool_group.addButton(btn_res, 3)
-        self.tools_row.addWidget(btn_res)
-
-        # 4. Sculpting
-        add_separator(self.tools_row, "SCULPT")
-
-        btn_mask = QPushButton("Mask")
-        btn_mask.setCheckable(True)
-        btn_mask.setObjectName("ToolButtonBlue")
-        self.tool_group.addButton(btn_mask, 11)
-        self.tools_row.addWidget(btn_mask)
-
-        btn_raise = QPushButton("Raise ▲")
-        btn_raise.setCheckable(True)
-        btn_raise.setObjectName("ToolButtonGreen")
-        self.tool_group.addButton(btn_raise, 8)
-        self.tools_row.addWidget(btn_raise)
-
-        btn_lower = QPushButton("Lower ▼")
-        btn_lower.setCheckable(True)
-        btn_lower.setObjectName("ToolButtonRed")
-        self.tool_group.addButton(btn_lower, 9)
-        self.tools_row.addWidget(btn_lower)
-
-        btn_flatten = QPushButton("Flatten ▬")
-        btn_flatten.setCheckable(True)
-        btn_flatten.setObjectName("ToolButtonBlue")
-        self.tool_group.addButton(btn_flatten, 10)
-        self.tools_row.addWidget(btn_flatten)
-
-        # Brush controls (shown for sculpt tools)
-        self.brush_widget = QWidget()
-        brush_layout = QHBoxLayout(self.brush_widget)
-        brush_layout.setContentsMargins(0, 0, 0, 0)
-        brush_layout.setSpacing(2)
-
-        self.brush_size_label = QLabel("Size: 512")
-        self.brush_size_label.setStyleSheet("color: #ccc; font-size: 11px;")
-        self.brush_size_slider = QSlider(Qt.Horizontal)
-        self.brush_size_slider.setRange(64, 4096)
-        self.brush_size_slider.setValue(512)
-        self.brush_size_slider.setFixedWidth(80)
-        self.brush_size_slider.valueChanged.connect(
-            lambda v: self.brush_size_label.setText(f"Size: {v}")
-        )
-
-        self.brush_strength_label = QLabel("Str: 50")
-        self.brush_strength_label.setStyleSheet("color: #ccc; font-size: 11px;")
-        self.brush_strength_slider = QSlider(Qt.Horizontal)
-        self.brush_strength_slider.setRange(5, 200)
-        self.brush_strength_slider.setValue(50)
-        self.brush_strength_slider.setFixedWidth(60)
-        self.brush_strength_slider.valueChanged.connect(
-            lambda v: self.brush_strength_label.setText(f"Str: {v}")
-        )
-
-        brush_layout.addWidget(self.brush_size_label)
-        brush_layout.addWidget(self.brush_size_slider)
-        brush_layout.addWidget(self.brush_strength_label)
-        brush_layout.addWidget(self.brush_strength_slider)
-        self.brush_widget.setVisible(False)
-        self.actions_row.addWidget(self.brush_widget)
-
-        self.tool_group.button(0).setChecked(True)
-        self.current_mode = 0
-        self.tool_group.idClicked.connect(self.on_tool_changed)
-
-        self.mask_section_label = QLabel("MASK")
-        self.mask_section_label.setStyleSheet(
-            "color: #888; font-weight: bold; font-size: 9px; margin-left: 4px; margin-right: 2px;"
-        )
-        self.mask_section_label.setVisible(False)
-        self.actions_row.addWidget(self.mask_section_label)
-
-        self.mask_actions_widget = QWidget()
-        mask_actions_layout = QHBoxLayout(self.mask_actions_widget)
-        mask_actions_layout.setContentsMargins(0, 0, 0, 0)
-        mask_actions_layout.setSpacing(4)
-
-        self.btn_reset_mask = QPushButton("Reset")
-        self.btn_reset_mask.setObjectName("SmallButton")
-        self.btn_reset_mask.clicked.connect(self.reset_mask)
-        mask_actions_layout.addWidget(self.btn_reset_mask)
-
-        self.btn_clear_mask = QPushButton("Clear")
-        self.btn_clear_mask.setObjectName("SmallButton")
-        self.btn_clear_mask.clicked.connect(self.clear_mask)
-        mask_actions_layout.addWidget(self.btn_clear_mask)
-
-        self.btn_invert_mask = QPushButton("Invert")
-        self.btn_invert_mask.setObjectName("SmallButton")
-        self.btn_invert_mask.clicked.connect(self.invert_mask)
-        mask_actions_layout.addWidget(self.btn_invert_mask)
-
-        self.mask_actions_widget.setVisible(False)
-        self.actions_row.addWidget(self.mask_actions_widget)
-
-        self.actions_row.addStretch()
-
-        # 4. Actions
-        add_separator(self.actions_row, "ACTIONS")
-
-        self.btn_undo = QPushButton("Undo")
-        self.btn_undo.setObjectName("SmallButton")
-        self.btn_undo.clicked.connect(self.undo)
-        self.actions_row.addWidget(self.btn_undo)
-
-        self.btn_redo = QPushButton("Redo")
-        self.btn_redo.setObjectName("SmallButton")
-        self.btn_redo.clicked.connect(self.redo)
-        self.actions_row.addWidget(self.btn_redo)
-
-        self.btn_clear = QPushButton("Clear All")
-        self.btn_clear.setObjectName("SmallButton")
-        self.btn_clear.clicked.connect(self.clear_scene_nodes)
-        self.actions_row.addWidget(self.btn_clear)
-
-        self.btn_toggle_3d = QPushButton("3D View")
-        self.btn_toggle_3d.setObjectName("SmallButton")
-        self.btn_toggle_3d.clicked.connect(self.toggle_3d_view)
-        self.actions_row.addWidget(self.btn_toggle_3d)
+        def add_tool(layout_obj, text, tool_id):
+            btn = QPushButton(text)
+            btn.setObjectName("ContextToolBtn")
+            btn.setCheckable(True)
+            self.tool_group.addButton(btn, tool_id)
+            layout_obj.addWidget(btn)
+            return btn
 
         # Action history for Undo/Redo
         self.history = []
         self.redo_history = []
 
-        toolbar_scroll.setWidget(toolbar_widget)
-        layout.addWidget(toolbar_scroll)
+        self.tool_group = QButtonGroup(self)
+        self.tool_group.setExclusive(True)
+        self.tool_group.idClicked.connect(self.on_tool_changed)
+
+        # ── Level 1: Global Actions & Tabs ──
+        lvl1_layout = QHBoxLayout()
+        lvl1_layout.setContentsMargins(4, 0, 4, 0)
+
+        # Left: Global Actions
+        self.btn_undo = QPushButton("↶ Undo")
+        self.btn_undo.setObjectName("GlobalActionBtn")
+        self.btn_undo.clicked.connect(self.undo)
+        lvl1_layout.addWidget(self.btn_undo)
+
+        self.btn_redo = QPushButton("↷ Redo")
+        self.btn_redo.setObjectName("GlobalActionBtn")
+        self.btn_redo.clicked.connect(self.redo)
+        lvl1_layout.addWidget(self.btn_redo)
+
+        self.btn_toggle_3d = QPushButton("👁️ 3D View")
+        self.btn_toggle_3d.setObjectName("GlobalActionBtn")
+        self.btn_toggle_3d.clicked.connect(self.toggle_3d_view)
+        lvl1_layout.addWidget(self.btn_toggle_3d)
+
+        lvl1_layout.addStretch()
+
+        # Center: Tabs
+        self.tab_group = QButtonGroup(self)
+        tabs = [("⛰️ Terrain", 0), ("🚩 Entities", 1), ("🛣️ Layout", 2)]
+        for text, idx in tabs:
+            btn = QPushButton(text)
+            btn.setObjectName("TabButton")
+            btn.setCheckable(True)
+            self.tab_group.addButton(btn, idx)
+            lvl1_layout.addWidget(btn)
+
+        self.tab_group.idClicked.connect(self.on_tab_changed)
+
+        lvl1_layout.addStretch()
+
+        # Right: Danger Action
+        self.btn_clear = QPushButton("🗑️ Clear Map")
+        self.btn_clear.setObjectName("DangerActionBtn")
+        self.btn_clear.clicked.connect(self.clear_scene_nodes)
+        lvl1_layout.addWidget(self.btn_clear)
+
+        layout.addLayout(lvl1_layout)
+
+        # ── Level 2: Contextual Toolbar Stack ──
+        self.stacked_tools = QStackedWidget()
+
+        # -- Page 0: Terrain --
+        page_terrain = QWidget()
+        layout_t = QHBoxLayout(page_terrain)
+        layout_t.setContentsMargins(4, 0, 4, 0)
+
+        self.btn_raise = add_tool(layout_t, "▲ Raise", 8)
+        self.btn_lower = add_tool(layout_t, "▼ Lower", 9)
+        self.btn_flatten = add_tool(layout_t, "▬ Flatten", 10)
+        self.btn_mask = add_tool(layout_t, "🖌️ Edit Mask", 11)
+
+        layout_t.addWidget(create_divider())
+
+        layout_t.addWidget(QLabel("Size:"))
+        self.brush_size_slider = QSlider(Qt.Horizontal)
+        self.brush_size_slider.setRange(64, 4096)
+        self.brush_size_slider.setValue(512)
+        self.brush_size_slider.setFixedWidth(80)
+        self.brush_size_label = QLabel("512")
+        self.brush_size_slider.valueChanged.connect(
+            lambda v: self.brush_size_label.setText(str(v))
+        )
+        layout_t.addWidget(self.brush_size_slider)
+        layout_t.addWidget(self.brush_size_label)
+
+        layout_t.addWidget(QLabel("Str:"))
+        self.brush_strength_slider = QSlider(Qt.Horizontal)
+        self.brush_strength_slider.setRange(5, 200)
+        self.brush_strength_slider.setValue(50)
+        self.brush_strength_slider.setFixedWidth(60)
+        self.brush_strength_label = QLabel("50")
+        self.brush_strength_slider.valueChanged.connect(
+            lambda v: self.brush_strength_label.setText(str(v))
+        )
+        layout_t.addWidget(self.brush_strength_slider)
+        layout_t.addWidget(self.brush_strength_label)
+
+        layout_t.addWidget(create_divider())
+
+        self.btn_invert_mask = QPushButton("Invert")
+        self.btn_invert_mask.setObjectName("GlobalActionBtn")
+        self.btn_invert_mask.clicked.connect(self.invert_mask)
+        layout_t.addWidget(self.btn_invert_mask)
+
+        self.btn_clear_mask = QPushButton("Clear")
+        self.btn_clear_mask.setObjectName("GlobalActionBtn")
+        self.btn_clear_mask.clicked.connect(self.clear_mask)
+        layout_t.addWidget(self.btn_clear_mask)
+
+        self.btn_reset_mask = QPushButton("Reset")
+        self.btn_reset_mask.setObjectName("GlobalActionBtn")
+        self.btn_reset_mask.clicked.connect(self.reset_mask)
+        layout_t.addWidget(self.btn_reset_mask)
+
+        layout_t.addStretch()
+        self.stacked_tools.addWidget(page_terrain)
+
+        # -- Page 1: Entities --
+        page_entities = QWidget()
+        layout_e = QHBoxLayout(page_entities)
+        layout_e.setContentsMargins(4, 0, 4, 0)
+
+        self.btn_move_ent = add_tool(layout_e, "🖱️ Move", 200)
+        self.btn_remove_ent = add_tool(layout_e, "❌ Remove", 201)
+        layout_e.addWidget(create_divider())
+        self.btn_set_be = add_tool(layout_e, "🟡 Set BE", 2)
+        self.btn_set_nf = add_tool(layout_e, "🟢 Set NF", 7)
+        self.btn_add_res = add_tool(layout_e, "💎 Add Res", 3)
+
+        layout_e.addStretch()
+        self.stacked_tools.addWidget(page_entities)
+
+        # -- Page 2: Layout --
+        page_layout = QWidget()
+        layout_l = QHBoxLayout(page_layout)
+        layout_l.setContentsMargins(4, 0, 4, 0)
+
+        self.btn_move_lay = add_tool(layout_l, "🖱️ Move", 300)
+        self.btn_remove_lay = add_tool(layout_l, "❌ Remove", 301)
+        layout_l.addWidget(create_divider())
+        self.btn_link = add_tool(layout_l, "🔗 Link", 4)
+        self.btn_lane = add_tool(layout_l, "🛣️ Lane", 6)
+
+        layout_l.addWidget(create_divider())
+        layout_l.addWidget(QLabel("Width:"))
+        self.thickness_slider = QSlider(Qt.Horizontal)
+        self.thickness_slider.setRange(0, 800)
+        self.thickness_slider.setValue(600)
+        self.thickness_slider.setFixedWidth(80)
+        self.thickness_label = QLabel("600")
+        self.thickness_slider.valueChanged.connect(self._on_thickness_slider_changed)
+        layout_l.addWidget(self.thickness_slider)
+        layout_l.addWidget(self.thickness_label)
+
+        layout_l.addStretch()
+        self.stacked_tools.addWidget(page_layout)
+
+        layout.addWidget(self.stacked_tools)
 
         # ── Graphics View ──
         class CustomGraphicsView(QGraphicsView):
@@ -683,6 +620,10 @@ class MapPreviewWidget(QWidget):
         self.view_stack.addWidget(self.view_3d)
 
         layout.addWidget(self.view_stack)
+
+        self.current_mode = 0
+        self.tab_group.button(0).setChecked(True)
+        self.on_tab_changed(0)
 
         # State
         self.map_image = None
@@ -1518,20 +1459,37 @@ class MapPreviewWidget(QWidget):
             if hasattr(item, "_update_pen"):
                 item._update_pen()
 
+    def on_tab_changed(self, index):
+        self.stacked_tools.setCurrentIndex(index)
+
+        # Auto-select default tool for the new tab
+        if index == 0:
+            self.btn_raise.setChecked(True)
+            self.on_tool_changed(8)
+        elif index == 1:
+            self.btn_move_ent.setChecked(True)
+            self.on_tool_changed(200)
+        elif index == 2:
+            self.btn_move_lay.setChecked(True)
+            self.on_tool_changed(300)
+
     def on_tool_changed(self, tid):
-        self.current_mode = tid
+        # Map duplicate virtual IDs to standard internal modes
+        mode_mapping = {
+            200: 0, # Entities Move -> Move
+            300: 0, # Layout Move -> Move
+            201: 5, # Entities Remove -> Remove
+            301: 5  # Layout Remove -> Remove
+        }
+
+        actual_mode = mode_mapping.get(tid, tid)
+        self.current_mode = actual_mode
         self.link_start_node = None
-        if tid != 10:
+
+        if actual_mode != 10:
             self._flatten_target_height = None
 
-        # Show thickness slider only for Draw Lane mode (6) or Link Nodes (4)
-        show_thickness = tid in [4, 6]
-        self.thickness_widget.setVisible(show_thickness)
-        self.brush_widget.setVisible(tid in [8, 9, 10, 11])
-        self.mask_section_label.setVisible(tid == 11)
-        self.mask_actions_widget.setVisible(tid == 11)
-
-        if tid == 0:
+        if actual_mode == 0:
             for item in self.scene.items():
                 if isinstance(item, VisualNode) or hasattr(item, "is_fixed_entity"):
                     item.setFlag(QGraphicsItem.ItemIsMovable, True)

@@ -1604,6 +1604,67 @@ class TerrainGeneratorGUI(QMainWindow):
             background: #2a2a34;
             border: 1px solid #44444e;
         }}
+
+        /* ── New Two-Level Toolbar Styles ── */
+        /* Tabs (Level 1) */
+        QPushButton#TabButton {{
+            background-color: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            border-radius: 0px;
+            font-weight: bold;
+            color: #888888;
+            padding: 6px 12px;
+            font-size: 13px;
+        }}
+        QPushButton#TabButton:hover {{
+            color: #ffffff;
+        }}
+        QPushButton#TabButton:checked {{
+            color: {ACCENT_HOVER};
+            border-bottom: 2px solid {ACCENT_HOVER};
+        }}
+
+        /* Contextual Tools (Level 2) */
+        QPushButton#ContextToolBtn {{
+            background-color: transparent;
+            border: 1px solid transparent;
+            padding: 6px 12px;
+            border-radius: 4px;
+        }}
+        QPushButton#ContextToolBtn:hover {{
+            background-color: #333333;
+            border: 1px solid #444444;
+        }}
+        QPushButton#ContextToolBtn:checked {{
+            background-color: #1a3a5a;
+            border: 1px solid {ACCENT_HOVER};
+            color: {ACCENT_HOVER};
+        }}
+
+        /* Global Actions (Level 1/2) */
+        QPushButton#GlobalActionBtn {{
+            background-color: transparent;
+            border: 1px solid transparent;
+            padding: 6px 12px;
+            border-radius: 4px;
+        }}
+        QPushButton#GlobalActionBtn:hover {{
+            background-color: #333333;
+        }}
+
+        /* Danger Action */
+        QPushButton#DangerActionBtn {{
+            background-color: transparent;
+            border: 1px solid transparent;
+            color: #ff6666;
+            padding: 6px 12px;
+            border-radius: 4px;
+        }}
+        QPushButton#DangerActionBtn:hover {{
+            background-color: #552222;
+            border: 1px solid #ff4444;
+        }}
         """
         self.setStyleSheet(style)
 
