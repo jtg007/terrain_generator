@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.6] - 2026-04-24
+### Terrain Shaping
+- Introduced **Lane-Aware Terrain Shaping**: Terrain near lanes is now significantly flatter and smoother to ensure vehicle traversability, while areas farther away feature increased elevation variation, sharp ridges, and natural noise detail.
+- Fixed an issue where the roughness parameter wasn't properly generating sharp ridges, by implementing a true ridged multifractal noise algorithm.
+
 ## [0.9.5] - 2026-04-23
 ### Editor Features & Fixes
 - Added a new "Flatten ▬" sculpt tool for easier base building
