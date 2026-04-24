@@ -593,6 +593,12 @@ class MapPreviewWidget(QWidget):
         self.btn_clear_mask.setObjectName("SmallButton")
         self.btn_clear_mask.clicked.connect(self.clear_mask)
         mask_actions_layout.addWidget(self.btn_clear_mask)
+
+        self.btn_invert_mask = QPushButton("Invert")
+        self.btn_invert_mask.setObjectName("SmallButton")
+        self.btn_invert_mask.clicked.connect(self.invert_mask)
+        mask_actions_layout.addWidget(self.btn_invert_mask)
+
         self.mask_actions_widget.setVisible(False)
         self.actions_row.addWidget(self.mask_actions_widget)
 
@@ -1071,6 +1077,12 @@ class MapPreviewWidget(QWidget):
             self._global_selection_mask[:] = False
             self._rerender_heightmap()
 
+    def invert_mask(self):
+        if self._global_selection_mask is not None:
+            self.record_action("mask_change", self._global_selection_mask.copy())
+            self._global_selection_mask = ~self._global_selection_mask
+            self._rerender_heightmap()
+
     def _apply_brush(self, scene_x: float, scene_y: float, mode: int):
         if self._base_heights is None:
             return
@@ -1105,10 +1117,19 @@ class MapPreviewWidget(QWidget):
         falloff = np.exp(-dist_sq / (radius_sq * 0.3)) * mask
 
         if mode == 11 and self._global_selection_mask is not None:
-            # Mask brush mode
-            paint_value = False
+            # Mask brush mode:
+            # Left-click (True) paints the editable selection.
+            # Right-click (False) paints the protected area.
+            paint_value = True
             if self._active_mouse_button == Qt.RightButton:
-                paint_value = True
+                paint_value = False
+
+            # If the user is starting to paint an editable area (True) and the map is
+            # currently entirely editable (True everywhere), assume they want to start a
+            # fresh selection. Set the map to protected (False) first.
+            if paint_value and np.all(self._global_selection_mask):
+                self._global_selection_mask[:] = False
+
             # Only paint where mask is > threshold (like a hard brush)
             paint_area = mask > 0.5
             self._global_selection_mask[r_min:r_max, c_min:c_max][paint_area] = paint_value
@@ -1175,10 +1196,10 @@ class MapPreviewWidget(QWidget):
             and np.any(~self._global_selection_mask)
         ):
             # Show a subtle mask preview only while Mask tool is active.
-            s_mask = self._global_selection_mask
-            protected = ~s_mask
-            rgba_array[protected, 2] = np.clip(rgba_array[protected, 2] + 25, 0, 255)
-            rgba_array[protected, 1] = np.clip(rgba_array[protected, 1] * 0.9, 0, 255)
+            # The user wants the selected (editable) area to be tinted blue.
+            editable = self._global_selection_mask
+            rgba_array[editable, 2] = np.clip(rgba_array[editable, 2] + 25, 0, 255)
+            rgba_array[editable, 1] = np.clip(rgba_array[editable, 1] * 0.9, 0, 255)
 
         self._preview_img_data = rgba_array
         bytes_per_line = 4 * w

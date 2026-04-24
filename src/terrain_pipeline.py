@@ -2048,6 +2048,7 @@ def run_pipeline(
     output_dir: Optional[str] = None,
     skip_layout_validation: bool = False,
     global_selection_mask: Optional[np.ndarray] = None,
+    initial_heights: Optional[np.ndarray] = None,
 ) -> dict:
     """
     Run the complete terrain generation pipeline.
@@ -2073,6 +2074,17 @@ def run_pipeline(
 
     print(f"  Step 1: Generate vertex grid ({spec.vertex_cols}x{spec.vertex_rows})")
     grid = generate_vertex_grid(spec)
+
+    if initial_heights is not None:
+        if initial_heights.shape != grid.heights.shape:
+            from src.compat_utils import scipy_zoom_equivalent
+            scale_y = grid.heights.shape[0] / initial_heights.shape[0]
+            scale_x = grid.heights.shape[1] / initial_heights.shape[1]
+            grid.heights = scipy_zoom_equivalent(
+                initial_heights.astype(np.float32), (scale_y, scale_x)
+            )
+        else:
+            grid.heights = initial_heights.astype(np.float32).copy()
 
     if global_selection_mask is not None:
         grid.global_selection_mask = global_selection_mask.copy()
