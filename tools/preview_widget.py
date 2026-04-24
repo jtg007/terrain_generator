@@ -1064,6 +1064,9 @@ class MapPreviewWidget(QWidget):
         if self._base_heights is None or self._height_overlay is None:
             return
             
+        if self._base_heights.shape != self._height_overlay.shape:
+            return
+
         self.record_action("heights", self._height_overlay.copy())
         
         combined = self._base_heights + self._height_overlay
@@ -1086,6 +1089,9 @@ class MapPreviewWidget(QWidget):
 
     def _apply_brush(self, scene_x: float, scene_y: float, mode: int):
         if self._base_heights is None:
+            return
+
+        if self._height_overlay is not None and self._base_heights.shape != self._height_overlay.shape:
             return
 
         h, w = self._base_heights.shape
@@ -1161,6 +1167,9 @@ class MapPreviewWidget(QWidget):
 
     def _rerender_heightmap(self):
         if self._base_heights is None:
+            return
+
+        if self._height_overlay is not None and self._base_heights.shape != self._height_overlay.shape:
             return
 
         combined = self._base_heights + self._height_overlay
