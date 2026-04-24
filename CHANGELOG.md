@@ -21,7 +21,7 @@ All notable changes to this project will be documented in this file.
 - Fixed toolbar layout on small windows
 - Mask overlay no longer disappears when switching tools
 ### Terrain Masking, Sculpting & Shaping
-- Universal Masking: Left-click to unfreeze (red), right-click to freeze
+- Universal Masking: Left-click to draw mask, right-click to remove mask
 - Lane-Aware Terrain: Flatter terrain near lanes, increased variation in distant areas
 - Ridged Multifractal: New algorithm for sharp ridges and roughness
 ## [0.9.5] - 2026-04-23
