@@ -62,6 +62,7 @@ from src.vmf_gen import (
 )
 from src.steam_paths import validate_empires_path
 from config import Config
+from src import project_utils
 
 # Ensure OUTPUT_DIR is writable. In bundled mode, avoid the executable's directory
 # as it may be installed in a protected location like Program Files.
@@ -267,6 +268,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.setMinimumSize(820, 560)
 
         self.config_model = GUIConfigModel()
+        self._is_dirty = False
         self.config = Config()
         self.config_model.use_nodetail_texture = self.config.get("nodetail", False)
         self.terrain_materials, self.skyboxes = self.load_textures()
@@ -442,6 +444,24 @@ class TerrainGeneratorGUI(QMainWindow):
         self.on_auto_copy_changed()  # Trigger initial state setup
 
         sidebar_layout.addStretch()
+        
+        project_row = QHBoxLayout()
+        project_row.setSpacing(6)
+        
+        self.btn_open_project = QPushButton("📂 Open")
+        self.btn_open_project.setObjectName("SmallButton")
+        self.btn_open_project.setMinimumHeight(34)
+        self.btn_open_project.clicked.connect(self.on_open_project)
+        project_row.addWidget(self.btn_open_project, 1)
+        
+        self.btn_save_project = QPushButton("💾 Save")
+        self.btn_save_project.setObjectName("SmallButton")
+        self.btn_save_project.setMinimumHeight(34)
+        self.btn_save_project.clicked.connect(self.on_save_project)
+        project_row.addWidget(self.btn_save_project, 1)
+        
+        sidebar_layout.addLayout(project_row)
+        sidebar_layout.addSpacing(4)
 
         self.btn_generate = QPushButton("Generate VMF")
         self.btn_generate.setObjectName("GenerateButton")
@@ -1030,6 +1050,7 @@ class TerrainGeneratorGUI(QMainWindow):
             invalid_entities=invalid_entities,
         )
         self.preview_timer.start(500)
+        self._is_dirty = True
 
     def on_tool_changed(self, id):
         pass  # Tools are fully managed by preview_widget internally now
@@ -1048,11 +1069,11 @@ class TerrainGeneratorGUI(QMainWindow):
             self.config_model.custom_nf_base_y = val_y
 
         invalid_entities, _ = self.validate_current_layout()
-        # Ensure we sync invalid entities to canvas without wiping it out completely via set_entities
         # which creates a feedback loop with base_moved / layout_changed
         self.preview_widget.invalid_entities = invalid_entities
         self.preview_widget.redraw_fixed_entities()
         self.preview_timer.start(500)
+        self._is_dirty = True
 
     def on_resource_moved(self, index, x, y):
         if self.config_model.custom_resources and 0 <= index < len(
@@ -1066,6 +1087,7 @@ class TerrainGeneratorGUI(QMainWindow):
         # so we don't necessarily need to re-run the pipeline on move,
         # but we can do it if desired.
         self.preview_timer.start(500)
+        self._is_dirty = True
 
     def on_layout_changed(self):
         # When clear all is called it doesn't emit resource removed signals, just layout changed.
@@ -1096,6 +1118,7 @@ class TerrainGeneratorGUI(QMainWindow):
 
         self.update_validation_status()
         self.preview_timer.start(500)
+        self._is_dirty = True
 
     def on_resource_added(self, x, y):
         if self.config_model.custom_resources is None:
@@ -1107,10 +1130,10 @@ class TerrainGeneratorGUI(QMainWindow):
                 return
 
         self.config_model.custom_resources.append((x, y))
-        invalid_entities, _ = self.validate_current_layout()
         self.preview_widget.invalid_entities = invalid_entities
         self.preview_widget.redraw_fixed_entities()
         self.preview_timer.start(500)
+        self._is_dirty = True
 
     def run_preview(self):
         if hasattr(self, "preview_worker") and self.preview_worker.isRunning():
@@ -1982,6 +2005,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.update_validation_status()
         if hasattr(self, "preview_timer"):
             self.preview_timer.start(500)
+        self._is_dirty = True
 
     def update_validation_status(self):
         is_valid, msg = self.config_model.validate()
@@ -2165,6 +2189,88 @@ class TerrainGeneratorGUI(QMainWindow):
         )
         self.worker.finished.connect(self.on_generation_finished)
         self.worker.start()
+
+    def on_save_project(self):
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Terrain Project", "", "Terrain Project (*.terrain)"
+        )
+        if not file_path:
+            return
+
+        if not file_path.endswith(".terrain"):
+            file_path += ".terrain"
+
+        try:
+            nodes, conns, res, overlay, mask = self.preview_widget.get_layout_from_editor()
+            
+            layout_data = {
+                "nodes": nodes,
+                "connections": conns,
+                "resources": res,
+                "imp_base": self.preview_widget.imp_base,
+                "nf_base": self.preview_widget.nf_base,
+                "height_overlay": overlay,
+                "global_mask": mask,
+                "map_name": self.txt_map_name.text().strip()
+            }
+            
+            project_utils.save_project(file_path, self.config_model, layout_data)
+            self._is_dirty = False
+            self.statusBar().showMessage(f"Project saved to {file_path}", 5000)
+        except Exception as e:
+            QMessageBox.critical(self, "Save Error", f"Could not save project:\n{e}")
+
+    def on_open_project(self):
+        if self._is_dirty:
+            reply = QMessageBox.question(
+                self,
+                "Unsaved Changes",
+                "You have unsaved changes. Do you want to save them before opening a new project?",
+                QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
+                QMessageBox.Save
+            )
+            if reply == QMessageBox.Save:
+                self.on_save_project()
+                if self._is_dirty: # If save was cancelled
+                    return
+            elif reply == QMessageBox.Cancel:
+                return
+
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Open Terrain Project", "", "Terrain Project (*.terrain)"
+        )
+        if not file_path:
+            return
+
+        try:
+            data = project_utils.load_project(file_path)
+            
+            # Apply loaded state
+            self.config_model = data["config"]
+            self.txt_map_name.setText(data["map_name"])
+            
+            # Use sync_to_ui which already has signal blocking for widgets
+            self.sync_to_ui()
+            
+            # Restore layout in editor
+            self.preview_widget.set_layout_to_editor(
+                data["nodes"],
+                data["connections"],
+                data["resources"],
+                data["imp_base"],
+                data["nf_base"],
+                data["height_overlay"],
+                data["global_mask"]
+            )
+            
+            self._is_dirty = False
+            self.run_preview()
+            self.statusBar().showMessage(f"Project loaded from {file_path}", 5000)
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QMessageBox.critical(self, "Load Error", f"Could not load project:\n{e}")
 
     def on_generation_finished(self, success, msg, warning):
         self.btn_generate.setEnabled(True)

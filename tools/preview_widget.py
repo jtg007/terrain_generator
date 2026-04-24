@@ -2075,6 +2075,70 @@ class MapPreviewWidget(QWidget):
         # Resources are now exclusively tracked by self.resources, not VisualNodes
         return nodes, connections, list(self.resources), self._height_overlay.copy() if self._height_overlay is not None else None, self._global_selection_mask.copy() if self._global_selection_mask is not None else None
 
+    def set_layout_to_editor(self, nodes, connections, resources, imp_base, nf_base, height_overlay, global_mask):
+        """Restore the editor state from a saved project."""
+        # 1. Clear current state (without adding to history)
+        items_to_remove = []
+        for item in self.scene.items():
+            if item == self.map_pixmap_item:
+                continue
+            if hasattr(self, "grid_items") and item in self.grid_items:
+                continue
+            if isinstance(item, (VisualNode, VisualEdge, VisualFreehandEdge)) or hasattr(item, "is_fixed_entity"):
+                items_to_remove.append(item)
+
+        for item in items_to_remove:
+            if isinstance(item, VisualNode):
+                item.edges.clear()
+            self.scene.removeItem(item)
+
+        # 2. Reset internal data
+        self.imp_base = imp_base if imp_base else (None, None)
+        self.nf_base = nf_base if nf_base else (None, None)
+        self.resources = resources if resources else []
+        
+        # Ensure arrays are correct
+        if height_overlay is not None:
+            self._height_overlay = height_overlay
+        if global_mask is not None:
+            self._global_selection_mask = global_mask
+            
+        self.history.clear()
+        self.redo_history.clear()
+
+        # 3. Reconstruct VisualNodes
+        node_to_vis = {}
+        for node in nodes:
+            vis_node = VisualNode(node.x, node.y, node.radius, node.type, self.scene)
+            node_to_vis[node] = vis_node
+
+        # 4. Reconstruct VisualEdges
+        for conn in connections:
+            start_vis = node_to_vis.get(conn.start_node)
+            end_vis = node_to_vis.get(conn.end_node)
+            
+            if conn.path_points:
+                points = [QPointF(p[0], p[1]) for p in conn.path_points]
+                vis_edge = VisualFreehandEdge(points, conn.width, start_vis, end_vis)
+                self.scene.addItem(vis_edge)
+                if start_vis:
+                    start_vis.edges.append(vis_edge)
+                if end_vis:
+                    end_vis.edges.append(vis_edge)
+            else:
+                if start_vis and end_vis:
+                    vis_edge = VisualEdge(start_vis, end_vis)
+                    vis_edge.base_width = conn.width
+                    vis_edge._update_pen()
+                    self.scene.addItem(vis_edge)
+                    start_vis.edges.append(vis_edge)
+                    end_vis.edges.append(vis_edge)
+
+        # 5. Refresh UI
+        self._rerender_heightmap()
+        self.redraw_fixed_entities()
+        self.layout_changed.emit()
+
     def toggle_3d_view(self):
         current_idx = self.view_stack.currentIndex()
         if current_idx == 0:

@@ -8,13 +8,21 @@ All notable changes to this project will be documented in this file.
 - Lane-Aware Terrain Shaping: Terrain near lanes now flatter and smoother
 - Toolbar Redesign: Modern, context-aware two-level layout with tabs
 - Invert Terrain: New button to flip topology
+- Save/Open Projects: Full project persistence with compressed sculpting data
 ---
 ### Editor UX
 - Redesigned toolbar into modern, context-aware layout with tabs (Terrain, Entities, Layout)
+- Added "Open Project" and "Save Project" buttons to the sidebar
+- Implemented "Dirty State" tracking with unsaved changes prompts
 - Flat dark theme with minimalist icons and blue accent highlights
 - Global actions (Undo, Redo, 3D View, Clear Map) permanently visible
 - Contextual tools appear dynamically based on selected tab
 - Mask actions contextual: Reset and Clear only in Mask mode
+### Project Persistence
+- New `.terrain` file format for full project serialization
+- Preserves all config settings, custom nodes, lanes, and manual sculpting
+- Optimized storage: Sculpting overlays are compressed using zlib/base64
+- Robust loading: Implemented signal blocking and versioning for stability
 ### Preview & Sculpting Fixes
 - Mask brush and flatten brush now work correctly
 - Sculpt edits are highlighted, mask tint only shown when actively using
