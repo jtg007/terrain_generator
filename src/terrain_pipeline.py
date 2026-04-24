@@ -714,20 +714,18 @@ def generate_playability_mask(
     y_coords = np.linspace(spec.origin_y, spec.origin_y + spec.size_y, rows)
     WX, WY = np.meshgrid(x_coords, y_coords)
 
-    playable_mask = np.zeros((rows, cols), dtype=np.float64)
-    ramp_width = max(100.0, spec.transition_blur_sigma * 30.0)
+    # Compute signed distance to the playability boundary
+    distance_field = np.full((rows, cols), np.inf, dtype=np.float64)
 
-    # 1. Evaluate Nodes (BASE, VEHICLE_OPEN): smooth ramp
+    # 1. Evaluate Nodes (BASE, VEHICLE_OPEN)
     for node in nodes:
         if spec.lane_node_radius <= 0 and node.type == ZoneType.BASE:
             continue
         dist_grid = np.sqrt((WX - node.x) ** 2 + (WY - node.y) ** 2)
         if node.type in (ZoneType.BASE, ZoneType.VEHICLE_OPEN):
-            fade = np.clip((dist_grid - node.radius) / ramp_width, 0.0, 1.0)
-            node_mask = 1.0 - (fade * fade * (3.0 - 2.0 * fade))
-            playable_mask = np.maximum(playable_mask, node_mask)
+            distance_field = np.minimum(distance_field, dist_grid - node.radius)
 
-    # 2. Evaluate Polyline Connections: hard binary
+    # 2. Evaluate Polyline Connections
     for conn in connections:
         # Skip connections from/to base nodes when lane_node_radius is 0
         if spec.lane_node_radius <= 0 and conn.start_node.type == ZoneType.BASE:
@@ -768,11 +766,11 @@ def generate_playability_mask(
         else:
             continue
 
-        fade = np.clip((min_dist_grid - playable_width) / ramp_width, 0.0, 1.0)
-        conn_mask = 1.0 - (fade * fade * (3.0 - 2.0 * fade))
-        playable_mask = np.maximum(playable_mask, conn_mask)
+        distance_field = np.minimum(distance_field, min_dist_grid - playable_width)
 
-    return np.clip(playable_mask, 0.0, 1.0)
+    # distance_field is now the continuous distance from the playable boundary.
+    # negative means inside the lane, positive means outside in the wilderness.
+    return distance_field
 
 
 def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
@@ -819,7 +817,14 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
                 * warp_strength
             )
 
-            mask_val = float(hard_mask[r, c])
+            dist_field_val = float(hard_mask[r, c])
+            # mask_val replaces the old playable_mask concept for height interpolation.
+            # dist_field_val is negative inside the lane, positive outside.
+            # We want mask_val = 1.0 on the lane (dist_field_val <= 0),
+            # and smoothly transitioning to 0.0 at ramp_width.
+            ramp_width = max(100.0, spec.transition_blur_sigma * 30.0)
+            fade = np.clip(dist_field_val / ramp_width, 0.0, 1.0)
+            mask_val = 1.0 - (fade * fade * (3.0 - 2.0 * fade))
 
             if spec.manual_terrain:
                 base_noise = 0.0
@@ -827,20 +832,42 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
                 detail_val = 0.0
                 noise_combined = 1.0
             else:
+                # Use a broader ramp for distance shaping of noise, so the terrain
+                # gets progressively rougher over a larger distance from the lane.
+                shaping_ramp_width = ramp_width * 4.0
+                dist_factor = np.clip(dist_field_val / shaping_ramp_width, 0.0, 1.0)
+                # Smooth the factor
+                dist_factor = dist_factor * dist_factor * (3.0 - 2.0 * dist_factor)
+
+                effective_roughness = roughness * dist_factor
+
                 base_noise = noise.fbm(
                     wx_warp * macro_scale, wy_warp * macro_scale, octaves=spec.noise_octaves
                 )
-                ridge_val = noise.fbm(
-                    wx_warp * ridge_scale + 50,
-                    wy_warp * ridge_scale + 50,
-                    octaves=spec.noise_octaves,
-                )
-                ridge_val = (1.0 - abs(ridge_val)) ** 2
+                # True ridged multifractal noise (fold each octave)
+                t_ridge = 0.0
+                f_ridge = 1.0
+                a_ridge = 1.0
+                m_ridge = 0.0
+                rx = wx_warp * ridge_scale + 50
+                ry = wy_warp * ridge_scale + 50
+                for _ in range(spec.noise_octaves):
+                    v = noise.noise2d(rx * f_ridge, ry * f_ridge) * 2.0 - 1.0
+                    v = 1.0 - abs(v)
+                    v = v * v
+                    t_ridge += v * a_ridge
+                    m_ridge += a_ridge
+                    a_ridge *= 0.5
+                    f_ridge *= 2.0
+                ridge_val = t_ridge / m_ridge if m_ridge > 0 else 0.0
+                ridge_val = ridge_val * dist_factor
+
                 detail_val = noise.fbm(wx_warp * 0.008, wy_warp * 0.008, octaves=3)
+                detail_val = detail_val * dist_factor
 
                 noise_combined = (
-                    (0.5 - 0.2 * roughness) * base_noise
-                    + (0.3 + 0.4 * roughness) * ridge_val
+                    (0.5 - 0.2 * effective_roughness) * base_noise
+                    + (0.3 + 0.4 * effective_roughness) * ridge_val
                     + 0.05 * detail_val
                 )
 
@@ -1205,7 +1232,9 @@ def simulate_hydraulic_erosion(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
         start_c = rng.randint(1, cols - 2)
 
         # Protect playable lanes: DO NOT spawn droplets on paths or bases
-        if playability_mask is not None and playability_mask[start_r, start_c] > 0.5:
+        # distance_field is negative inside the lane, positive outside.
+        # We want to avoid spawning droplets near the lane (e.g. distance < 256.0).
+        if playability_mask is not None and playability_mask[start_r, start_c] < 256.0:
             continue
 
         pos_r = float(start_r)
@@ -1221,7 +1250,7 @@ def simulate_hydraulic_erosion(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
                 break
 
             # Protect playable lanes: droplets instantly evaporate when hitting a lane
-            if playability_mask is not None and playability_mask[ir, ic] > 0.5:
+            if playability_mask is not None and playability_mask[ir, ic] < 256.0:
                 break
 
             fx = pos_c - ic
