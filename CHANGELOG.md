@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.9] - 2026-04-24
+### Terrain & Generation
+- Fixed terrain generation so mountains can scale to the absolute maximum map height.
+- Implemented canyon wall steepness slider to make steep terrain block vehicles.
+- Decoupled skybox ceiling height from terrain max height to improve compiler optimization (VVIS).
+- Automatically generate bounding `toolsclip` brushes against skybox walls to seal map when terrain is outside bounds.
+- Added a Lane Elevation slider to control the base height of paths and lanes.
 ## [0.9.8] - 2026-04-24
 ### Highlights
 - Universal Masking (Stencil): New global selection mask system to protect/specific areas

@@ -755,11 +755,42 @@ class TerrainGeneratorGUI(QMainWindow):
         self.lbl_mountain_height_val = QLabel("50%")
         mh_row.addWidget(
             make_slider_row(
-                self.slider_mountain_height, self.lbl_mountain_height_val, "%"
+                self.slider_mountain_height,
+            self.lbl_mountain_height_val, "%"
             ),
             1,
         )
         config_layout.addLayout(mh_row)
+
+        # Canyon Steepness
+        cs_row = QHBoxLayout()
+        cs_row.setSpacing(8)
+        lbl_cs = QLabel("Wall Smoothness")
+        lbl_cs.setObjectName("FieldLabel")
+        lbl_cs.setToolTip("How smooth the transition is from lane floor to mountain. Low = steep canyon cliff, High = smooth valley.")
+        cs_row.addWidget(lbl_cs)
+        self.slider_canyon_steepness = QSlider(Qt.Horizontal)
+        self.slider_canyon_steepness.setRange(1, 100)
+        self.slider_canyon_steepness.setValue(26) # 26 maps roughly to sigma 8.0 where sigma = val * 0.3
+        self.lbl_canyon_steepness_val = QLabel("26%")
+        cs_row.addWidget(make_slider_row(self.slider_canyon_steepness, self.lbl_canyon_steepness_val, "%"), 1)
+        config_layout.addLayout(cs_row)
+
+        # Lane Elevation
+        le_row = QHBoxLayout()
+        le_row.setSpacing(8)
+        lbl_le = QLabel("Lane Elevation")
+        lbl_le.setObjectName("FieldLabel")
+        lbl_le.setToolTip("Base height of the lanes as a percentage of max terrain height.")
+        le_row.addWidget(lbl_le)
+        self.slider_lane_elevation = QSlider(Qt.Horizontal)
+        self.slider_lane_elevation.setRange(0, 100)
+        self.slider_lane_elevation.setValue(15)
+        self.lbl_lane_elevation_val = QLabel("15%")
+        le_row.addWidget(make_slider_row(self.slider_lane_elevation, self.lbl_lane_elevation_val, "%"), 1)
+        config_layout.addLayout(le_row)
+
+
 
         # Roughness
         rough_row = QHBoxLayout()
@@ -798,6 +829,12 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_mountain_height.valueChanged.connect(
             lambda v: self.lbl_mountain_height_val.setText(f"{v}%")
         )
+        self.slider_canyon_steepness.valueChanged.connect(
+            lambda v: self.lbl_canyon_steepness_val.setText(f"{v}%")
+        )
+        self.slider_lane_elevation.valueChanged.connect(
+            lambda v: self.lbl_lane_elevation_val.setText(f"{v}%")
+        )
         self.slider_rough.valueChanged.connect(
             lambda v: self.lbl_rough_val.setText(f"{v}%")
         )
@@ -810,6 +847,8 @@ class TerrainGeneratorGUI(QMainWindow):
         self.combo_topology.currentIndexChanged.connect(self.sync_to_model)
         self.slider_lane_width.valueChanged.connect(self.sync_to_model)
         self.slider_mountain_height.valueChanged.connect(self.sync_to_model)
+        self.slider_canyon_steepness.valueChanged.connect(self.sync_to_model)
+        self.slider_lane_elevation.valueChanged.connect(self.sync_to_model)
         self.slider_rough.valueChanged.connect(self.sync_to_model)
         self.slider_erosion.valueChanged.connect(self.sync_to_model)
         self.slider_lane_node_radius.valueChanged.connect(self.sync_to_model)
@@ -1855,6 +1894,8 @@ class TerrainGeneratorGUI(QMainWindow):
             self.combo_topology,
             self.slider_lane_width,
             self.slider_mountain_height,
+            self.slider_canyon_steepness,
+            self.slider_lane_elevation,
             self.slider_rough,
             self.slider_erosion,
             self.slider_lane_node_radius,
@@ -1903,6 +1944,12 @@ class TerrainGeneratorGUI(QMainWindow):
             )
             self.slider_mountain_height.setValue(
                 int(min(1.0, self.config_model.mountain_height_scale) * 100)
+            )
+            self.slider_canyon_steepness.setValue(
+                int(max(1, min(100, self.config_model.transition_blur_sigma / 0.3)))
+            )
+            self.slider_lane_elevation.setValue(
+                int(min(1.0, self.config_model.lane_elevation) * 100)
             )
             self.slider_rough.setValue(int(self.config_model.roughness * 100))
             self.slider_erosion.setValue(int(self.config_model.erosion_strength * 100))
@@ -1985,6 +2032,8 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.mountain_height_scale = (
             self.slider_mountain_height.value() / 100.0
         )
+        self.config_model.transition_blur_sigma = max(0.1, self.slider_canyon_steepness.value() * 0.3)
+        self.config_model.lane_elevation = self.slider_lane_elevation.value() / 100.0
 
         self.config_model.roughness = self.slider_rough.value() / 100.0
         self.config_model.erosion_strength = self.slider_erosion.value() / 100.0

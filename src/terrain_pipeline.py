@@ -788,7 +788,7 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
         nodes, connections = generate_strategic_layout(spec)
         hard_mask = generate_playability_mask(spec, rows, cols, nodes, connections)
 
-    floor_height = max_height * 0.15
+    floor_height = max_height * getattr(spec, 'lane_elevation', 0.15)
     base_mountain_height = max_height * 1.0
     scaled_mountain_height = spec.mountain_height_scale
     mountain_height = (
@@ -822,7 +822,7 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
             # dist_field_val is negative inside the lane, positive outside.
             # We want mask_val = 1.0 on the lane (dist_field_val <= 0),
             # and smoothly transitioning to 0.0 at ramp_width.
-            ramp_width = max(100.0, spec.transition_blur_sigma * 30.0)
+            ramp_width = max(10.0, spec.transition_blur_sigma * 30.0)
             fade = np.clip(dist_field_val / ramp_width, 0.0, 1.0)
             mask_val = 1.0 - (fade * fade * (3.0 - 2.0 * fade))
 
@@ -834,7 +834,7 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
             else:
                 # Use a broader ramp for distance shaping of noise, so the terrain
                 # gets progressively rougher over a larger distance from the lane.
-                shaping_ramp_width = ramp_width * 4.0
+                shaping_ramp_width = max(400.0, ramp_width * 4.0)
                 dist_factor = np.clip(dist_field_val / shaping_ramp_width, 0.0, 1.0)
                 # Smooth the factor
                 dist_factor = dist_factor * dist_factor * (3.0 - 2.0 * dist_factor)

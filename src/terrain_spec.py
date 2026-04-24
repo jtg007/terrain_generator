@@ -63,6 +63,7 @@ class TerrainSpec:
     topology: str = "random"
     lane_width_scale: float = 1.0
     mountain_height_scale: float = 1.0
+    lane_elevation: float = 0.15
     transition_blur_sigma: float = 8.0
     material: str = "nature/terrain/blend_dirt_grass_dmz_sscale"
     underlay_material: str = "TOOLS/TOOLSSKIP"
@@ -186,6 +187,7 @@ class TerrainSpec:
             "topology": self.topology,
             "lane_width_scale": self.lane_width_scale,
             "mountain_height_scale": self.mountain_height_scale,
+            "lane_elevation": self.lane_elevation,
             "material": self.material,
             "underlay_material": self.underlay_material,
             "underlay_height": self.underlay_height,
@@ -399,6 +401,7 @@ def create_default_spec() -> TerrainSpec:
         topology="random",
         lane_width_scale=1.0,
         mountain_height_scale=1.0,
+        lane_elevation=0.15,
         transition_blur_sigma=8.0,
         material="common/nature/blend_grass_mountainwall_000",
         underlay_material="TOOLS/TOOLSSKIP",

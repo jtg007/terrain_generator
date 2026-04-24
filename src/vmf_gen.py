@@ -179,14 +179,14 @@ def generate_skybox(
                 north_y,
                 wall_center_z,
             ),
-            (w, north_max_y - north_min_y, wall_height),
+            (w, wall_thickness, wall_height),
             "tools/toolsskybox",
         )
         north.set_material("tools/toolsskybox")
         valve_map.world.children.append(north)
         north_clip = Block(
             Vertex(cx, north_y - wall_thickness, wall_center_z),
-            (w, north_max_y - north_min_y, wall_height),
+            (w, wall_thickness, wall_height),
             "tools/toolsclip",
         )
         north_clip.set_material("tools/toolsclip")
@@ -199,14 +199,14 @@ def generate_skybox(
                 south_y,
                 wall_center_z,
             ),
-            (w, south_max_y - south_min_y, wall_height),
+            (w, wall_thickness, wall_height),
             "tools/toolsskybox",
         )
         south.set_material("tools/toolsskybox")
         valve_map.world.children.append(south)
         south_clip = Block(
             Vertex(cx, south_y + wall_thickness, wall_center_z),
-            (w, south_max_y - south_min_y, wall_height),
+            (w, wall_thickness, wall_height),
             "tools/toolsclip",
         )
         south_clip.set_material("tools/toolsclip")
@@ -237,14 +237,14 @@ def generate_skybox(
                 cy,
                 wall_center_z,
             ),
-            (east_max_x - east_min_x, h, wall_height),
+            (wall_thickness, h, wall_height),
             "tools/toolsskybox",
         )
         east.set_material("tools/toolsskybox")
         valve_map.world.children.append(east)
         east_clip = Block(
             Vertex(east_x - wall_thickness, cy, wall_center_z),
-            (east_max_x - east_min_x, h, wall_height),
+            (wall_thickness, h, wall_height),
             "tools/toolsclip",
         )
         east_clip.set_material("tools/toolsclip")
@@ -257,14 +257,14 @@ def generate_skybox(
                 cy,
                 wall_center_z,
             ),
-            (west_max_x - west_min_x, h, wall_height),
+            (wall_thickness, h, wall_height),
             "tools/toolsskybox",
         )
         west.set_material("tools/toolsskybox")
         valve_map.world.children.append(west)
         west_clip = Block(
             Vertex(west_x + wall_thickness, cy, wall_center_z),
-            (west_max_x - west_min_x, h, wall_height),
+            (wall_thickness, h, wall_height),
             "tools/toolsclip",
         )
         west_clip.set_material("tools/toolsclip")
@@ -1599,7 +1599,7 @@ class DisplacementVMF:
                     "imp",
                     imp_base_x,
                     imp_base_y,
-                    int(get_terrain_height_at(imp_base_x, imp_base_y, height_array, origin_x, origin_y, map_width, map_height, height_scale, tiles_x, tiles_y, power)),
+                    int(max_terrain_height),
                     map_center_x,
                     map_center_y,
                     rules,
@@ -1618,7 +1618,7 @@ class DisplacementVMF:
                     "nf",
                     nf_base_x,
                     nf_base_y,
-                    int(get_terrain_height_at(nf_base_x, nf_base_y, height_array, origin_x, origin_y, map_width, map_height, height_scale, tiles_x, tiles_y, power)),
+                    int(max_terrain_height),
                     map_center_x,
                     map_center_y,
                     rules,
@@ -1721,7 +1721,7 @@ class DisplacementVMF:
                     "imp",
                     imp_base_x,
                     imp_base_y,
-                    int(get_terrain_height_at(imp_base_x, imp_base_y, height_array, origin_x, origin_y, map_width, map_height, height_scale, tiles_x, tiles_y, power)),
+                    int(max_terrain_height),
                     map_center_x,
                     map_center_y,
                     rules,
@@ -1740,7 +1740,7 @@ class DisplacementVMF:
                     "nf",
                     nf_base_x,
                     nf_base_y,
-                    int(get_terrain_height_at(nf_base_x, nf_base_y, height_array, origin_x, origin_y, map_width, map_height, height_scale, tiles_x, tiles_y, power)),
+                    int(max_terrain_height),
                     map_center_x,
                     map_center_y,
                     rules,

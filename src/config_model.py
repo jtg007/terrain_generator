@@ -36,6 +36,8 @@ class GUIConfigModel:
     topology: str = "random"
     lane_width_scale: float = 1.0
     mountain_height_scale: float = 1.0
+    lane_elevation: float = 0.15
+    transition_blur_sigma: float = 8.0
 
     # Selected preset for UI tracking
     preset_name: str = "mixed"
@@ -220,6 +222,8 @@ class GUIConfigModel:
             topology=self.topology,
             lane_width_scale=self.lane_width_scale,
             mountain_height_scale=effective_mountain_height_scale,
+            lane_elevation=self.lane_elevation,
+            transition_blur_sigma=self.transition_blur_sigma,
             custom_image_path=self.custom_image_path,
             base_clear_radius=self.base_clear_radius,
             base_flatness=self.base_flatness,
