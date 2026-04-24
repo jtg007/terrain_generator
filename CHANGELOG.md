@@ -18,6 +18,9 @@ All notable changes to this project will be documented in this file.
 - Fixed flatten brush behavior to reliably apply per stroke.
 - Improved 2D sculpt visibility: sculpt edits are now highlighted, and mask tint is only
   shown when masking is actively used.
+- Fixed squished toolbar layout on small windows by splitting the toolbar into two rows.
+- Refined the visual alignment of the brush tool sliders using a grid layout.
+- Fixed a bug where the mask overlay disappeared when switching to Raise, Lower, or Flatten tools.
 
 ## [0.9.7] - 2026-04-24
 ### Terrain Masking & Sculpting

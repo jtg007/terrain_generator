@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
+    QGridLayout,
     QPushButton,
     QButtonGroup,
     QGraphicsView,
@@ -405,9 +406,8 @@ class MapPreviewWidget(QWidget):
 
         def create_divider():
             line = QFrame()
-            line.setFrameShape(QFrame.VLine)
-            line.setFrameShadow(QFrame.Sunken)
-            line.setStyleSheet("color: #333333;")
+            line.setFixedWidth(1)
+            line.setStyleSheet("background-color: #383842; margin: 4px 6px;")
             return line
 
         def add_tool(layout_obj, text, tool_id):
@@ -426,29 +426,42 @@ class MapPreviewWidget(QWidget):
         self.tool_group.setExclusive(True)
         self.tool_group.idClicked.connect(self.on_tool_changed)
 
-        # ── Level 1: Global Actions & Tabs ──
-        lvl1_layout = QHBoxLayout()
-        lvl1_layout.setContentsMargins(4, 0, 4, 0)
+        # ── Top Row: Globals & Tabs ──
+        top_row_layout = QHBoxLayout()
+        top_row_layout.setContentsMargins(4, 4, 4, 2)
+        top_row_layout.setSpacing(6)
 
-        # Left: Global Actions
-        self.btn_undo = QPushButton("↶ Undo")
+        # Handle
+        handle = QLabel("⋮")
+        handle.setStyleSheet("color: #555566; font-size: 15px; font-weight: bold; margin-bottom: 2px; padding-left: 2px;")
+        top_row_layout.addWidget(handle)
+        top_row_layout.addWidget(create_divider())
+
+        # Global Actions
+        self.btn_undo = QPushButton("↶\nUndo")
         self.btn_undo.setObjectName("GlobalActionBtn")
         self.btn_undo.clicked.connect(self.undo)
-        lvl1_layout.addWidget(self.btn_undo)
+        top_row_layout.addWidget(self.btn_undo)
 
-        self.btn_redo = QPushButton("↷ Redo")
+        self.btn_redo = QPushButton("↷\nRedo")
         self.btn_redo.setObjectName("GlobalActionBtn")
         self.btn_redo.clicked.connect(self.redo)
-        lvl1_layout.addWidget(self.btn_redo)
+        top_row_layout.addWidget(self.btn_redo)
 
-        self.btn_toggle_3d = QPushButton("👁️ 3D View")
+        self.btn_toggle_3d = QPushButton("👁️\n3D View")
         self.btn_toggle_3d.setObjectName("GlobalActionBtn")
         self.btn_toggle_3d.clicked.connect(self.toggle_3d_view)
-        lvl1_layout.addWidget(self.btn_toggle_3d)
+        top_row_layout.addWidget(self.btn_toggle_3d)
 
-        lvl1_layout.addStretch()
+        top_row_layout.addWidget(create_divider())
 
-        # Center: Tabs
+        # Tabs Container
+        tab_container = QWidget()
+        tab_container.setObjectName("TabContainer")
+        tab_layout = QHBoxLayout(tab_container)
+        tab_layout.setContentsMargins(2, 2, 2, 2)
+        tab_layout.setSpacing(2)
+
         self.tab_group = QButtonGroup(self)
         tabs = [("⛰️ Terrain", 0), ("🚩 Entities", 1), ("🛣️ Layout", 2)]
         for text, idx in tabs:
@@ -456,72 +469,91 @@ class MapPreviewWidget(QWidget):
             btn.setObjectName("TabButton")
             btn.setCheckable(True)
             self.tab_group.addButton(btn, idx)
-            lvl1_layout.addWidget(btn)
+            tab_layout.addWidget(btn)
 
         self.tab_group.idClicked.connect(self.on_tab_changed)
+        top_row_layout.addWidget(tab_container)
+        
+        top_row_layout.addStretch()
 
-        lvl1_layout.addStretch()
-
-        # Right: Danger Action
-        self.btn_clear = QPushButton("🗑️ Clear Map")
+        # Clear All Action
+        top_row_layout.addWidget(create_divider())
+        self.btn_clear = QPushButton("🗑️\nClear All")
         self.btn_clear.setObjectName("DangerActionBtn")
         self.btn_clear.clicked.connect(self.clear_scene_nodes)
-        lvl1_layout.addWidget(self.btn_clear)
+        top_row_layout.addWidget(self.btn_clear)
 
-        layout.addLayout(lvl1_layout)
+        layout.addLayout(top_row_layout)
 
-        # ── Level 2: Contextual Toolbar Stack ──
+        # ── Bottom Row: Context Tools ──
         self.stacked_tools = QStackedWidget()
+        self.stacked_tools.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Fixed)
 
         # -- Page 0: Terrain --
         page_terrain = QWidget()
         layout_t = QHBoxLayout(page_terrain)
-        layout_t.setContentsMargins(4, 0, 4, 0)
+        layout_t.setContentsMargins(4, 2, 4, 4)
 
-        self.btn_raise = add_tool(layout_t, "▲ Raise", 8)
-        self.btn_lower = add_tool(layout_t, "▼ Lower", 9)
-        self.btn_flatten = add_tool(layout_t, "▬ Flatten", 10)
-        self.btn_mask = add_tool(layout_t, "🖌️ Edit Mask", 11)
+        self.btn_raise = add_tool(layout_t, "▲\nRaise", 8)
+        self.btn_lower = add_tool(layout_t, "▼\nLower", 9)
+        self.btn_flatten = add_tool(layout_t, "▬\nFlatten", 10)
+        self.btn_mask = add_tool(layout_t, "🎭\nMask", 11)
 
         layout_t.addWidget(create_divider())
 
-        layout_t.addWidget(QLabel("Size:"))
+        # Sliders
+        sliders_layout = QGridLayout()
+        sliders_layout.setContentsMargins(4, 0, 4, 0)
+        sliders_layout.setSpacing(6)
+        
+        lbl_size = QLabel("Size:")
+        lbl_size.setStyleSheet("color: #999; font-size: 10px;")
+        sliders_layout.addWidget(lbl_size, 0, 0)
+        
         self.brush_size_slider = QSlider(Qt.Horizontal)
         self.brush_size_slider.setRange(64, 4096)
         self.brush_size_slider.setValue(512)
         self.brush_size_slider.setFixedWidth(80)
+        sliders_layout.addWidget(self.brush_size_slider, 0, 1)
+        
         self.brush_size_label = QLabel("512")
+        self.brush_size_label.setStyleSheet("color: #ccc; font-size: 10px; font-family: monospace;")
         self.brush_size_slider.valueChanged.connect(
             lambda v: self.brush_size_label.setText(str(v))
         )
-        layout_t.addWidget(self.brush_size_slider)
-        layout_t.addWidget(self.brush_size_label)
+        sliders_layout.addWidget(self.brush_size_label, 0, 2)
 
-        layout_t.addWidget(QLabel("Str:"))
+        lbl_str = QLabel("Str:")
+        lbl_str.setStyleSheet("color: #999; font-size: 10px;")
+        sliders_layout.addWidget(lbl_str, 1, 0)
+        
         self.brush_strength_slider = QSlider(Qt.Horizontal)
         self.brush_strength_slider.setRange(5, 200)
         self.brush_strength_slider.setValue(50)
-        self.brush_strength_slider.setFixedWidth(60)
+        self.brush_strength_slider.setFixedWidth(80)
+        sliders_layout.addWidget(self.brush_strength_slider, 1, 1)
+        
         self.brush_strength_label = QLabel("50")
+        self.brush_strength_label.setStyleSheet("color: #ccc; font-size: 10px; font-family: monospace;")
         self.brush_strength_slider.valueChanged.connect(
             lambda v: self.brush_strength_label.setText(str(v))
         )
-        layout_t.addWidget(self.brush_strength_slider)
-        layout_t.addWidget(self.brush_strength_label)
+        sliders_layout.addWidget(self.brush_strength_label, 1, 2)
 
+        layout_t.addLayout(sliders_layout)
         layout_t.addWidget(create_divider())
 
-        self.btn_invert_mask = QPushButton("Invert")
+        self.btn_invert_mask = QPushButton("🔄\nInvert")
         self.btn_invert_mask.setObjectName("GlobalActionBtn")
         self.btn_invert_mask.clicked.connect(self.invert_mask)
         layout_t.addWidget(self.btn_invert_mask)
 
-        self.btn_clear_mask = QPushButton("Clear")
+        self.btn_clear_mask = QPushButton("🗑️\nClear Mask")
         self.btn_clear_mask.setObjectName("GlobalActionBtn")
         self.btn_clear_mask.clicked.connect(self.clear_mask)
         layout_t.addWidget(self.btn_clear_mask)
 
-        self.btn_reset_mask = QPushButton("Reset")
+        self.btn_reset_mask = QPushButton("↺\nReset Mask")
         self.btn_reset_mask.setObjectName("GlobalActionBtn")
         self.btn_reset_mask.clicked.connect(self.reset_mask)
         layout_t.addWidget(self.btn_reset_mask)
@@ -532,14 +564,14 @@ class MapPreviewWidget(QWidget):
         # -- Page 1: Entities --
         page_entities = QWidget()
         layout_e = QHBoxLayout(page_entities)
-        layout_e.setContentsMargins(4, 0, 4, 0)
+        layout_e.setContentsMargins(4, 2, 4, 4)
 
-        self.btn_move_ent = add_tool(layout_e, "🖱️ Move", 200)
-        self.btn_remove_ent = add_tool(layout_e, "❌ Remove", 201)
+        self.btn_move_ent = add_tool(layout_e, "🖱️\nMove", 200)
+        self.btn_remove_ent = add_tool(layout_e, "❌\nRemove", 201)
         layout_e.addWidget(create_divider())
-        self.btn_set_be = add_tool(layout_e, "🟡 Set BE", 2)
-        self.btn_set_nf = add_tool(layout_e, "🟢 Set NF", 7)
-        self.btn_add_res = add_tool(layout_e, "💎 Add Res", 3)
+        self.btn_set_be = add_tool(layout_e, "🟡\nSet BE", 2)
+        self.btn_set_nf = add_tool(layout_e, "🟢\nSet NF", 7)
+        self.btn_add_res = add_tool(layout_e, "💎\nAdd Res", 3)
 
         layout_e.addStretch()
         self.stacked_tools.addWidget(page_entities)
@@ -547,23 +579,28 @@ class MapPreviewWidget(QWidget):
         # -- Page 2: Layout --
         page_layout = QWidget()
         layout_l = QHBoxLayout(page_layout)
-        layout_l.setContentsMargins(4, 0, 4, 0)
+        layout_l.setContentsMargins(4, 2, 4, 4)
 
-        self.btn_move_lay = add_tool(layout_l, "🖱️ Move", 300)
-        self.btn_remove_lay = add_tool(layout_l, "❌ Remove", 301)
+        self.btn_move_lay = add_tool(layout_l, "🖱️\nMove", 300)
+        self.btn_remove_lay = add_tool(layout_l, "❌\nRemove", 301)
         layout_l.addWidget(create_divider())
-        self.btn_link = add_tool(layout_l, "🔗 Link", 4)
-        self.btn_lane = add_tool(layout_l, "🛣️ Lane", 6)
+        self.btn_link = add_tool(layout_l, "🔗\nLink", 4)
+        self.btn_lane = add_tool(layout_l, "🛣️\nLane", 6)
 
         layout_l.addWidget(create_divider())
-        layout_l.addWidget(QLabel("Width:"))
+        lbl_width = QLabel("Width:")
+        lbl_width.setStyleSheet("color: #999; font-size: 10px;")
+        layout_l.addWidget(lbl_width)
+        
         self.thickness_slider = QSlider(Qt.Horizontal)
         self.thickness_slider.setRange(0, 800)
         self.thickness_slider.setValue(600)
         self.thickness_slider.setFixedWidth(80)
-        self.thickness_label = QLabel("600")
-        self.thickness_slider.valueChanged.connect(self._on_thickness_slider_changed)
         layout_l.addWidget(self.thickness_slider)
+        
+        self.thickness_label = QLabel("600")
+        self.thickness_label.setStyleSheet("color: #ccc; font-size: 10px; font-family: monospace;")
+        self.thickness_slider.valueChanged.connect(self._on_thickness_slider_changed)
         layout_l.addWidget(self.thickness_label)
 
         layout_l.addStretch()
@@ -1132,7 +1169,7 @@ class MapPreviewWidget(QWidget):
         rgba_array[..., 3] = 255                # Alpha
 
         if (
-            self.current_mode == 11
+            self.current_mode in (8, 9, 10, 11)
             and self._global_selection_mask is not None
             and np.any(~self._global_selection_mask)
         ):
