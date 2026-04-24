@@ -31,6 +31,7 @@ class GUIConfigModel:
     roughness: float = 0.5  # Maps to noise octaves
     erosion_strength: float = 0.5  # Maps to erosion iterations
     height_scale: int = 2048  # Absolute max height
+    skybox_ceiling: int = 4096  # Skybox Ceiling Height
 
     topology: str = "random"
     lane_width_scale: float = 1.0
@@ -210,10 +211,11 @@ class GUIConfigModel:
             cell_size=self.cell_size,
             displacement_power=self.displacement_power,
             seed=self.seed,
-            max_slope_step=64,
+            max_slope_step=256,
             noise_octaves=octaves,
             erosion_iterations=iterations,
             terrain_max_height=self.height_scale,
+            skybox_ceiling=self.skybox_ceiling,
             roughness=self.roughness,
             topology=self.topology,
             lane_width_scale=self.lane_width_scale,

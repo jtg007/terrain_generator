@@ -52,12 +52,13 @@ class TerrainSpec:
     cell_size: int = 512
     displacement_power: int = 3
     seed: int = 12345
-    max_slope_step: int = 64
+    max_slope_step: int = 256
     height_quantization: int = 1
     noise_octaves: int = 4
     erosion_iterations: int = 50000
     erosion_droplet_lifetime: int = 30
     terrain_max_height: int = 2048
+    skybox_ceiling: int = 4096
     roughness: float = 0.5
     topology: str = "random"
     lane_width_scale: float = 1.0
@@ -390,7 +391,7 @@ def create_default_spec() -> TerrainSpec:
         cell_size=512,
         displacement_power=3,
         seed=12345,
-        max_slope_step=64,
+        max_slope_step=256,
         height_quantization=1,
         noise_octaves=4,
         erosion_iterations=50000,

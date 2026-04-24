@@ -617,6 +617,14 @@ class TerrainGeneratorGUI(QMainWindow):
         dim_grid.addWidget(lbl_hs, 1, 2)
         self.spin_height = QSpinBox()
         self.spin_height.setRange(1, 999999)
+        lbl_skybox = QLabel("Skybox Ceil")
+        lbl_skybox.setObjectName("FieldLabel")
+        lbl_skybox.setToolTip("Skybox ceiling height above ground")
+        dim_grid.addWidget(lbl_skybox, 2, 2)
+        self.spin_skybox_ceiling = QSpinBox()
+        self.spin_skybox_ceiling.setRange(1, 999999)
+        dim_grid.addWidget(self.spin_skybox_ceiling, 2, 3)
+
         dim_grid.addWidget(self.spin_height, 1, 3)
 
         lbl_pw = QLabel("Detail")
@@ -660,6 +668,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.spin_tiles_y.valueChanged.connect(self.sync_to_model)
         self.spin_tile_size.valueChanged.connect(self.sync_to_model)
         self.spin_height.valueChanged.connect(self.sync_to_model)
+        self.spin_skybox_ceiling.valueChanged.connect(self.sync_to_model)
         self.combo_power.currentIndexChanged.connect(self.sync_to_model)
 
         config_layout.addWidget(make_divider())
@@ -1842,6 +1851,7 @@ class TerrainGeneratorGUI(QMainWindow):
             self.spin_tile_size,
             self.spin_target_map_size,
             self.spin_height,
+            self.spin_skybox_ceiling,
             self.combo_topology,
             self.slider_lane_width,
             self.slider_mountain_height,
@@ -1869,6 +1879,7 @@ class TerrainGeneratorGUI(QMainWindow):
                 max(self.config_model.map_size_x, self.config_model.map_size_y)
             )
             self.spin_height.setValue(self.config_model.height_scale)
+            self.spin_skybox_ceiling.setValue(self.config_model.skybox_ceiling)
             topology_map = {
                 "random": 0,
                 "central_gorge": 1,
@@ -1951,6 +1962,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.tiles_y = self.spin_tiles_y.value()
         self.config_model.cell_size = self.spin_tile_size.value()
         self.config_model.height_scale = self.spin_height.value()
+        self.config_model.skybox_ceiling = self.spin_skybox_ceiling.value()
 
         topology_reverse_map = {
             0: "random",

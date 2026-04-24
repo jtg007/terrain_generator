@@ -90,6 +90,12 @@ def main():
         help="Max terrain height (auto: tiles*tile_size/8)",
     )
     parser.add_argument(
+        "--skybox-ceiling",
+        type=int,
+        default=4096,
+        help="Skybox ceiling height",
+    )
+    parser.add_argument(
         "-p",
         "--power",
         type=int,
@@ -192,12 +198,13 @@ def main():
         cell_size=tile_size,
         displacement_power=args.power,
         seed=args.seed,
-        max_slope_step=64,
+        max_slope_step=256,
         height_quantization=1,
         noise_octaves=args.octaves,
         erosion_iterations=0 if args.skip_erosion else args.erosion_iterations,
         erosion_droplet_lifetime=args.erosion_lifetime,
         terrain_max_height=calculated_max_height,
+        skybox_ceiling=args.skybox_ceiling,
         material=compile_safe_material,
         underlay_material="TOOLS/TOOLSSKIP",
         underlay_height=128,
@@ -243,6 +250,7 @@ def main():
         map_name=Path(args.output).stem,
         heightmap_path=str(hm_path),
         terrain_max_height=calculated_max_height,
+        skybox_ceiling=args.skybox_ceiling,
         terrain_actual_max=grid.max_height(),
         terrain_tile_size=tile_size,
         terrain_power=args.power,

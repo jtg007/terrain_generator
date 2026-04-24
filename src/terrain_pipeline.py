@@ -789,8 +789,8 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
         hard_mask = generate_playability_mask(spec, rows, cols, nodes, connections)
 
     floor_height = max_height * 0.15
-    base_mountain_height = max_height * 0.85
-    scaled_mountain_height = spec.mountain_height_scale**2
+    base_mountain_height = max_height * 1.0
+    scaled_mountain_height = spec.mountain_height_scale
     mountain_height = (
         floor_height + (base_mountain_height - floor_height) * scaled_mountain_height
     )
@@ -1536,7 +1536,7 @@ def build_cells(spec: TerrainSpec, grid: HeightGrid) -> List[TerrainCell]:
     return cells
 
 
-def validate_seams(cells: List[TerrainCell], grid: HeightGrid) -> List[str]:
+def validate_seams(cells: List[TerrainCell], grid: HeightGrid, spec: TerrainSpec) -> List[str]:
     """
     Step 7: Validate seam topology.
 
@@ -1598,7 +1598,8 @@ def validate_seams(cells: List[TerrainCell], grid: HeightGrid) -> List[str]:
             edge_heights = cell.get_edge_heights(grid, edge)
             if len(edge_heights) >= 2:
                 diff = abs(edge_heights[0] - edge_heights[1])
-                if diff > 100:
+                if diff > spec.max_slope_step:
+
                     errors.append(
                         f"Cell {cell.cell_id} {edge} edge has height diff {diff:.1f} "
                         f"(heights: {edge_heights})"
@@ -2217,7 +2218,7 @@ def run_pipeline(
     print(f"    Created {len(cells)} cells")
 
     print("  Step 9: Validate seams")
-    errors = validate_seams(cells, grid)
+    errors = validate_seams(cells, grid, spec)
     if errors:
         print("    ERRORS FOUND:")
         for e in errors:
