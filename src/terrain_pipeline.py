@@ -58,7 +58,7 @@ def generate_vertex_grid(spec: TerrainSpec) -> HeightGrid:
     rows = spec.vertex_rows
     cols = spec.vertex_cols
 
-    heights = [[0.0 for _ in range(cols)] for _ in range(rows)]
+    heights = np.zeros((rows, cols), dtype=np.float32)
 
     return HeightGrid(
         heights=heights,
@@ -777,6 +777,7 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     rows = grid.rows
     cols = grid.cols
     from src.noise import NoiseGenerator
+    original_heights = grid.heights.copy()
 
     noise = NoiseGenerator(spec.seed)
     roughness = getattr(spec, "roughness", 0.5)
@@ -799,10 +800,9 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     macro_scale = 0.0015
     ridge_scale = 0.0025
 
-    heightmap = []
+    new_heights = np.zeros((rows, cols), dtype=np.float32)
 
     for r in range(rows):
-        row_heights = []
         wy = spec.origin_y + r * spec.size_y / max(1, rows - 1)
         for c in range(cols):
             wx = spec.origin_x + c * spec.size_x / max(1, cols - 1)
@@ -892,10 +892,9 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
                     1.0 - mask_val
                 )
 
-            row_heights.append(final_height)
-        heightmap.append(row_heights)
+            new_heights[r, c] = final_height
 
-    grid.heights = heightmap
+    grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
 
     return grid
 
@@ -907,6 +906,8 @@ def load_custom_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     """
     if not spec.custom_image_path:
         return grid
+
+    original_heights = grid.heights.copy()
 
     img = Image.open(spec.custom_image_path).convert("L")
 
@@ -920,17 +921,15 @@ def load_custom_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     pixels = list(img_fitted.getdata())
     max_height = spec.terrain_max_height
 
-    heightmap = []
+    new_heights = np.zeros((grid.rows, grid.cols), dtype=np.float32)
     idx = 0
-    for _ in range(grid.rows):
-        row_heights = []
-        for _ in range(grid.cols):
+    for r in range(grid.rows):
+        for c in range(grid.cols):
             val = pixels[idx] / 255.0
-            row_heights.append(val * max_height)
+            new_heights[r, c] = val * max_height
             idx += 1
-        heightmap.append(row_heights)
 
-    grid.heights = heightmap
+    grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
     return grid
 
 
@@ -943,24 +942,27 @@ def smooth_heights(grid: HeightGrid, iterations: int = 1) -> HeightGrid:
     """
     rows = grid.rows
     cols = grid.cols
+    original_heights = grid.heights.copy()
+
+    current_heights = grid.heights.copy()
 
     for _ in range(iterations):
-        new_heights = []
+        new_heights = np.zeros_like(current_heights)
         for r in range(rows):
-            new_row = []
             for c in range(cols):
                 if r == 0 or r == rows - 1 or c == 0 or c == cols - 1:
-                    new_row.append(grid.heights[r][c])
+                    new_heights[r, c] = current_heights[r, c]
                 else:
                     total = 0.0
                     count = 0
                     for dr in (-1, 0, 1):
                         for dc in (-1, 0, 1):
-                            total += grid.heights[r + dr][c + dc]
+                            total += current_heights[r + dr, c + dc]
                             count += 1
-                    new_row.append(total / count)
-            new_heights.append(new_row)
-        grid.heights = new_heights
+                    new_heights[r, c] = total / count
+        current_heights = new_heights
+
+    grid.heights = np.where(grid.global_selection_mask, current_heights, original_heights)
 
     return grid
 
@@ -977,6 +979,9 @@ def flatten_base_areas(
 
     rows = grid.rows
     cols = grid.cols
+
+    original_heights = grid.heights.copy()
+    new_heights = grid.heights.copy()
 
     vertex_spacing = spec.size_x / (cols - 1)
 
@@ -1015,7 +1020,7 @@ def flatten_base_areas(
                 if abs(wx - bx) > r_area:
                     continue
                 if math.sqrt((wx - bx) ** 2 + (wy - by) ** 2) <= r_area:
-                    heights.append(grid.heights[r_][c_])
+                    heights.append(new_heights[r_, c_])
         return (
             sum(heights) / len(heights) if heights else spec.terrain_max_height * 0.15
         )
@@ -1065,8 +1070,8 @@ def flatten_base_areas(
 
             t = t * flatness
 
-            current = grid.heights[r][c]
-            grid.heights[r][c] = float(current * (1.0 - t) + target_height * t)
+            current = new_heights[r, c]
+            new_heights[r, c] = float(current * (1.0 - t) + target_height * t)
 
     avg_height = spec.terrain_max_height * 0.15  # Fallback for resource nodes
     # Flatten resource nodes
@@ -1084,7 +1089,7 @@ def flatten_base_areas(
                         (world_x - res_x) ** 2 + (world_y - res_y) ** 2
                     )
                     if dist_to_res <= res_radius:
-                        local_heights.append(grid.heights[r][c])
+                        local_heights.append(new_heights[r, c])
 
             local_avg_height = (
                 sum(local_heights) / len(local_heights) if local_heights else avg_height
@@ -1103,8 +1108,10 @@ def flatten_base_areas(
                         t = t * t * (3 - 2 * t)
                         t = t * res_flatness
 
-                        current = grid.heights[r][c]
-                        grid.heights[r][c] = current * (1.0 - t) + local_avg_height * t
+                        current = new_heights[r, c]
+                        new_heights[r, c] = current * (1.0 - t) + local_avg_height * t
+
+    grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
 
     return grid
 
@@ -1119,6 +1126,9 @@ def clamp_slope(grid: HeightGrid, max_step: int) -> HeightGrid:
     rows = grid.rows
     cols = grid.cols
 
+    original_heights = grid.heights.copy()
+    new_heights = grid.heights.copy()
+
     changed = True
     passes = 0
     max_passes = 100
@@ -1129,42 +1139,44 @@ def clamp_slope(grid: HeightGrid, max_step: int) -> HeightGrid:
 
         for r in range(rows):
             for c in range(cols):
-                current = grid.heights[r][c]
+                current = new_heights[r, c]
 
                 if r > 0:
-                    diff = grid.heights[r - 1][c] - current
+                    diff = new_heights[r - 1, c] - current
                     if abs(diff) > max_step:
                         new_adj = current + (max_step if diff > 0 else -max_step)
-                        if new_adj != grid.heights[r - 1][c]:
+                        if new_adj != new_heights[r - 1, c]:
                             changed = True
-                        grid.heights[r - 1][c] = new_adj
+                        new_heights[r - 1, c] = new_adj
 
                 if r < rows - 1:
-                    diff = grid.heights[r + 1][c] - current
+                    diff = new_heights[r + 1, c] - current
                     if abs(diff) > max_step:
                         new_adj = current + (max_step if diff > 0 else -max_step)
-                        if new_adj != grid.heights[r + 1][c]:
+                        if new_adj != new_heights[r + 1, c]:
                             changed = True
-                        grid.heights[r + 1][c] = new_adj
+                        new_heights[r + 1, c] = new_adj
 
                 if c > 0:
-                    diff = grid.heights[r][c - 1] - current
+                    diff = new_heights[r, c - 1] - current
                     if abs(diff) > max_step:
                         new_adj = current + (max_step if diff > 0 else -max_step)
-                        if new_adj != grid.heights[r][c - 1]:
+                        if new_adj != new_heights[r, c - 1]:
                             changed = True
-                        grid.heights[r][c - 1] = new_adj
+                        new_heights[r, c - 1] = new_adj
 
                 if c < cols - 1:
-                    diff = grid.heights[r][c + 1] - current
+                    diff = new_heights[r, c + 1] - current
                     if abs(diff) > max_step:
                         new_adj = current + (max_step if diff > 0 else -max_step)
-                        if new_adj != grid.heights[r][c + 1]:
+                        if new_adj != new_heights[r, c + 1]:
                             changed = True
-                        grid.heights[r][c + 1] = new_adj
+                        new_heights[r, c + 1] = new_adj
 
     if passes >= max_passes:
         print(f"Warning: slope clamping reached max passes ({max_passes})")
+
+    grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
 
     return grid
 
@@ -1178,9 +1190,10 @@ def quantize_heights(grid: HeightGrid, step: int) -> HeightGrid:
     if step <= 0:
         return grid
 
-    for r in range(grid.rows):
-        for c in range(grid.cols):
-            grid.heights[r][c] = round(grid.heights[r][c] / step) * step
+    original_heights = grid.heights.copy()
+    new_heights = np.round(grid.heights / step) * step
+
+    grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
 
     return grid
 
@@ -1208,6 +1221,8 @@ def simulate_hydraulic_erosion(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
     cols = grid.cols
     iterations = spec.erosion_iterations
     lifetime = spec.erosion_droplet_lifetime
+
+    original_heights = grid.heights.copy()
 
     terrain = np.array(grid.heights, dtype=np.float64)
 
@@ -1342,7 +1357,9 @@ def simulate_hydraulic_erosion(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
             if sediment < 1e-6 and speed < 1e-6:
                 break
 
-    grid.heights = terrain.tolist()
+    new_heights = terrain.astype(np.float32)
+    grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
+
     return grid
 
 
@@ -1371,18 +1388,18 @@ def calculate_slopes(grid: HeightGrid) -> HeightGrid:
     for r in range(rows):
         for c in range(cols):
             if r == 0:
-                dz_dr = grid.heights[r + 1][c] - grid.heights[r][c]
+                dz_dr = grid.heights[r + 1, c] - grid.heights[r, c]
             elif r == rows - 1:
-                dz_dr = grid.heights[r][c] - grid.heights[r - 1][c]
+                dz_dr = grid.heights[r, c] - grid.heights[r - 1, c]
             else:
-                dz_dr = (grid.heights[r + 1][c] - grid.heights[r - 1][c]) / 2.0
+                dz_dr = (grid.heights[r + 1, c] - grid.heights[r - 1, c]) / 2.0
 
             if c == 0:
-                dz_dc = grid.heights[r][c + 1] - grid.heights[r][c]
+                dz_dc = grid.heights[r, c + 1] - grid.heights[r, c]
             elif c == cols - 1:
-                dz_dc = grid.heights[r][c] - grid.heights[r][c - 1]
+                dz_dc = grid.heights[r, c] - grid.heights[r, c - 1]
             else:
-                dz_dc = (grid.heights[r][c + 1] - grid.heights[r][c - 1]) / 2.0
+                dz_dc = (grid.heights[r, c + 1] - grid.heights[r, c - 1]) / 2.0
 
             slope_r = dz_dr / cell_size
             slope_c = dz_dc / cell_size
@@ -1631,11 +1648,13 @@ def apply_pipeline_for_preview(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
     heights = np.array(grid.heights, dtype=np.float64)
 
     terrain_copy = HeightGrid(
-        heights=heights.tolist(),
+        heights=heights,
         origin_x=grid.origin_x,
         origin_y=grid.origin_y,
         cell_size=grid.cell_size,
     )
+    if grid.global_selection_mask is not None:
+        terrain_copy.global_selection_mask = grid.global_selection_mask.copy()
 
     if spec.erosion_iterations > 0:
         import random as rng_module
@@ -1682,10 +1701,10 @@ def apply_pipeline_for_preview(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
                 fx = pos_c - ic
                 fy = pos_r - ir
 
-                h00 = float(terrain_copy.heights[ir][ic])
-                h01 = float(terrain_copy.heights[ir][ic + 1])
-                h10 = float(terrain_copy.heights[ir + 1][ic])
-                h11 = float(terrain_copy.heights[ir + 1][ic + 1])
+                h00 = float(terrain_copy.heights[ir, ic])
+                h01 = float(terrain_copy.heights[ir, ic + 1])
+                h10 = float(terrain_copy.heights[ir + 1, ic])
+                h11 = float(terrain_copy.heights[ir + 1, ic + 1])
 
                 h_top = h00 * (1.0 - fx) + h01 * fx
                 h_bot = h10 * (1.0 - fx) + h11 * fx
@@ -1713,10 +1732,10 @@ def apply_pipeline_for_preview(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
                 new_fx = pos_c - new_ic
                 new_fy = pos_r - new_ir
 
-                new_h00 = float(terrain_copy.heights[new_ir][new_ic])
-                new_h01 = float(terrain_copy.heights[new_ir][new_ic + 1])
-                new_h10 = float(terrain_copy.heights[new_ir + 1][new_ic])
-                new_h11 = float(terrain_copy.heights[new_ir + 1][new_ic + 1])
+                new_h00 = float(terrain_copy.heights[new_ir, new_ic])
+                new_h01 = float(terrain_copy.heights[new_ir, new_ic + 1])
+                new_h10 = float(terrain_copy.heights[new_ir + 1, new_ic])
+                new_h11 = float(terrain_copy.heights[new_ir + 1, new_ic + 1])
 
                 new_h_top = new_h00 * (1.0 - new_fx) + new_h01 * new_fx
                 new_h_bot = new_h10 * (1.0 - new_fx) + new_h11 * new_fx
@@ -1729,16 +1748,21 @@ def apply_pipeline_for_preview(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
                     deposit_amount = min(sediment * deposition_rate, delta_h * 0.3)
                     deposit_amount = min(deposit_amount, max_deposition_per_step)
                     if deposit_amount > 0:
-                        terrain_copy.heights[new_ir][new_ic] += (
+                        # For preview we might not need to respect the mask completely
+                        # inside the droplet loop as it's too slow, so we can apply the mask
+                        # outside via np.where at the end. Actually, `apply_pipeline_for_preview`
+                        # doesn't strictly need the mask if it's just a preview, but let's apply
+                        # the numpy operations directly here.
+                        terrain_copy.heights[new_ir, new_ic] += (
                             deposit_amount * (1.0 - new_fx) * (1.0 - new_fy)
                         )
-                        terrain_copy.heights[new_ir][new_ic + 1] += (
+                        terrain_copy.heights[new_ir, new_ic + 1] += (
                             deposit_amount * new_fx * (1.0 - new_fy)
                         )
-                        terrain_copy.heights[new_ir + 1][new_ic] += (
+                        terrain_copy.heights[new_ir + 1, new_ic] += (
                             deposit_amount * (1.0 - new_fx) * new_fy
                         )
-                        terrain_copy.heights[new_ir + 1][new_ic + 1] += (
+                        terrain_copy.heights[new_ir + 1, new_ic + 1] += (
                             deposit_amount * new_fx * new_fy
                         )
                         sediment -= deposit_amount
@@ -1751,16 +1775,16 @@ def apply_pipeline_for_preview(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
                         )
                         erode_amount = min(erode_amount, max_erosion_per_step)
                         if erode_amount > 0:
-                            terrain_copy.heights[new_ir][new_ic] -= (
+                            terrain_copy.heights[new_ir, new_ic] -= (
                                 erode_amount * (1.0 - new_fx) * (1.0 - new_fy)
                             )
-                            terrain_copy.heights[new_ir][new_ic + 1] -= (
+                            terrain_copy.heights[new_ir, new_ic + 1] -= (
                                 erode_amount * new_fx * (1.0 - new_fy)
                             )
-                            terrain_copy.heights[new_ir + 1][new_ic] -= (
+                            terrain_copy.heights[new_ir + 1, new_ic] -= (
                                 erode_amount * (1.0 - new_fx) * new_fy
                             )
-                            terrain_copy.heights[new_ir + 1][new_ic + 1] -= (
+                            terrain_copy.heights[new_ir + 1, new_ic + 1] -= (
                                 erode_amount * new_fx * new_fy
                             )
                             sediment += erode_amount
@@ -1769,6 +1793,9 @@ def apply_pipeline_for_preview(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
 
                 if sediment < 1e-6 and speed < 1e-6:
                     break
+
+    if terrain_copy.global_selection_mask is not None:
+        terrain_copy.heights = np.where(terrain_copy.global_selection_mask, terrain_copy.heights, heights)
 
     terrain_copy = smooth_heights(terrain_copy, iterations=2)
     terrain_copy = clamp_slope(terrain_copy, spec.max_slope_step)
@@ -1942,6 +1969,7 @@ def run_pipeline(
     map_name: Optional[str] = None,
     output_dir: Optional[str] = None,
     skip_layout_validation: bool = False,
+    global_selection_mask: Optional[np.ndarray] = None,
 ) -> dict:
     """
     Run the complete terrain generation pipeline.
@@ -1967,6 +1995,9 @@ def run_pipeline(
 
     print(f"  Step 1: Generate vertex grid ({spec.vertex_cols}x{spec.vertex_rows})")
     grid = generate_vertex_grid(spec)
+
+    if global_selection_mask is not None:
+        grid.global_selection_mask = global_selection_mask.copy()
 
     if spec.custom_image_path:
         print(f"  Step 2: Loading custom heightmap from {spec.custom_image_path}")

@@ -7,6 +7,7 @@ Core data structures for compile-safe displacement terrain generation.
 
 from dataclasses import dataclass
 from typing import List, Tuple, Dict, Any, Optional
+import numpy as np
 
 
 class ZoneType:
@@ -201,22 +202,28 @@ class HeightGrid:
     """
     2D grid of height values.
 
-    heights[r][c] gives the height at row r, column c.
+    heights[r, c] gives the height at row r, column c.
     Coordinate system: row 0 = origin_y (min Y), col 0 = origin_x (min X)
     slopes[r][c] gives the gradient magnitude at vertex (r, c), or None if not calculated.
     """
 
-    heights: List[List[float]]
+    heights: np.ndarray
     origin_x: int
     origin_y: int
     cell_size: int
     slopes: Optional[List[List[float]]] = None
+    global_selection_mask: Optional[np.ndarray] = None
 
     def __post_init__(self):
-        self._rows = len(self.heights)
-        self._cols = len(self.heights[0]) if self._rows > 0 else 0
+        if isinstance(self.heights, list):
+            self.heights = np.array(self.heights, dtype=np.float32)
+
+        self._rows = self.heights.shape[0]
+        self._cols = self.heights.shape[1] if self._rows > 0 else 0
         if self.slopes is None:
             self.slopes = [[0.0 for _ in range(self._cols)] for _ in range(self._rows)]
+        if self.global_selection_mask is None:
+            self.global_selection_mask = np.ones((self._rows, self._cols), dtype=bool)
 
     @property
     def rows(self) -> int:
@@ -255,33 +262,31 @@ class HeightGrid:
         """Get heights of 4-connected neighbors. Returns [N, S, E, W] or fewer at edges."""
         neighbors = []
         if row > 0:
-            neighbors.append(self.heights[row - 1][col])  # North
+            neighbors.append(float(self.heights[row - 1, col]))  # North
         if row < self.rows - 1:
-            neighbors.append(self.heights[row + 1][col])  # South
+            neighbors.append(float(self.heights[row + 1, col]))  # South
         if col < self.cols - 1:
-            neighbors.append(self.heights[row][col + 1])  # East
+            neighbors.append(float(self.heights[row, col + 1]))  # East
         if col > 0:
-            neighbors.append(self.heights[row][col - 1])  # West
+            neighbors.append(float(self.heights[row, col - 1]))  # West
         return neighbors
 
     def max_height(self) -> float:
         """Get maximum height in grid."""
-        return max(max(row) for row in self.heights)
+        return float(np.max(self.heights))
 
     def min_height(self) -> float:
         """Get minimum height in grid."""
-        return min(min(row) for row in self.heights)
+        return float(np.min(self.heights))
 
     def average_height(self) -> float:
         """Get average height in grid."""
-        total = sum(sum(row) for row in self.heights)
-        count = len(self.heights) * len(self.heights[0])
-        return total / count if count > 0 else 0.0
+        return float(np.mean(self.heights))
 
     def copy(self) -> "HeightGrid":
         """Create a deep copy of the height grid."""
         return HeightGrid(
-            heights=[row[:] for row in self.heights],
+            heights=self.heights.copy(),
             origin_x=self.origin_x,
             origin_y=self.origin_y,
             cell_size=self.cell_size,
