@@ -3,35 +3,27 @@
 All notable changes to this project will be documented in this file.
 
 ## [0.9.8] - 2026-04-24
+### Highlights
+- Universal Masking (Stencil): New global selection mask system to protect/specific areas
+- Lane-Aware Terrain Shaping: Terrain near lanes now flatter and smoother
+- Toolbar Redesign: Modern, context-aware two-level layout with tabs
+- Invert Terrain: New button to flip topology
+---
 ### Editor UX
-- Redesigned the top toolbar into a modern, context-aware, two-level layout utilizing tabs (`Terrain`, `Entities`, `Layout`) instead of a cluttered single row.
-- Re-styled the UI to a clean, flat dark theme using minimalist icons and blue accent highlights.
-- Global actions (`Undo`, `Redo`, `3D View`, `Clear Map`) are now permanently visible on the top level.
-- Contextual tools (like `Raise`, `Move`, `Link`, brush sliders, mask tools) dynamically appear on the second level based on the selected tab.
-- Reworked the editor toolbar into two rows (tool modes on top, context/actions below) to reduce
-  clutter and improve readability.
-- Collapsed the toolbar back to a compact single-line layout with horizontal scrolling.
-- Made mask actions contextual: `Reset` and `Clear` for mask now appear only in Mask mode.
-
+- Redesigned toolbar into modern, context-aware layout with tabs (Terrain, Entities, Layout)
+- Flat dark theme with minimalist icons and blue accent highlights
+- Global actions (Undo, Redo, 3D View, Clear Map) permanently visible
+- Contextual tools appear dynamically based on selected tab
+- Mask actions contextual: Reset and Clear only in Mask mode
 ### Preview & Sculpting Fixes
-- Fixed sculpt tool input routing so the `Mask` brush applies correctly.
-- Fixed flatten brush behavior to reliably apply per stroke.
-- Improved 2D sculpt visibility: sculpt edits are now highlighted, and mask tint is only
-  shown when masking is actively used.
-- Fixed squished toolbar layout on small windows by splitting the toolbar into two rows.
-- Refined the visual alignment of the brush tool sliders using a grid layout.
-- Fixed a bug where the mask overlay disappeared when switching to Raise, Lower, or Flatten tools.
-- Added 'Invert Terrain' button to easily flip the topology (mountains become holes and vice versa). It gracefully respects the active selection mask!
-
-## [0.9.7] - 2026-04-24
-### Terrain Masking & Sculpting
-- **Universal Masking (Stencil):** Added a global selection mask system! Use the new Mask tool in the 2D view to protect or edit specific areas. Paint with Left-Click to unfreeze areas (editable, shown in red), and Right-Click to freeze them (protected). This global stencil natively affects all operations—from procedural generation sliders (e.g. erosion) to manual SCULPT tools. Includes Reset and Clear mask buttons.
-
-## [0.9.6] - 2026-04-24
-### Terrain Shaping
-- Introduced **Lane-Aware Terrain Shaping**: Terrain near lanes is now significantly flatter and smoother to ensure vehicle traversability, while areas farther away feature increased elevation variation, sharp ridges, and natural noise detail.
-- Fixed an issue where the roughness parameter wasn't properly generating sharp ridges, by implementing a true ridged multifractal noise algorithm.
-
+- Mask brush and flatten brush now work correctly
+- Sculpt edits are highlighted, mask tint only shown when actively using
+- Fixed toolbar layout on small windows
+- Mask overlay no longer disappears when switching tools
+### Terrain Masking, Sculpting & Shaping
+- Universal Masking: Left-click to unfreeze (red), right-click to freeze
+- Lane-Aware Terrain: Flatter terrain near lanes, increased variation in distant areas
+- Ridged Multifractal: New algorithm for sharp ridges and roughness
 ## [0.9.5] - 2026-04-23
 ### Editor Features & Fixes
 - Added a new "Flatten ▬" sculpt tool for easier base building
