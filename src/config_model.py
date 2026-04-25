@@ -112,10 +112,10 @@ class GUIConfigModel:
                 "Reduce Tiles X/Y or increase Tile Size.",
             )
 
-        if self.height_scale <= 0 or self.height_scale > 4096:
+        if self.height_scale <= 0 or self.height_scale > 16384:
             return (
                 False,
-                "Height scale is out of reasonable bounds (max recommended 4096).",
+                "Height scale is out of reasonable bounds (max recommended 16384).",
             )
 
         if self.custom_image_path and not Path(self.custom_image_path).is_file():
@@ -213,7 +213,7 @@ class GUIConfigModel:
             cell_size=self.cell_size,
             displacement_power=self.displacement_power,
             seed=self.seed,
-            max_slope_step=256,
+            max_slope_step=1024,
             noise_octaves=octaves,
             erosion_iterations=iterations,
             terrain_max_height=self.height_scale,

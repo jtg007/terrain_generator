@@ -52,7 +52,7 @@ class TerrainSpec:
     cell_size: int = 512
     displacement_power: int = 3
     seed: int = 12345
-    max_slope_step: int = 256
+    max_slope_step: int = 1024
     height_quantization: int = 1
     noise_octaves: int = 4
     erosion_iterations: int = 50000
@@ -393,7 +393,7 @@ def create_default_spec() -> TerrainSpec:
         cell_size=512,
         displacement_power=3,
         seed=12345,
-        max_slope_step=256,
+        max_slope_step=1024,
         height_quantization=1,
         noise_octaves=4,
         erosion_iterations=50000,

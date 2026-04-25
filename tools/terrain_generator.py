@@ -765,14 +765,14 @@ class TerrainGeneratorGUI(QMainWindow):
         # Canyon Steepness
         cs_row = QHBoxLayout()
         cs_row.setSpacing(8)
-        lbl_cs = QLabel("Wall Smoothness")
+        lbl_cs = QLabel("Wall Steepness")
         lbl_cs.setObjectName("FieldLabel")
-        lbl_cs.setToolTip("How smooth the transition is from lane floor to mountain. Low = steep canyon cliff, High = smooth valley.")
+        lbl_cs.setToolTip("How steep the transition is from lane floor to mountain. High = steep canyon cliff, Low = smooth valley.")
         cs_row.addWidget(lbl_cs)
         self.slider_canyon_steepness = QSlider(Qt.Horizontal)
         self.slider_canyon_steepness.setRange(1, 100)
-        self.slider_canyon_steepness.setValue(26) # 26 maps roughly to sigma 8.0 where sigma = val * 0.3
-        self.lbl_canyon_steepness_val = QLabel("26%")
+        self.slider_canyon_steepness.setValue(74) # 100 - 26 = 74
+        self.lbl_canyon_steepness_val = QLabel("74%")
         cs_row.addWidget(make_slider_row(self.slider_canyon_steepness, self.lbl_canyon_steepness_val, "%"), 1)
         config_layout.addLayout(cs_row)
 
@@ -1945,9 +1945,7 @@ class TerrainGeneratorGUI(QMainWindow):
             self.slider_mountain_height.setValue(
                 int(min(1.0, self.config_model.mountain_height_scale) * 100)
             )
-            self.slider_canyon_steepness.setValue(
-                int(max(1, min(100, self.config_model.transition_blur_sigma / 0.3)))
-            )
+            self.slider_canyon_steepness.setValue(int(max(1, min(100, 100 - (self.config_model.transition_blur_sigma / 0.3)))))
             self.slider_lane_elevation.setValue(
                 int(min(1.0, self.config_model.lane_elevation) * 100)
             )
@@ -2032,7 +2030,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.mountain_height_scale = (
             self.slider_mountain_height.value() / 100.0
         )
-        self.config_model.transition_blur_sigma = max(0.1, self.slider_canyon_steepness.value() * 0.3)
+        self.config_model.transition_blur_sigma = max(0.1, (100 - self.slider_canyon_steepness.value()) * 0.3)
         self.config_model.lane_elevation = self.slider_lane_elevation.value() / 100.0
 
         self.config_model.roughness = self.slider_rough.value() / 100.0
