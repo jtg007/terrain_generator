@@ -776,11 +776,8 @@ def generate_playability_mask(
 def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     rows = grid.rows
     cols = grid.cols
-    from src.noise import NoiseGenerator
     original_heights = grid.heights.copy()
 
-    noise = NoiseGenerator(spec.seed)
-    roughness = getattr(spec, "roughness", 0.5)
     max_height = spec.terrain_max_height
 
     hard_mask = getattr(grid, "playability_mask", None)
@@ -795,104 +792,47 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
         floor_height + (base_mountain_height - floor_height) * scaled_mountain_height
     )
 
-    warp_scale = 0.005
-    warp_strength = 150.0 * roughness
-    macro_scale = 0.0015
-    ridge_scale = 0.0025
+    if spec.manual_terrain:
+        # Fully flat, empty base
+        new_heights = np.full((rows, cols), floor_height, dtype=np.float32)
+    else:
+        from src.canyon_generator import generate_canyon_base
+        # 1. Generate base canyon noise terrain map [0, 1]
+        canyon_noise = generate_canyon_base(
+            rows=rows,
+            cols=cols,
+            seed=spec.seed,
+            feature_scale=getattr(spec, 'feature_scale', 1.8),
+            warp_strength=getattr(spec, 'warp_strength', 1.0),
+            plateau_threshold=getattr(spec, 'plateau_threshold', 0.60),
+            canyon_threshold=getattr(spec, 'canyon_threshold', 0.42),
+            blur_radius=getattr(spec, 'blur_radius', 14),
+            octaves=spec.noise_octaves
+        )
 
-    new_heights = np.zeros((rows, cols), dtype=np.float32)
+        # Scale noise base to actual map height range
+        wilderness_target = floor_height + (mountain_height - floor_height) * canyon_noise
+        playable_height = np.full((rows, cols), floor_height, dtype=np.float32)
 
-    for r in range(rows):
-        wy = spec.origin_y + r * spec.size_y / max(1, rows - 1)
-        for c in range(cols):
-            wx = spec.origin_x + c * spec.size_x / max(1, cols - 1)
+        # 2. Blend the hard mask for the paths
+        # dist_field_val is negative inside the lane, positive outside.
+        # We want mask_val = 1.0 on the lane (dist_field_val <= 0) to carve out playable paths
+        # Ramp width creates the transition boundary
+        ramp_width = 150.0  # constant transition width for custom pathing
 
-            wx_warp = (
-                wx
-                + noise.fbm(wx * warp_scale, wy * warp_scale, octaves=2) * warp_strength
-            )
-            wy_warp = (
-                wy
-                + noise.fbm(wx * warp_scale + 100, wy * warp_scale + 100, octaves=2)
-                * warp_strength
-            )
+        fade = np.clip(hard_mask / ramp_width, 0.0, 1.0)
+        mask_val = 1.0 - (fade * fade * (3.0 - 2.0 * fade))
 
-            dist_field_val = float(hard_mask[r, c])
-            # mask_val replaces the old playable_mask concept for height interpolation.
-            # dist_field_val is negative inside the lane, positive outside.
-            # We want mask_val = 1.0 on the lane (dist_field_val <= 0),
-            # and smoothly transitioning to 0.0 at ramp_width.
-            ramp_width = max(10.0, spec.transition_blur_sigma * 30.0)
-            fade = np.clip(dist_field_val / ramp_width, 0.0, 1.0)
-            mask_val = 1.0 - (fade * fade * (3.0 - 2.0 * fade))
-
-            if spec.manual_terrain:
-                base_noise = 0.0
-                ridge_val = 0.0
-                detail_val = 0.0
-                noise_combined = 1.0
-            else:
-                # Use a broader ramp for distance shaping of noise, so the terrain
-                # gets progressively rougher over a larger distance from the lane.
-                shaping_ramp_width = max(400.0, ramp_width * 4.0)
-                dist_factor = np.clip(dist_field_val / shaping_ramp_width, 0.0, 1.0)
-                # Smooth the factor
-                dist_factor = dist_factor * dist_factor * (3.0 - 2.0 * dist_factor)
-
-                effective_roughness = roughness * dist_factor
-
-                base_noise = noise.fbm(
-                    wx_warp * macro_scale, wy_warp * macro_scale, octaves=spec.noise_octaves
-                )
-                # True ridged multifractal noise (fold each octave)
-                t_ridge = 0.0
-                f_ridge = 1.0
-                a_ridge = 1.0
-                m_ridge = 0.0
-                rx = wx_warp * ridge_scale + 50
-                ry = wy_warp * ridge_scale + 50
-                for _ in range(spec.noise_octaves):
-                    v = noise.noise2d(rx * f_ridge, ry * f_ridge) * 2.0 - 1.0
-                    v = 1.0 - abs(v)
-                    v = v * v
-                    t_ridge += v * a_ridge
-                    m_ridge += a_ridge
-                    a_ridge *= 0.5
-                    f_ridge *= 2.0
-                ridge_val = t_ridge / m_ridge if m_ridge > 0 else 0.0
-                ridge_val = ridge_val * dist_factor
-
-                detail_val = noise.fbm(wx_warp * 0.008, wy_warp * 0.008, octaves=3)
-                detail_val = detail_val * dist_factor
-
-                noise_combined = (
-                    (0.5 - 0.2 * effective_roughness) * base_noise
-                    + (0.3 + 0.4 * effective_roughness) * ridge_val
-                    + 0.05 * detail_val
-                )
-
-            playable_height = floor_height + (max_height * 0.01 * base_noise)
-            wilderness_target = (
-                floor_height + (mountain_height - floor_height) * noise_combined
-            )
-
-            if spec.invert_lanes:
-                # User selected invert lanes: lane is raised, wilderness is low
-                final_height = wilderness_target * mask_val + playable_height * (
-                    1.0 - mask_val
-                )
-            elif spec.topology == "island":
-                # For islands, the playable area should be the elevated mountain,
-                # and the wilderness should be the low floor (water level)
-                final_height = wilderness_target * mask_val + playable_height * (
-                    1.0 - mask_val
-                )
-            else:
-                final_height = playable_height * mask_val + wilderness_target * (
-                    1.0 - mask_val
-                )
-
-            new_heights[r, c] = final_height
+        if spec.invert_lanes:
+            # User selected invert lanes: lane is raised, wilderness is low
+            new_heights = wilderness_target * mask_val + playable_height * (1.0 - mask_val)
+        elif spec.topology == "island":
+            # For islands, the playable area should be the elevated mountain,
+            # and the wilderness should be the low floor (water level)
+            new_heights = wilderness_target * mask_val + playable_height * (1.0 - mask_val)
+        else:
+            # Carve roads (playable height) into canyon noise (wilderness)
+            new_heights = playable_height * mask_val + wilderness_target * (1.0 - mask_val)
 
     grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
 
@@ -2169,22 +2109,15 @@ def run_pipeline(
         print("  Step 3-6: Manual terrain mode (no modifications)")
         grid = calculate_slopes(grid)
     else:
-        print(
-            f"  Step 3: Simulate hydraulic erosion ({spec.erosion_iterations} droplets, lifetime={spec.erosion_droplet_lifetime})"
-        )
-        grid = simulate_hydraulic_erosion(grid, spec)
-        print(
-            f"    Height range after erosion: {grid.min_height():.1f} to {grid.max_height():.1f}"
-        )
-
+        # Canyon generator applies its own blur_radius pass internally.
+        # Bypass hydraulic erosion and standard 3x3 smoothing which ruins canyon structures.
+        print("  Step 3: Simulate hydraulic erosion (BYPASSED for Canyon Generator)")
         print("  Step 4: Calculate slopes")
         grid = calculate_slopes(grid)
-
-        print("  Step 5: Smooth heights")
-        grid = smooth_heights(grid, iterations=2)
+        print("  Step 5: Smooth heights (BYPASSED for Canyon Generator)")
 
         if spec.base_clear_radius > 0 and spec.base_flatness > 0.5:
-            print("  Step 5b: Light touch-up for base areas after erosion")
+            print("  Step 5b: Light touch-up for base areas")
             import copy
 
             spec_light = copy.copy(spec)

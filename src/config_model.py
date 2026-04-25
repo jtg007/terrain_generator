@@ -33,11 +33,17 @@ class GUIConfigModel:
     height_scale: int = 2048  # Absolute max height
     skybox_ceiling: int = 4096  # Skybox Ceiling Height
 
-    topology: str = "random"
+    topology: str = "canyon"
     lane_width_scale: float = 1.0
     mountain_height_scale: float = 1.0
     lane_elevation: float = 0.15
-    transition_blur_sigma: float = 8.0
+
+    # Canyon Generator Settings
+    feature_scale: float = 1.8
+    warp_strength: float = 1.0
+    plateau_threshold: float = 0.60
+    canyon_threshold: float = 0.42
+    blur_radius: int = 14
 
     # Selected preset for UI tracking
     preset_name: str = "mixed"
@@ -223,7 +229,11 @@ class GUIConfigModel:
             lane_width_scale=self.lane_width_scale,
             mountain_height_scale=effective_mountain_height_scale,
             lane_elevation=self.lane_elevation,
-            transition_blur_sigma=self.transition_blur_sigma,
+            feature_scale=self.feature_scale,
+            warp_strength=self.warp_strength,
+            plateau_threshold=self.plateau_threshold,
+            canyon_threshold=self.canyon_threshold,
+            blur_radius=self.blur_radius,
             custom_image_path=self.custom_image_path,
             base_clear_radius=self.base_clear_radius,
             base_flatness=self.base_flatness,

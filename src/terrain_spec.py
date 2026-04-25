@@ -64,7 +64,14 @@ class TerrainSpec:
     lane_width_scale: float = 1.0
     mountain_height_scale: float = 1.0
     lane_elevation: float = 0.15
-    transition_blur_sigma: float = 8.0
+
+    # Canyon Generator Parameters
+    feature_scale: float = 1.8
+    warp_strength: float = 1.0
+    plateau_threshold: float = 0.60
+    canyon_threshold: float = 0.42
+    blur_radius: int = 14
+
     material: str = "nature/terrain/blend_dirt_grass_dmz_sscale"
     underlay_material: str = "TOOLS/TOOLSSKIP"
     underlay_height: int = 128
@@ -402,7 +409,11 @@ def create_default_spec() -> TerrainSpec:
         lane_width_scale=1.0,
         mountain_height_scale=1.0,
         lane_elevation=0.15,
-        transition_blur_sigma=8.0,
+        feature_scale=1.8,
+        warp_strength=1.0,
+        plateau_threshold=0.60,
+        canyon_threshold=0.42,
+        blur_radius=14,
         material="common/nature/blend_grass_mountainwall_000",
         underlay_material="TOOLS/TOOLSSKIP",
         underlay_height=128,

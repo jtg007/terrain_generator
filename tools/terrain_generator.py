@@ -686,15 +686,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.combo_topology = QComboBox()
         self.combo_topology.addItems(
             [
-                "Random",
-                "Central Gorge",
-                "Valley",
-                "Two Lane",
-                "Island",
-                "Classic Cross",
-                "Peninsula",
-                "Archipelago",
-                "Delta",
+                "Canyon",
             ]
         )
         self.combo_topology.setCurrentIndex(0)
@@ -795,9 +787,9 @@ class TerrainGeneratorGUI(QMainWindow):
         # Roughness
         rough_row = QHBoxLayout()
         rough_row.setSpacing(8)
-        lbl_r = QLabel("Roughness")
+        lbl_r = QLabel("Canyon Warping")
         lbl_r.setObjectName("FieldLabel")
-        lbl_r.setToolTip("Low = smooth rolling hills, High = jagged mountains")
+        lbl_r.setToolTip("Low = straight canyons, High = twisty, organic canyon walls")
         rough_row.addWidget(lbl_r)
         self.slider_rough = QSlider(Qt.Horizontal)
         self.slider_rough.setRange(0, 100)
@@ -810,9 +802,9 @@ class TerrainGeneratorGUI(QMainWindow):
         # Erosion
         eros_row = QHBoxLayout()
         eros_row.setSpacing(8)
-        lbl_e = QLabel("Erosion")
+        lbl_e = QLabel("Edge Smoothing")
         lbl_e.setObjectName("FieldLabel")
-        lbl_e.setToolTip("Hydraulic erosion — smooths sharp features naturally")
+        lbl_e.setToolTip("Blur radius to soften canyon steps — High = Source-like rolling drops")
         eros_row.addWidget(lbl_e)
         self.slider_erosion = QSlider(Qt.Horizontal)
         self.slider_erosion.setRange(0, 100)
@@ -1922,15 +1914,7 @@ class TerrainGeneratorGUI(QMainWindow):
             self.spin_height.setValue(self.config_model.height_scale)
             self.spin_skybox_ceiling.setValue(self.config_model.skybox_ceiling)
             topology_map = {
-                "random": 0,
-                "central_gorge": 1,
-                "valley": 2,
-                "two_lane": 3,
-                "island": 4,
-                "classic_cross": 5,
-                "peninsula": 6,
-                "archipelago": 7,
-                "delta": 8,
+                "canyon": 0,
             }
             self.combo_topology.setCurrentIndex(
                 topology_map.get(self.config_model.topology, 0)
@@ -1945,12 +1929,16 @@ class TerrainGeneratorGUI(QMainWindow):
             self.slider_mountain_height.setValue(
                 int(min(1.0, self.config_model.mountain_height_scale) * 100)
             )
-            self.slider_canyon_steepness.setValue(int(max(1, min(100, 100 - (self.config_model.transition_blur_sigma / 0.3)))))
+            self.slider_canyon_steepness.setValue(
+                int(100 - (self.config_model.canyon_threshold * 100))
+            )
             self.slider_lane_elevation.setValue(
                 int(min(1.0, self.config_model.lane_elevation) * 100)
             )
-            self.slider_rough.setValue(int(self.config_model.roughness * 100))
-            self.slider_erosion.setValue(int(self.config_model.erosion_strength * 100))
+            # We map the old "roughness" slider to warp_strength [0.0 - 2.0]
+            self.slider_rough.setValue(int((self.config_model.warp_strength / 2.0) * 100))
+            # Map old erosion slider to blur_radius [0 - 30]
+            self.slider_erosion.setValue(int((self.config_model.blur_radius / 30.0) * 100))
             self.slider_base_radius.setValue(self.config_model.base_clear_radius)
             self.slider_base_flatness.setValue(
                 int(self.config_model.base_flatness * 100)
@@ -2010,18 +1998,10 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.skybox_ceiling = self.spin_skybox_ceiling.value()
 
         topology_reverse_map = {
-            0: "random",
-            1: "central_gorge",
-            2: "valley",
-            3: "two_lane",
-            4: "island",
-            5: "classic_cross",
-            6: "peninsula",
-            7: "archipelago",
-            8: "delta",
+            0: "canyon",
         }
         self.config_model.topology = topology_reverse_map.get(
-            self.combo_topology.currentIndex(), "random"
+            self.combo_topology.currentIndex(), "canyon"
         )
         self.config_model.lane_node_radius = self.slider_lane_node_radius.value()
         self.config_model.lane_width_scale = self.slider_lane_width.value() / 100.0
@@ -2030,11 +2010,16 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.mountain_height_scale = (
             self.slider_mountain_height.value() / 100.0
         )
-        self.config_model.transition_blur_sigma = max(0.1, (100 - self.slider_canyon_steepness.value()) * 0.3)
+        # canyon_steepness maps to canyon_threshold. Higher steepness = lower threshold (more vertical walls)
+        self.config_model.canyon_threshold = max(0.01, (100 - self.slider_canyon_steepness.value()) / 100.0)
+        self.config_model.plateau_threshold = min(0.99, self.config_model.canyon_threshold + 0.18)
+
         self.config_model.lane_elevation = self.slider_lane_elevation.value() / 100.0
 
-        self.config_model.roughness = self.slider_rough.value() / 100.0
-        self.config_model.erosion_strength = self.slider_erosion.value() / 100.0
+        # roughness maps to warp_strength [0.0 - 2.0]
+        self.config_model.warp_strength = (self.slider_rough.value() / 100.0) * 2.0
+        # erosion_strength maps to blur_radius [0 - 30]
+        self.config_model.blur_radius = int((self.slider_erosion.value() / 100.0) * 30.0)
         self.config_model.base_clear_radius = self.slider_base_radius.value()
         self.config_model.base_flatness = self.slider_base_flatness.value() / 100.0
         self.config_model.resource_clear_radius = self.slider_resource_clear.value()
