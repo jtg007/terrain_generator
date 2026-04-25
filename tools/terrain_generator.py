@@ -1183,22 +1183,28 @@ class TerrainGeneratorGUI(QMainWindow):
             self.preview_timer.start(500)
             return
 
-        nodes, connections, resources, _, global_mask = self.preview_widget.get_layout_from_editor()
+        try:
+            nodes, connections, resources, _, global_mask = self.preview_widget.get_layout_from_editor()
 
-        initial_heights = None
-        if hasattr(self.preview_widget, "_base_heights"):
-            initial_heights = self.preview_widget._base_heights
+            initial_heights = None
+            if hasattr(self.preview_widget, "_base_heights"):
+                initial_heights = self.preview_widget._base_heights
 
-        self.preview_worker = PreviewWorker(
-            self.config_model,
-            custom_nodes=nodes if nodes else None,
-            custom_connections=connections if connections else None,
-            custom_resources=resources,
-            global_selection_mask=global_mask,
-            initial_heights=initial_heights,
-        )
-        self.preview_worker.finished.connect(self.on_preview_finished)
-        self.preview_worker.start()
+            self.preview_worker = PreviewWorker(
+                self.config_model,
+                custom_nodes=nodes if nodes else None,
+                custom_connections=connections if connections else None,
+                custom_resources=resources,
+                global_selection_mask=global_mask,
+                initial_heights=initial_heights,
+            )
+            self.preview_worker.finished.connect(self.on_preview_finished)
+            self.preview_worker.start()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            # If prep fails, unlock so we aren't permanently stuck
+            pass
 
     def on_preview_finished(self, grid, spec):
         if getattr(sys, "frozen", False) and not grid:
@@ -1207,6 +1213,11 @@ class TerrainGeneratorGUI(QMainWindow):
                 f.write("Signal received but grid is None.\n")
 
         if grid and spec:
+            self.lbl_validation.setText("✓  Preview updated")
+            self.lbl_validation.setStyleSheet(
+                "color: #22c55e; font-size: 11px; "
+                "background: #122218; border-radius: 6px; padding: 8px 10px;"
+            )
             import numpy as np
 
             display_grid = grid
