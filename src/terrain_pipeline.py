@@ -784,9 +784,6 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     max_height = spec.terrain_max_height
 
     hard_mask = getattr(grid, "playability_mask", None)
-    if hard_mask is None:
-        nodes, connections = generate_strategic_layout(spec)
-        hard_mask = generate_playability_mask(spec, rows, cols, nodes, connections)
 
     floor_height = max_height * 0.15
     base_mountain_height = max_height * 0.85
@@ -817,14 +814,27 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
                 * warp_strength
             )
 
-            dist_field_val = float(hard_mask[r, c])
-            # mask_val replaces the old playable_mask concept for height interpolation.
-            # dist_field_val is negative inside the lane, positive outside.
-            # We want mask_val = 1.0 on the lane (dist_field_val <= 0),
-            # and smoothly transitioning to 0.0 at ramp_width.
             ramp_width = max(100.0, spec.transition_blur_sigma * 30.0)
-            fade = np.clip(dist_field_val / ramp_width, 0.0, 1.0)
-            mask_val = 1.0 - (fade * fade * (3.0 - 2.0 * fade))
+
+            if hard_mask is not None:
+                dist_field_val = float(hard_mask[r, c])
+                # mask_val replaces the old playable_mask concept for height interpolation.
+                # dist_field_val is negative inside the lane, positive outside.
+                # We want mask_val = 1.0 on the lane (dist_field_val <= 0),
+                # and smoothly transitioning to 0.0 at ramp_width.
+                fade = np.clip(dist_field_val / ramp_width, 0.0, 1.0)
+                mask_val = 1.0 - (fade * fade * (3.0 - 2.0 * fade))
+
+                # Use a broader ramp for distance shaping of noise, so the terrain
+                # gets progressively rougher over a larger distance from the lane.
+                shaping_ramp_width = ramp_width * 4.0
+                dist_factor = np.clip(dist_field_val / shaping_ramp_width, 0.0, 1.0)
+                # Smooth the factor
+                dist_factor = dist_factor * dist_factor * (3.0 - 2.0 * dist_factor)
+            else:
+                # If lanes are disabled, entire map is wilderness/rough
+                mask_val = 0.0
+                dist_factor = 1.0
 
             if spec.manual_terrain:
                 base_noise = 0.0
@@ -832,13 +842,6 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
                 detail_val = 0.0
                 noise_combined = 1.0
             else:
-                # Use a broader ramp for distance shaping of noise, so the terrain
-                # gets progressively rougher over a larger distance from the lane.
-                shaping_ramp_width = ramp_width * 4.0
-                dist_factor = np.clip(dist_field_val / shaping_ramp_width, 0.0, 1.0)
-                # Smooth the factor
-                dist_factor = dist_factor * dist_factor * (3.0 - 2.0 * dist_factor)
-
                 effective_roughness = roughness * dist_factor
 
                 base_noise = noise.fbm(
@@ -933,34 +936,71 @@ def load_custom_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     return grid
 
 
-def smooth_heights(grid: HeightGrid, iterations: int = 1) -> HeightGrid:
+def smooth_heights(grid: HeightGrid, iterations: int = 1, spec: Optional[TerrainSpec] = None) -> HeightGrid:
     """
     Step 3: Smooth heights using 3x3 averaging kernel.
 
     Each vertex becomes the average of itself and 8 neighbors.
     Border vertices remain unchanged (no neighbors outside grid).
     """
-    rows = grid.rows
-    cols = grid.cols
-    original_heights = grid.heights.copy()
+    import numpy as np
 
+    original_heights = grid.heights.copy()
     current_heights = grid.heights.copy()
 
     for _ in range(iterations):
-        new_heights = np.zeros_like(current_heights)
-        for r in range(rows):
-            for c in range(cols):
-                if r == 0 or r == rows - 1 or c == 0 or c == cols - 1:
-                    new_heights[r, c] = current_heights[r, c]
-                else:
-                    total = 0.0
-                    count = 0
-                    for dr in (-1, 0, 1):
-                        for dc in (-1, 0, 1):
-                            total += current_heights[r + dr, c + dc]
-                            count += 1
-                    new_heights[r, c] = total / count
-        current_heights = new_heights
+        # Create a padded array to handle borders safely
+        padded = np.pad(current_heights, pad_width=1, mode='edge')
+
+        # Accumulate sums from 9 offset slices
+        # This pure numpy approach is much faster than nested python loops
+        total = np.zeros_like(current_heights)
+        total += padded[0:-2, 0:-2] # Top-Left
+        total += padded[0:-2, 1:-1] # Top-Center
+        total += padded[0:-2, 2:]   # Top-Right
+
+        total += padded[1:-1, 0:-2] # Mid-Left
+        total += padded[1:-1, 1:-1] # Center
+        total += padded[1:-1, 2:]   # Mid-Right
+
+        total += padded[2:, 0:-2]   # Bottom-Left
+        total += padded[2:, 1:-1]   # Bottom-Center
+        total += padded[2:, 2:]     # Bottom-Right
+
+        avg = total / 9.0
+
+        # Restore borders to their original values
+        avg[0, :] = current_heights[0, :]
+        avg[-1, :] = current_heights[-1, :]
+        avg[:, 0] = current_heights[:, 0]
+        avg[:, -1] = current_heights[:, -1]
+
+        current_heights = avg
+
+    # If spec is provided, blend the smoothed heights back based on the roughness
+    # to preserve high-frequency details where requested.
+    if spec is not None and not spec.manual_terrain:
+        roughness = getattr(spec, "roughness", 0.5)
+
+        # Calculate distance factor using the same logic as generate_heights
+        hard_mask = getattr(grid, "playability_mask", None)
+        if hard_mask is not None:
+            ramp_width = max(100.0, spec.transition_blur_sigma * 30.0)
+            shaping_ramp_width = ramp_width * 4.0
+            dist_factor = np.clip(hard_mask / shaping_ramp_width, 0.0, 1.0)
+            dist_factor = dist_factor * dist_factor * (3.0 - 2.0 * dist_factor)
+        else:
+            dist_factor = np.ones_like(current_heights)
+
+        effective_roughness = roughness * dist_factor
+
+        # Where effective_roughness is 1, keep 100% of original. Where 0, keep 100% smoothed.
+        # But maybe we want the smoothing to still have some effect?
+        # A mix from 1.0 (fully original) to 0.0 (fully smoothed).
+        # Actually, if we keep 100% original, the erosion won't be smoothed out!
+        # Let's say smooth_weight = 1.0 - effective_roughness
+        smooth_weight = 1.0 - effective_roughness
+        current_heights = original_heights * effective_roughness + current_heights * smooth_weight
 
     grid.heights = np.where(grid.global_selection_mask, current_heights, original_heights)
 
@@ -1891,7 +1931,7 @@ def apply_pipeline_for_preview(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
             ) > 0.5
         terrain_copy.heights = np.where(terrain_copy.global_selection_mask, terrain_copy.heights, heights)
 
-    terrain_copy = smooth_heights(terrain_copy, iterations=2)
+    terrain_copy = smooth_heights(terrain_copy, iterations=2, spec=spec)
     terrain_copy = clamp_slope(terrain_copy, spec.max_slope_step, use_mask=False)
     terrain_copy = quantize_heights(terrain_copy, spec.height_quantization, use_mask=False)
 
@@ -2180,7 +2220,7 @@ def run_pipeline(
         grid = calculate_slopes(grid)
 
         print("  Step 5: Smooth heights")
-        grid = smooth_heights(grid, iterations=2)
+        grid = smooth_heights(grid, iterations=2, spec=spec)
 
         if spec.base_clear_radius > 0 and spec.base_flatness > 0.5:
             print("  Step 5b: Light touch-up for base areas after erosion")
