@@ -784,6 +784,20 @@ class TerrainGeneratorGUI(QMainWindow):
 
 
 
+        # Feature Scale
+        fs_row = QHBoxLayout()
+        fs_row.setSpacing(8)
+        lbl_fs = QLabel("Feature Scale")
+        lbl_fs.setObjectName("FieldLabel")
+        lbl_fs.setToolTip("How large/wide the canyon structures generate (100% = default)")
+        fs_row.addWidget(lbl_fs)
+        self.slider_feature_scale = QSlider(Qt.Horizontal)
+        self.slider_feature_scale.setRange(10, 5000)
+        self.slider_feature_scale.setValue(180) # 1.8 * 100
+        self.lbl_feature_scale_val = QLabel("180%")
+        fs_row.addWidget(make_slider_row(self.slider_feature_scale, self.lbl_feature_scale_val, "%"), 1)
+        config_layout.addLayout(fs_row)
+
         # Roughness
         rough_row = QHBoxLayout()
         rough_row.setSpacing(8)
@@ -833,6 +847,9 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_erosion.valueChanged.connect(
             lambda v: self.lbl_erosion_val.setText(f"{v}%")
         )
+        self.slider_feature_scale.valueChanged.connect(
+            lambda v: self.lbl_feature_scale_val.setText(f"{v}%")
+        )
         self.slider_lane_node_radius.valueChanged.connect(
             lambda v: self.lbl_lane_node_radius_val.setText(str(v))
         )
@@ -843,6 +860,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_lane_elevation.valueChanged.connect(self.sync_to_model)
         self.slider_rough.valueChanged.connect(self.sync_to_model)
         self.slider_erosion.valueChanged.connect(self.sync_to_model)
+        self.slider_feature_scale.valueChanged.connect(self.sync_to_model)
         self.slider_lane_node_radius.valueChanged.connect(self.sync_to_model)
 
         config_layout.addWidget(make_divider())
@@ -1901,6 +1919,7 @@ class TerrainGeneratorGUI(QMainWindow):
             self.slider_lane_elevation,
             self.slider_rough,
             self.slider_erosion,
+            self.slider_feature_scale,
             self.slider_lane_node_radius,
             self.slider_base_radius,
             self.slider_base_flatness,
@@ -1950,6 +1969,9 @@ class TerrainGeneratorGUI(QMainWindow):
             self.slider_rough.setValue(int((self.config_model.warp_strength / 2.0) * 100))
             # Map old erosion slider to blur_radius [0 - 30]
             self.slider_erosion.setValue(int((self.config_model.blur_radius / 30.0) * 100))
+
+            self.slider_feature_scale.setValue(int(self.config_model.feature_scale * 100))
+
             self.slider_base_radius.setValue(self.config_model.base_clear_radius)
             self.slider_base_flatness.setValue(
                 int(self.config_model.base_flatness * 100)
@@ -2031,6 +2053,9 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.warp_strength = (self.slider_rough.value() / 100.0) * 2.0
         # erosion_strength maps to blur_radius [0 - 30]
         self.config_model.blur_radius = int((self.slider_erosion.value() / 100.0) * 30.0)
+
+        self.config_model.feature_scale = self.slider_feature_scale.value() / 100.0
+
         self.config_model.base_clear_radius = self.slider_base_radius.value()
         self.config_model.base_flatness = self.slider_base_flatness.value() / 100.0
         self.config_model.resource_clear_radius = self.slider_resource_clear.value()
