@@ -742,9 +742,9 @@ class TerrainGeneratorGUI(QMainWindow):
         )
         mh_row.addWidget(lbl_mh)
         self.slider_mountain_height = QSlider(Qt.Horizontal)
-        self.slider_mountain_height.setRange(0, 100)
-        self.slider_mountain_height.setValue(50)
-        self.lbl_mountain_height_val = QLabel("50%")
+        self.slider_mountain_height.setRange(0, 800)
+        self.slider_mountain_height.setValue(100)
+        self.lbl_mountain_height_val = QLabel("100%")
         mh_row.addWidget(
             make_slider_row(
                 self.slider_mountain_height,
@@ -1938,7 +1938,7 @@ class TerrainGeneratorGUI(QMainWindow):
                 int(self.config_model.lane_width_scale * 100)
             )
             self.slider_mountain_height.setValue(
-                int(min(1.0, self.config_model.mountain_height_scale) * 100)
+                int(self.config_model.mountain_height_scale * 100)
             )
             self.slider_canyon_steepness.setValue(
                 int(100 - (self.config_model.canyon_threshold * 100))

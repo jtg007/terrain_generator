@@ -1833,7 +1833,12 @@ def apply_pipeline_for_preview(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
         terrain_copy.heights = np.where(terrain_copy.global_selection_mask, terrain_copy.heights, heights)
 
     terrain_copy = smooth_heights(terrain_copy, iterations=2)
-    terrain_copy = clamp_slope(terrain_copy, spec.max_slope_step, use_mask=False)
+
+    effective_max_slope = spec.max_slope_step
+    if getattr(spec, "topology", "canyon") == "canyon":
+        effective_max_slope = max(spec.max_slope_step, 99999)
+
+    terrain_copy = clamp_slope(terrain_copy, effective_max_slope, use_mask=False)
     terrain_copy = quantize_heights(terrain_copy, spec.height_quantization, use_mask=False)
 
     return terrain_copy
@@ -2128,8 +2133,14 @@ def run_pipeline(
             )
 
     if not spec.manual_terrain:
-        print(f"  Step 6: Clamp slope (max step={spec.max_slope_step})")
-        grid = clamp_slope(grid, spec.max_slope_step)
+        # Canyon generation relies on sheer vertical cliffs which exceed normal max_slope_step limits.
+        # When using canyon topology, significantly increase the clamp step so walls aren't flattened.
+        effective_max_slope = spec.max_slope_step
+        if getattr(spec, "topology", "canyon") == "canyon":
+            effective_max_slope = max(spec.max_slope_step, 99999)
+
+        print(f"  Step 6: Clamp slope (max step={effective_max_slope})")
+        grid = clamp_slope(grid, effective_max_slope)
 
         print(f"  Step 7: Quantize heights (step={spec.height_quantization})")
         grid = quantize_heights(grid, spec.height_quantization)
@@ -2142,8 +2153,12 @@ def run_pipeline(
         # FINAL STEP: Run a global slope clamp WITHOUT mask restriction to resolve
         # any remaining discontinuities introduced by the mask or feathering.
         # This ensures the map is 100% compile-safe (slope < 100).
-        print("  Step 7.6: Final global slope clamp for seam safety")
-        grid = clamp_slope(grid, spec.max_slope_step, use_mask=False)
+        effective_max_slope_seam = spec.max_slope_step
+        if getattr(spec, "topology", "canyon") == "canyon":
+            effective_max_slope_seam = max(spec.max_slope_step, 99999)
+
+        print(f"  Step 7.6: Final global slope clamp for seam safety (max step={effective_max_slope_seam})")
+        grid = clamp_slope(grid, effective_max_slope_seam, use_mask=False)
         grid = quantize_heights(grid, spec.height_quantization, use_mask=False)
 
     print("  Step 8: Build cells")

@@ -102,7 +102,7 @@ def generate_canyon_base(
     warp_strength: float = 1.0,
     plateau_threshold: float = 0.60,
     canyon_threshold: float = 0.42,
-    blur_radius: int = 14,
+    blur_radius: int = 2,
     octaves: int = 4
 ) -> np.ndarray:
     """
