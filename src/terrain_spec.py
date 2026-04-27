@@ -103,6 +103,9 @@ class TerrainSpec:
     manual_terrain: bool = False
     invert_lanes: bool = False
 
+    # Flag for natural un-carved canyon height generation
+    canyon_natural: bool = False
+
     def default_imp_base(self) -> Tuple[float, float]:
         """
         Get the default imperial base spawn position (25% of map size).

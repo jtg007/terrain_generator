@@ -124,7 +124,12 @@ class PreviewWorker(QThread):
                 spec.custom_resources = self.custom_resources
 
             # Skip layout validation during preview to prevent crashes while dragging
-            result = run_pipeline(spec, skip_layout_validation=True, global_selection_mask=self.global_selection_mask, initial_heights=self.initial_heights)
+            result = run_pipeline(
+                spec,
+                skip_layout_validation=True,
+                global_selection_mask=self.global_selection_mask,
+                initial_heights=self.initial_heights,
+            )
             self.finished.emit(result["grid"], result["spec"])
         except Exception:
             import traceback
@@ -179,8 +184,11 @@ class GenerationWorker(QThread):
 
             # Run pipeline
             result = run_pipeline(
-                spec, map_name=self.output_filename, output_dir=str(self.project_root),
-                global_selection_mask=self.global_selection_mask, initial_heights=self.initial_heights
+                spec,
+                map_name=self.output_filename,
+                output_dir=str(self.project_root),
+                global_selection_mask=self.global_selection_mask,
+                initial_heights=self.initial_heights,
             )
             if result["errors"]:
                 raise Exception(f"Pipeline errors: {result['errors']}")
@@ -444,22 +452,22 @@ class TerrainGeneratorGUI(QMainWindow):
         self.on_auto_copy_changed()  # Trigger initial state setup
 
         sidebar_layout.addStretch()
-        
+
         project_row = QHBoxLayout()
         project_row.setSpacing(6)
-        
+
         self.btn_open_project = QPushButton("📂 Open")
         self.btn_open_project.setObjectName("SmallButton")
         self.btn_open_project.setMinimumHeight(34)
         self.btn_open_project.clicked.connect(self.on_open_project)
         project_row.addWidget(self.btn_open_project, 1)
-        
+
         self.btn_save_project = QPushButton("💾 Save")
         self.btn_save_project.setObjectName("SmallButton")
         self.btn_save_project.setMinimumHeight(34)
         self.btn_save_project.clicked.connect(self.on_save_project)
         project_row.addWidget(self.btn_save_project, 1)
-        
+
         sidebar_layout.addLayout(project_row)
         sidebar_layout.addSpacing(4)
 
@@ -686,7 +694,8 @@ class TerrainGeneratorGUI(QMainWindow):
         self.combo_topology = QComboBox()
         self.combo_topology.addItems(
             [
-                "Canyon",
+                "Canyon Maze",
+                "Canyon Natural",
             ]
         )
         self.combo_topology.setCurrentIndex(0)
@@ -747,8 +756,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.lbl_mountain_height_val = QLabel("100%")
         mh_row.addWidget(
             make_slider_row(
-                self.slider_mountain_height,
-            self.lbl_mountain_height_val, "%"
+                self.slider_mountain_height, self.lbl_mountain_height_val, "%"
             ),
             1,
         )
@@ -759,13 +767,20 @@ class TerrainGeneratorGUI(QMainWindow):
         cs_row.setSpacing(8)
         lbl_cs = QLabel("Wall Steepness")
         lbl_cs.setObjectName("FieldLabel")
-        lbl_cs.setToolTip("How steep the transition is from lane floor to mountain. High = steep canyon cliff, Low = smooth valley.")
+        lbl_cs.setToolTip(
+            "How steep the transition is from lane floor to mountain. High = steep canyon cliff, Low = smooth valley."
+        )
         cs_row.addWidget(lbl_cs)
         self.slider_canyon_steepness = QSlider(Qt.Horizontal)
         self.slider_canyon_steepness.setRange(1, 100)
-        self.slider_canyon_steepness.setValue(74) # 100 - 26 = 74
+        self.slider_canyon_steepness.setValue(74)  # 100 - 26 = 74
         self.lbl_canyon_steepness_val = QLabel("74%")
-        cs_row.addWidget(make_slider_row(self.slider_canyon_steepness, self.lbl_canyon_steepness_val, "%"), 1)
+        cs_row.addWidget(
+            make_slider_row(
+                self.slider_canyon_steepness, self.lbl_canyon_steepness_val, "%"
+            ),
+            1,
+        )
         config_layout.addLayout(cs_row)
 
         # Lane Elevation
@@ -773,29 +788,39 @@ class TerrainGeneratorGUI(QMainWindow):
         le_row.setSpacing(8)
         lbl_le = QLabel("Lane Elevation")
         lbl_le.setObjectName("FieldLabel")
-        lbl_le.setToolTip("Base height of the lanes as a percentage of max terrain height.")
+        lbl_le.setToolTip(
+            "Base height of the lanes as a percentage of max terrain height."
+        )
         le_row.addWidget(lbl_le)
         self.slider_lane_elevation = QSlider(Qt.Horizontal)
         self.slider_lane_elevation.setRange(0, 100)
         self.slider_lane_elevation.setValue(15)
         self.lbl_lane_elevation_val = QLabel("15%")
-        le_row.addWidget(make_slider_row(self.slider_lane_elevation, self.lbl_lane_elevation_val, "%"), 1)
+        le_row.addWidget(
+            make_slider_row(
+                self.slider_lane_elevation, self.lbl_lane_elevation_val, "%"
+            ),
+            1,
+        )
         config_layout.addLayout(le_row)
-
-
 
         # Feature Scale
         fs_row = QHBoxLayout()
         fs_row.setSpacing(8)
         lbl_fs = QLabel("Feature Scale")
         lbl_fs.setObjectName("FieldLabel")
-        lbl_fs.setToolTip("How large/wide the canyon structures generate (100% = default)")
+        lbl_fs.setToolTip(
+            "How large/wide the canyon structures generate (100% = default)"
+        )
         fs_row.addWidget(lbl_fs)
         self.slider_feature_scale = QSlider(Qt.Horizontal)
         self.slider_feature_scale.setRange(10, 5000)
-        self.slider_feature_scale.setValue(180) # 1.8 * 100
+        self.slider_feature_scale.setValue(180)  # 1.8 * 100
         self.lbl_feature_scale_val = QLabel("180%")
-        fs_row.addWidget(make_slider_row(self.slider_feature_scale, self.lbl_feature_scale_val, "%"), 1)
+        fs_row.addWidget(
+            make_slider_row(self.slider_feature_scale, self.lbl_feature_scale_val, "%"),
+            1,
+        )
         config_layout.addLayout(fs_row)
 
         # Roughness
@@ -818,7 +843,9 @@ class TerrainGeneratorGUI(QMainWindow):
         eros_row.setSpacing(8)
         lbl_e = QLabel("Edge Smoothing")
         lbl_e.setObjectName("FieldLabel")
-        lbl_e.setToolTip("Blur radius to soften canyon steps — High = Source-like rolling drops")
+        lbl_e.setToolTip(
+            "Blur radius to soften canyon steps — High = Source-like rolling drops"
+        )
         eros_row.addWidget(lbl_e)
         self.slider_erosion = QSlider(Qt.Horizontal)
         self.slider_erosion.setRange(0, 100)
@@ -1202,7 +1229,9 @@ class TerrainGeneratorGUI(QMainWindow):
             return
 
         try:
-            nodes, connections, resources, _, global_mask = self.preview_widget.get_layout_from_editor()
+            nodes, connections, resources, _, global_mask = (
+                self.preview_widget.get_layout_from_editor()
+            )
 
             initial_heights = None
             if hasattr(self.preview_widget, "_base_heights"):
@@ -1220,6 +1249,7 @@ class TerrainGeneratorGUI(QMainWindow):
             self.preview_worker.start()
         except Exception as e:
             import traceback
+
             traceback.print_exc()
             # If prep fails, unlock so we aren't permanently stuck
             pass
@@ -1272,7 +1302,11 @@ class TerrainGeneratorGUI(QMainWindow):
                 spec.cell_size,
             )
             # Pass the mask from the grid to preserve it through preview updates
-            grid_mask = grid.global_selection_mask if hasattr(grid, 'global_selection_mask') else None
+            grid_mask = (
+                grid.global_selection_mask
+                if hasattr(grid, "global_selection_mask")
+                else None
+            )
             self.preview_widget.set_raw_heights(heights, mask=grid_mask)
 
             imp_pos = (
@@ -1945,6 +1979,7 @@ class TerrainGeneratorGUI(QMainWindow):
             self.spin_skybox_ceiling.setValue(self.config_model.skybox_ceiling)
             topology_map = {
                 "canyon": 0,
+                "canyon_natural": 1,
             }
             self.combo_topology.setCurrentIndex(
                 topology_map.get(self.config_model.topology, 0)
@@ -1966,11 +2001,17 @@ class TerrainGeneratorGUI(QMainWindow):
                 int(min(1.0, self.config_model.lane_elevation) * 100)
             )
             # We map the old "roughness" slider to warp_strength [0.0 - 2.0]
-            self.slider_rough.setValue(int((self.config_model.warp_strength / 2.0) * 100))
+            self.slider_rough.setValue(
+                int((self.config_model.warp_strength / 2.0) * 100)
+            )
             # Map old erosion slider to blur_radius [0 - 30]
-            self.slider_erosion.setValue(int((self.config_model.blur_radius / 30.0) * 100))
+            self.slider_erosion.setValue(
+                int((self.config_model.blur_radius / 30.0) * 100)
+            )
 
-            self.slider_feature_scale.setValue(int(self.config_model.feature_scale * 100))
+            self.slider_feature_scale.setValue(
+                int(self.config_model.feature_scale * 100)
+            )
 
             self.slider_base_radius.setValue(self.config_model.base_clear_radius)
             self.slider_base_flatness.setValue(
@@ -2032,10 +2073,15 @@ class TerrainGeneratorGUI(QMainWindow):
 
         topology_reverse_map = {
             0: "canyon",
+            1: "canyon_natural",
         }
-        self.config_model.topology = topology_reverse_map.get(
-            self.combo_topology.currentIndex(), "canyon"
-        )
+        topo = topology_reverse_map.get(self.combo_topology.currentIndex(), "canyon")
+        if topo == "canyon_natural":
+            self.config_model.topology = "canyon"
+            self.config_model.canyon_natural = True
+        else:
+            self.config_model.topology = "canyon"
+            self.config_model.canyon_natural = False
         self.config_model.lane_node_radius = self.slider_lane_node_radius.value()
         self.config_model.lane_width_scale = self.slider_lane_width.value() / 100.0
         if hasattr(self, "preview_widget"):
@@ -2044,15 +2090,21 @@ class TerrainGeneratorGUI(QMainWindow):
             self.slider_mountain_height.value() / 100.0
         )
         # canyon_steepness maps to canyon_threshold. Higher steepness = lower threshold (more vertical walls)
-        self.config_model.canyon_threshold = max(0.01, (100 - self.slider_canyon_steepness.value()) / 100.0)
-        self.config_model.plateau_threshold = min(0.99, self.config_model.canyon_threshold + 0.18)
+        self.config_model.canyon_threshold = max(
+            0.01, (100 - self.slider_canyon_steepness.value()) / 100.0
+        )
+        self.config_model.plateau_threshold = min(
+            0.99, self.config_model.canyon_threshold + 0.18
+        )
 
         self.config_model.lane_elevation = self.slider_lane_elevation.value() / 100.0
 
         # roughness maps to warp_strength [0.0 - 2.0]
         self.config_model.warp_strength = (self.slider_rough.value() / 100.0) * 2.0
         # erosion_strength maps to blur_radius [0 - 30]
-        self.config_model.blur_radius = int((self.slider_erosion.value() / 100.0) * 30.0)
+        self.config_model.blur_radius = int(
+            (self.slider_erosion.value() / 100.0) * 30.0
+        )
 
         self.config_model.feature_scale = self.slider_feature_scale.value() / 100.0
 
@@ -2281,8 +2333,10 @@ class TerrainGeneratorGUI(QMainWindow):
             file_path += ".terrain"
 
         try:
-            nodes, conns, res, overlay, mask = self.preview_widget.get_layout_from_editor()
-            
+            nodes, conns, res, overlay, mask = (
+                self.preview_widget.get_layout_from_editor()
+            )
+
             layout_data = {
                 "nodes": nodes,
                 "connections": conns,
@@ -2291,9 +2345,9 @@ class TerrainGeneratorGUI(QMainWindow):
                 "nf_base": self.preview_widget.nf_base,
                 "height_overlay": overlay,
                 "global_mask": mask,
-                "map_name": self.txt_map_name.text().strip()
+                "map_name": self.txt_map_name.text().strip(),
             }
-            
+
             project_utils.save_project(file_path, self.config_model, layout_data)
             self._is_dirty = False
             self.statusBar().showMessage(f"Project saved to {file_path}", 5000)
@@ -2307,11 +2361,11 @@ class TerrainGeneratorGUI(QMainWindow):
                 "Unsaved Changes",
                 "You have unsaved changes. Do you want to save them before opening a new project?",
                 QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
-                QMessageBox.Save
+                QMessageBox.Save,
             )
             if reply == QMessageBox.Save:
                 self.on_save_project()
-                if self._is_dirty: # If save was cancelled
+                if self._is_dirty:  # If save was cancelled
                     return
             elif reply == QMessageBox.Cancel:
                 return
@@ -2324,14 +2378,14 @@ class TerrainGeneratorGUI(QMainWindow):
 
         try:
             data = project_utils.load_project(file_path)
-            
+
             # Apply loaded state
             self.config_model = data["config"]
             self.txt_map_name.setText(data["map_name"])
-            
+
             # Use sync_to_ui which already has signal blocking for widgets
             self.sync_to_ui()
-            
+
             # Restore layout in editor
             self.preview_widget.set_layout_to_editor(
                 data["nodes"],
@@ -2340,15 +2394,16 @@ class TerrainGeneratorGUI(QMainWindow):
                 data["imp_base"],
                 data["nf_base"],
                 data["height_overlay"],
-                data["global_mask"]
+                data["global_mask"],
             )
-            
+
             self._is_dirty = False
             self.run_preview()
             self.statusBar().showMessage(f"Project loaded from {file_path}", 5000)
-            
+
         except Exception as e:
             import traceback
+
             traceback.print_exc()
             QMessageBox.critical(self, "Load Error", f"Could not load project:\n{e}")
 
