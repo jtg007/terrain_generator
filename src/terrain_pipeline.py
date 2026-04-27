@@ -8,6 +8,7 @@ Terrain Generation Pipeline
 3. Simulate hydraulic erosion
 4. Calculate slopes
 5. Smooth heights
+from src.terrain_spec import TerrainSpec, ZoneType, ZoneType, ZoneType
 6. Clamp slope
 7. Quantize heights
 8. Build cells from shared vertices
@@ -142,9 +143,10 @@ def generate_strategic_layout(
         "archipelago",
         "delta",
     ]
-    if spec.topology in archetypes:
-        topology = spec.topology
-    elif spec.topology == "canyon":
+    raw_topology = getattr(spec, "topology", "").lower()
+    if raw_topology in archetypes:
+        topology = raw_topology
+    elif raw_topology.startswith("canyon"):
         topology = "canyon"
     else:
         topology = rng.choice(archetypes)
@@ -153,11 +155,17 @@ def generate_strategic_layout(
         # Create a sprawling maze network for canyons.
         nodes = []
         connections = []
+
+        map_min_dim = min(spec.size_x, spec.size_y)
+        base_radius = spec.lane_node_radius if spec.lane_node_radius > 0 else map_min_dim * 0.15
+        node_radius = map_min_dim * 0.10 * getattr(spec, "lane_width_scale", 1.0)
+        lane_width = map_min_dim * 0.08 * getattr(spec, "lane_width_scale", 1.0)
+
         # Main bases
         b1_x, b1_y = spec.default_nf_base()
         b2_x, b2_y = spec.default_imp_base()
-        b1 = LayoutNode(b1_x, b1_y, 4.0, "base_nf")
-        b2 = LayoutNode(b2_x, b2_y, 4.0, "base_imp")
+        b1 = LayoutNode(b1_x, b1_y, base_radius, ZoneType.BASE)
+        b2 = LayoutNode(b2_x, b2_y, base_radius, ZoneType.BASE)
         nodes.extend([b1, b2])
 
         # A grid-like structure of nodes to create paths
@@ -172,7 +180,7 @@ def generate_strategic_layout(
                 jx = jx + spec.origin_x
                 jy = jy + spec.origin_y
 
-                gn = LayoutNode(jx, jy, 3.0, "resource")
+                gn = LayoutNode(jx, jy, node_radius, ZoneType.VEHICLE_OPEN)
                 nodes.append(gn)
                 grid_nodes.append((ix, iy, gn))
 
@@ -183,13 +191,14 @@ def generate_strategic_layout(
             return None
 
         # Connect bases to the nearest grid nodes
-        connections.append(LayoutConnection(b1, get_gn(1, 1), 2.5, "main", []))
+        connections.append(LayoutConnection(b1, get_gn(1, 1), lane_width, ZoneType.MAIN_LANE, []))
         connections.append(
-            LayoutConnection(b2, get_gn(grid_size - 1, grid_size - 1), 2.5, "main", [])
+            LayoutConnection(b2, get_gn(grid_size - 1, grid_size - 1), lane_width, ZoneType.MAIN_LANE, [])
         )
 
         # Connect grid nodes to form a maze structure
         # ensuring all are connected but picking random paths to drop to create dead ends/maze
+        jitter_scale = map_min_dim * 0.05
         for gx, gy, n in grid_nodes:
             neighbors = []
             if gx < grid_size - 1:
@@ -205,10 +214,10 @@ def generate_strategic_layout(
                     steps = int(dist / 200)
                     for s in range(1, steps):
                         f = s / steps
-                        mx = n.x + (neighbor.x - n.x) * f + rng.uniform(-50, 50)
-                        my = n.y + (neighbor.y - n.y) * f + rng.uniform(-50, 50)
+                        mx = n.x + (neighbor.x - n.x) * f + rng.uniform(-jitter_scale, jitter_scale)
+                        my = n.y + (neighbor.y - n.y) * f + rng.uniform(-jitter_scale, jitter_scale)
                         pts.append((mx, my))
-                    connections.append(LayoutConnection(n, neighbor, 2.0, "flank", pts))
+                    connections.append(LayoutConnection(n, neighbor, lane_width, ZoneType.SIDE_ROUTE, pts))
 
         # Ensure minimal viable connectivity (base -> b1_node -> ... -> b2_node -> base)
         # We rely on rng and high chance for connections to generally make it playable
@@ -1569,7 +1578,7 @@ def validate_seams(
     cells: List[TerrainCell], grid: HeightGrid, spec: TerrainSpec
 ) -> List[str]:
     # Bypass slope limit check for canyon layouts
-    bypass_slope_limit = spec.topology.startswith("canyon")
+    bypass_slope_limit = getattr(spec, "topology", "").lower().startswith("canyon")
     """
     Step 7: Validate seam topology.
 
@@ -2257,7 +2266,7 @@ def run_pipeline(
         # Canyon generation relies on sheer vertical cliffs which exceed normal max_slope_step limits.
         # When using canyon topology, significantly increase the clamp step so walls aren't flattened.
         effective_max_slope = spec.max_slope_step
-        if getattr(spec, "topology", "canyon") == "canyon":
+        if getattr(spec, "topology", "").lower().startswith("canyon"):
             effective_max_slope = max(spec.max_slope_step, 99999)
 
         print(f"  Step 6: Clamp slope (max step={effective_max_slope})")
@@ -2277,7 +2286,7 @@ def run_pipeline(
         # any remaining discontinuities introduced by the mask or feathering.
         # This ensures the map is 100% compile-safe (slope < 100).
         effective_max_slope_seam = spec.max_slope_step
-        if getattr(spec, "topology", "canyon") == "canyon":
+        if getattr(spec, "topology", "").lower().startswith("canyon"):
             effective_max_slope_seam = max(spec.max_slope_step, 99999)
 
         print(
