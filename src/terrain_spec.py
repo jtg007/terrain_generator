@@ -52,17 +52,28 @@ class TerrainSpec:
     cell_size: int = 512
     displacement_power: int = 3
     seed: int = 12345
-    max_slope_step: int = 64
+    max_slope_step: int = 1024
     height_quantization: int = 1
     noise_octaves: int = 4
     erosion_iterations: int = 50000
     erosion_droplet_lifetime: int = 30
     terrain_max_height: int = 2048
+    skybox_ceiling: int = 4096
     roughness: float = 0.5
     topology: str = "random"
     lane_width_scale: float = 1.0
     mountain_height_scale: float = 1.0
-    transition_blur_sigma: float = 8.0
+    lane_elevation: float = 0.15
+
+    # Canyon Generator Parameters
+    feature_scale: float = 1.8
+    warp_strength: float = 0.018
+    roughness: float = 0.50
+    plateau_noise: float = 0.12
+    wall_slope: float = 0.06
+    lane_depth: float = 0.72
+    blur_radius: int = 10
+
     material: str = "nature/terrain/blend_dirt_grass_dmz_sscale"
     underlay_material: str = "TOOLS/TOOLSSKIP"
     underlay_height: int = 128
@@ -93,6 +104,9 @@ class TerrainSpec:
 
     manual_terrain: bool = False
     invert_lanes: bool = False
+
+    # Flag for natural un-carved canyon height generation
+    canyon_natural: bool = False
 
     def default_imp_base(self) -> Tuple[float, float]:
         """
@@ -185,6 +199,7 @@ class TerrainSpec:
             "topology": self.topology,
             "lane_width_scale": self.lane_width_scale,
             "mountain_height_scale": self.mountain_height_scale,
+            "lane_elevation": self.lane_elevation,
             "material": self.material,
             "underlay_material": self.underlay_material,
             "underlay_height": self.underlay_height,
@@ -390,7 +405,7 @@ def create_default_spec() -> TerrainSpec:
         cell_size=512,
         displacement_power=3,
         seed=12345,
-        max_slope_step=64,
+        max_slope_step=1024,
         height_quantization=1,
         noise_octaves=4,
         erosion_iterations=50000,
@@ -398,7 +413,13 @@ def create_default_spec() -> TerrainSpec:
         topology="random",
         lane_width_scale=1.0,
         mountain_height_scale=1.0,
-        transition_blur_sigma=8.0,
+        lane_elevation=0.15,
+        feature_scale=1.8,
+        warp_strength=1.0,
+        wall_slope=0.06,
+        plateau_noise=0.12,
+        lane_depth=0.72,
+        blur_radius=14,
         material="common/nature/blend_grass_mountainwall_000",
         underlay_material="TOOLS/TOOLSSKIP",
         underlay_height=128,

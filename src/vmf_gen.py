@@ -81,13 +81,14 @@ def generate_skybox(
     origin_y: int,
     map_width: int,
     map_height: int,
+    skybox_ceiling: int,
     max_terrain_height: int,
     skyname: str = "empsky_overcast2",
 ) -> None:
     """Generate airtight skybox with exact flush coordinates, split into smaller sections."""
     wall_thickness = 64
     terrain_base_z = -512
-    ceiling_z = max_terrain_height + 7072
+    ceiling_z = skybox_ceiling
     
     wall_height = ceiling_z - terrain_base_z
     wall_center_z = (ceiling_z + terrain_base_z) / 2.0
@@ -145,6 +146,14 @@ def generate_skybox(
             )
             ceiling.set_material("tools/toolsskybox")
             valve_map.world.children.append(ceiling)
+            ceiling_clip = Block(
+                Vertex(cx, cy, int(ceiling_z - wall_thickness / 2)),
+                (w, h, wall_thickness),
+                "tools/toolsclip",
+            )
+            ceiling_clip.set_material("tools/toolsclip")
+            valve_map.world.children.append(ceiling_clip)
+
 
     for x_start, x_end in x_wall_sections:
         cx = (x_start + x_end) // 2
@@ -170,11 +179,19 @@ def generate_skybox(
                 north_y,
                 wall_center_z,
             ),
-            (w, north_max_y - north_min_y, wall_height),
+            (w, wall_thickness, wall_height),
             "tools/toolsskybox",
         )
         north.set_material("tools/toolsskybox")
         valve_map.world.children.append(north)
+        north_clip = Block(
+            Vertex(cx, north_y - wall_thickness, wall_center_z),
+            (w, wall_thickness, wall_height),
+            "tools/toolsclip",
+        )
+        north_clip.set_material("tools/toolsclip")
+        valve_map.world.children.append(north_clip)
+
 
         south = Block(
             Vertex(
@@ -182,11 +199,19 @@ def generate_skybox(
                 south_y,
                 wall_center_z,
             ),
-            (w, south_max_y - south_min_y, wall_height),
+            (w, wall_thickness, wall_height),
             "tools/toolsskybox",
         )
         south.set_material("tools/toolsskybox")
         valve_map.world.children.append(south)
+        south_clip = Block(
+            Vertex(cx, south_y + wall_thickness, wall_center_z),
+            (w, wall_thickness, wall_height),
+            "tools/toolsclip",
+        )
+        south_clip.set_material("tools/toolsclip")
+        valve_map.world.children.append(south_clip)
+
 
     for y_start, y_end in y_wall_sections:
         cy = (y_start + y_end) // 2
@@ -212,11 +237,19 @@ def generate_skybox(
                 cy,
                 wall_center_z,
             ),
-            (east_max_x - east_min_x, h, wall_height),
+            (wall_thickness, h, wall_height),
             "tools/toolsskybox",
         )
         east.set_material("tools/toolsskybox")
         valve_map.world.children.append(east)
+        east_clip = Block(
+            Vertex(east_x - wall_thickness, cy, wall_center_z),
+            (wall_thickness, h, wall_height),
+            "tools/toolsclip",
+        )
+        east_clip.set_material("tools/toolsclip")
+        valve_map.world.children.append(east_clip)
+
 
         west = Block(
             Vertex(
@@ -224,11 +257,19 @@ def generate_skybox(
                 cy,
                 wall_center_z,
             ),
-            (west_max_x - west_min_x, h, wall_height),
+            (wall_thickness, h, wall_height),
             "tools/toolsskybox",
         )
         west.set_material("tools/toolsskybox")
         valve_map.world.children.append(west)
+        west_clip = Block(
+            Vertex(west_x + wall_thickness, cy, wall_center_z),
+            (wall_thickness, h, wall_height),
+            "tools/toolsclip",
+        )
+        west_clip.set_material("tools/toolsclip")
+        valve_map.world.children.append(west_clip)
+
 
     valve_map.world.skyname = skyname
 
@@ -980,6 +1021,7 @@ def spawn_required_entities_enhanced(
     valve_map: vmf.ValveMap,
     map_width: int,
     map_height: int,
+    skybox_ceiling: int,
     max_terrain_height: int,
     rules: Optional[Dict[str, Any]] = None,
     origin_x: int = 0,
@@ -1113,6 +1155,7 @@ class PipelineSpec:
     heightmap_path: Optional[str] = None
 
     terrain_max_height: int = 512
+    skybox_ceiling: int = 4096
     terrain_actual_max: Optional[float] = None
     terrain_tile_size: int = 512
     terrain_power: int = 3
@@ -1459,6 +1502,7 @@ class DisplacementVMF:
             origin_y,
             map_width,
             map_height,
+            self.spec.skybox_ceiling if hasattr(self.spec, "skybox_ceiling") and self.spec.skybox_ceiling is not None else 4096,
             max_terrain_height,
             skyname,
         )
@@ -1555,7 +1599,7 @@ class DisplacementVMF:
                     "imp",
                     imp_base_x,
                     imp_base_y,
-                    max_terrain_height,
+                    int(max_terrain_height),
                     map_center_x,
                     map_center_y,
                     rules,
@@ -1574,7 +1618,7 @@ class DisplacementVMF:
                     "nf",
                     nf_base_x,
                     nf_base_y,
-                    max_terrain_height,
+                    int(max_terrain_height),
                     map_center_x,
                     map_center_y,
                     rules,
@@ -1596,7 +1640,7 @@ class DisplacementVMF:
                     imp_base_y,
                     nf_base_x,
                     nf_base_y,
-                    max_terrain_height,
+                    int(max_terrain_height),
                     rules,
                 )
 
@@ -1609,7 +1653,7 @@ class DisplacementVMF:
                     nf_base_y,
                     map_center_x,
                     map_center_y,
-                    max_terrain_height,
+                    int(max_terrain_height),
                     rules,
                 )
         else:
@@ -1677,7 +1721,7 @@ class DisplacementVMF:
                     "imp",
                     imp_base_x,
                     imp_base_y,
-                    max_terrain_height,
+                    int(max_terrain_height),
                     map_center_x,
                     map_center_y,
                     rules,
@@ -1696,7 +1740,7 @@ class DisplacementVMF:
                     "nf",
                     nf_base_x,
                     nf_base_y,
-                    max_terrain_height,
+                    int(max_terrain_height),
                     map_center_x,
                     map_center_y,
                     rules,
@@ -1720,7 +1764,7 @@ class DisplacementVMF:
                 nf_base_y,
                 map_width,
                 map_height,
-                max_terrain_height,
+                int(max_terrain_height),
                 rules,
                 origin_x=origin_x,
                 origin_y=origin_y,
@@ -1730,6 +1774,7 @@ class DisplacementVMF:
             valve_map,
             map_width,
             map_height,
+            self.spec.skybox_ceiling if hasattr(self.spec, "skybox_ceiling") and self.spec.skybox_ceiling is not None else 4096,
             max_terrain_height,
             rules,
             origin_x=origin_x,

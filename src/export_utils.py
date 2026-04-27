@@ -126,6 +126,7 @@ def export_vmf(
         map_name=output_filename,
         heightmap_path=str(hm_path),
         terrain_max_height=grid.max_height(),
+        skybox_ceiling=config_model.skybox_ceiling,
         terrain_actual_max=grid.max_height(),
         terrain_tile_size=tile_size,
         terrain_power=config_model.displacement_power,

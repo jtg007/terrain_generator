@@ -31,10 +31,20 @@ class GUIConfigModel:
     roughness: float = 0.5  # Maps to noise octaves
     erosion_strength: float = 0.5  # Maps to erosion iterations
     height_scale: int = 2048  # Absolute max height
+    skybox_ceiling: int = 4096  # Skybox Ceiling Height
 
-    topology: str = "random"
+    topology: str = "canyon"
     lane_width_scale: float = 1.0
     mountain_height_scale: float = 1.0
+    lane_elevation: float = 0.15
+
+    # Canyon Generator Settings
+    feature_scale: float = 1.8
+    warp_strength: float = 0.018
+    plateau_noise: float = 0.12
+    wall_slope: float = 0.06
+    lane_depth: float = 0.72
+    blur_radius: int = 10
 
     # Selected preset for UI tracking
     preset_name: str = "mixed"
@@ -109,10 +119,10 @@ class GUIConfigModel:
                 "Reduce Tiles X/Y or increase Tile Size.",
             )
 
-        if self.height_scale <= 0 or self.height_scale > 4096:
+        if self.height_scale <= 0 or self.height_scale > 999999:
             return (
                 False,
-                "Height scale is out of reasonable bounds (max recommended 4096).",
+                "Height scale is out of reasonable bounds (max recommended 999999).",
             )
 
         if self.custom_image_path and not Path(self.custom_image_path).is_file():
@@ -210,14 +220,22 @@ class GUIConfigModel:
             cell_size=self.cell_size,
             displacement_power=self.displacement_power,
             seed=self.seed,
-            max_slope_step=64,
+            max_slope_step=1024,
             noise_octaves=octaves,
             erosion_iterations=iterations,
             terrain_max_height=self.height_scale,
+            skybox_ceiling=self.skybox_ceiling,
             roughness=self.roughness,
             topology=self.topology,
             lane_width_scale=self.lane_width_scale,
             mountain_height_scale=effective_mountain_height_scale,
+            lane_elevation=self.lane_elevation,
+            feature_scale=self.feature_scale,
+            warp_strength=self.warp_strength,
+            plateau_noise=self.plateau_noise,
+            wall_slope=self.wall_slope,
+            lane_depth=self.lane_depth,
+            blur_radius=self.blur_radius,
             custom_image_path=self.custom_image_path,
             base_clear_radius=self.base_clear_radius,
             base_flatness=self.base_flatness,

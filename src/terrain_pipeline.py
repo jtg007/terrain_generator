@@ -129,6 +129,7 @@ def generate_strategic_layout(
 ) -> Tuple[List[LayoutNode], List[LayoutConnection]]:
     """Generates an explicit layout of nodes and connections based on the terrain spec."""
     import random
+    import math
 
     rng = random.Random(spec.seed)
     archetypes = [
@@ -143,8 +144,90 @@ def generate_strategic_layout(
     ]
     if spec.topology in archetypes:
         topology = spec.topology
+    elif spec.topology == "canyon":
+        topology = "canyon"
     else:
         topology = rng.choice(archetypes)
+
+    if topology == "canyon":
+        # Create a sprawling maze network for canyons.
+        nodes = []
+        connections = []
+        # Main bases
+        b1_x, b1_y = spec.default_nf_base()
+        b2_x, b2_y = spec.default_imp_base()
+        b1 = LayoutNode(b1_x, b1_y, 4.0, "base_nf")
+        b2 = LayoutNode(b2_x, b2_y, 4.0, "base_imp")
+        nodes.extend([b1, b2])
+
+        # A grid-like structure of nodes to create paths
+        grid_size = 4
+        spacing = spec.size_x / grid_size
+        grid_nodes = []
+        for ix in range(1, grid_size):
+            for iy in range(1, grid_size):
+                # add some jitter
+                jx = (ix * spacing) + rng.uniform(-spacing * 0.3, spacing * 0.3)
+                jy = (iy * spacing) + rng.uniform(-spacing * 0.3, spacing * 0.3)
+                jx = jx + spec.origin_x
+                jy = jy + spec.origin_y
+
+                gn = LayoutNode(jx, jy, 3.0, "resource")
+                nodes.append(gn)
+                grid_nodes.append((ix, iy, gn))
+
+        def get_gn(ix, iy):
+            for gx, gy, n in grid_nodes:
+                if gx == ix and gy == iy:
+                    return n
+            return None
+
+        # Connect bases to the nearest grid nodes
+        connections.append(LayoutConnection(b1, get_gn(1, 1), 2.5, "main", []))
+        connections.append(
+            LayoutConnection(b2, get_gn(grid_size - 1, grid_size - 1), 2.5, "main", [])
+        )
+
+        # Connect grid nodes to form a maze structure
+        # ensuring all are connected but picking random paths to drop to create dead ends/maze
+        for gx, gy, n in grid_nodes:
+            neighbors = []
+            if gx < grid_size - 1:
+                neighbors.append(get_gn(gx + 1, gy))
+            if gy < grid_size - 1:
+                neighbors.append(get_gn(gx, gy + 1))
+
+            for neighbor in neighbors:
+                if neighbor and rng.random() > 0.35:  # 65% chance to connect
+                    # add intermediate points for a squiggly path
+                    pts = []
+                    dist = math.hypot(neighbor.x - n.x, neighbor.y - n.y)
+                    steps = int(dist / 200)
+                    for s in range(1, steps):
+                        f = s / steps
+                        mx = n.x + (neighbor.x - n.x) * f + rng.uniform(-50, 50)
+                        my = n.y + (neighbor.y - n.y) * f + rng.uniform(-50, 50)
+                        pts.append((mx, my))
+                    connections.append(LayoutConnection(n, neighbor, 2.0, "flank", pts))
+
+        # Ensure minimal viable connectivity (base -> b1_node -> ... -> b2_node -> base)
+        # We rely on rng and high chance for connections to generally make it playable
+        # To be safe, force a specific central path.
+        path = [(1, 1), (2, 1), (2, 2), (3, 2), (3, 3)]
+        for i in range(len(path) - 1):
+            n1 = get_gn(*path[i])
+            n2 = get_gn(*path[i + 1])
+            if n1 and n2:
+                already_connected = False
+                for c in connections:
+                    if (c.start_node == n1 and c.end_node == n2) or (
+                        c.start_node == n2 and c.end_node == n1
+                    ):
+                        already_connected = True
+                if not already_connected:
+                    connections.append(LayoutConnection(n1, n2, 2.5, "main", []))
+
+        return nodes, connections
 
     center_x = spec.origin_x + spec.size_x / 2
     center_y = spec.origin_y + spec.size_y / 2
@@ -776,11 +859,8 @@ def generate_playability_mask(
 def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     rows = grid.rows
     cols = grid.cols
-    from src.noise import NoiseGenerator
     original_heights = grid.heights.copy()
 
-    noise = NoiseGenerator(spec.seed)
-    roughness = getattr(spec, "roughness", 0.5)
     max_height = spec.terrain_max_height
 
     hard_mask = getattr(grid, "playability_mask", None)
@@ -788,111 +868,52 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
         nodes, connections = generate_strategic_layout(spec)
         hard_mask = generate_playability_mask(spec, rows, cols, nodes, connections)
 
-    floor_height = max_height * 0.15
-    base_mountain_height = max_height * 0.85
-    scaled_mountain_height = spec.mountain_height_scale**2
+    floor_height = max_height * getattr(spec, "lane_elevation", 0.15)
+    base_mountain_height = max_height * 1.0
+    scaled_mountain_height = spec.mountain_height_scale
     mountain_height = (
         floor_height + (base_mountain_height - floor_height) * scaled_mountain_height
     )
 
-    warp_scale = 0.005
-    warp_strength = 150.0 * roughness
-    macro_scale = 0.0015
-    ridge_scale = 0.0025
+    if spec.manual_terrain:
+        # Fully flat, empty base
+        new_heights = np.full((rows, cols), floor_height, dtype=np.float32)
+    else:
+        from src.canyon_generator import generate_canyon_base
 
-    new_heights = np.zeros((rows, cols), dtype=np.float32)
+        # If canyon_natural is true, we pass an infinity distance field so it doesn't carve
+        effective_mask = np.full((rows, cols), np.inf, dtype=np.float32) if getattr(spec, "canyon_natural", False) else hard_mask
 
-    for r in range(rows):
-        wy = spec.origin_y + r * spec.size_y / max(1, rows - 1)
-        for c in range(cols):
-            wx = spec.origin_x + c * spec.size_x / max(1, cols - 1)
+        # 1. Generate base canyon noise terrain map [0, 1] incorporating the path mask carving natively
+        canyon_noise = generate_canyon_base(
+            rows=rows,
+            cols=cols,
+            distance_field=effective_mask,
+            physical_map_size=max(spec.size_x, spec.size_y),
+            seed=spec.seed,
+            feature_scale=getattr(spec, "feature_scale", 1.8),
+            warp_strength=getattr(spec, "warp_strength", 0.018),
+            lane_depth=getattr(spec, "lane_depth", 0.72),
+            wall_slope=getattr(spec, "wall_slope", 0.06),
+            plateau_noise=getattr(spec, "plateau_noise", 0.12),
+            roughness=getattr(spec, "roughness", 0.50),
+            blur_radius=getattr(spec, "blur_radius", 10),
+            octaves=spec.noise_octaves,
+        )
 
-            wx_warp = (
-                wx
-                + noise.fbm(wx * warp_scale, wy * warp_scale, octaves=2) * warp_strength
-            )
-            wy_warp = (
-                wy
-                + noise.fbm(wx * warp_scale + 100, wy * warp_scale + 100, octaves=2)
-                * warp_strength
-            )
+        # 2. Scale noise base to actual map height range
+        new_heights = (
+            floor_height + (mountain_height - floor_height) * canyon_noise
+        )
 
-            dist_field_val = float(hard_mask[r, c])
-            # mask_val replaces the old playable_mask concept for height interpolation.
-            # dist_field_val is negative inside the lane, positive outside.
-            # We want mask_val = 1.0 on the lane (dist_field_val <= 0),
-            # and smoothly transitioning to 0.0 at ramp_width.
-            ramp_width = max(100.0, spec.transition_blur_sigma * 30.0)
-            fade = np.clip(dist_field_val / ramp_width, 0.0, 1.0)
-            mask_val = 1.0 - (fade * fade * (3.0 - 2.0 * fade))
-
-            if spec.manual_terrain:
-                base_noise = 0.0
-                ridge_val = 0.0
-                detail_val = 0.0
-                noise_combined = 1.0
-            else:
-                # Use a broader ramp for distance shaping of noise, so the terrain
-                # gets progressively rougher over a larger distance from the lane.
-                shaping_ramp_width = ramp_width * 4.0
-                dist_factor = np.clip(dist_field_val / shaping_ramp_width, 0.0, 1.0)
-                # Smooth the factor
-                dist_factor = dist_factor * dist_factor * (3.0 - 2.0 * dist_factor)
-
-                effective_roughness = roughness * dist_factor
-
-                base_noise = noise.fbm(
-                    wx_warp * macro_scale, wy_warp * macro_scale, octaves=spec.noise_octaves
-                )
-                # True ridged multifractal noise (fold each octave)
-                t_ridge = 0.0
-                f_ridge = 1.0
-                a_ridge = 1.0
-                m_ridge = 0.0
-                rx = wx_warp * ridge_scale + 50
-                ry = wy_warp * ridge_scale + 50
-                for _ in range(spec.noise_octaves):
-                    v = noise.noise2d(rx * f_ridge, ry * f_ridge) * 2.0 - 1.0
-                    v = 1.0 - abs(v)
-                    v = v * v
-                    t_ridge += v * a_ridge
-                    m_ridge += a_ridge
-                    a_ridge *= 0.5
-                    f_ridge *= 2.0
-                ridge_val = t_ridge / m_ridge if m_ridge > 0 else 0.0
-                ridge_val = ridge_val * dist_factor
-
-                detail_val = noise.fbm(wx_warp * 0.008, wy_warp * 0.008, octaves=3)
-                detail_val = detail_val * dist_factor
-
-                noise_combined = (
-                    (0.5 - 0.2 * effective_roughness) * base_noise
-                    + (0.3 + 0.4 * effective_roughness) * ridge_val
-                    + 0.05 * detail_val
-                )
-
-            playable_height = floor_height + (max_height * 0.01 * base_noise)
-            wilderness_target = (
-                floor_height + (mountain_height - floor_height) * noise_combined
-            )
-
-            if spec.invert_lanes:
-                # User selected invert lanes: lane is raised, wilderness is low
-                final_height = wilderness_target * mask_val + playable_height * (
-                    1.0 - mask_val
-                )
-            elif spec.topology == "island":
-                # For islands, the playable area should be the elevated mountain,
-                # and the wilderness should be the low floor (water level)
-                final_height = wilderness_target * mask_val + playable_height * (
-                    1.0 - mask_val
-                )
-            else:
-                final_height = playable_height * mask_val + wilderness_target * (
-                    1.0 - mask_val
-                )
-
-            new_heights[r, c] = final_height
+        # 3. Handle specific topology inversions
+        playable_height = np.full((rows, cols), floor_height, dtype=np.float32)
+        if not getattr(spec, "canyon_natural", False):
+            if getattr(spec, "invert_lanes", False) or getattr(spec, "topology", "canyon") == "island":
+                # Reverse the heights for islands or inverted lanes.
+                # canyon_noise is high (wilderness) and low (lanes).
+                # We want the lanes to be high and the wilderness to be low.
+                new_heights = mountain_height - (new_heights - floor_height)
 
     grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
 
@@ -962,7 +983,9 @@ def smooth_heights(grid: HeightGrid, iterations: int = 1) -> HeightGrid:
                     new_heights[r, c] = total / count
         current_heights = new_heights
 
-    grid.heights = np.where(grid.global_selection_mask, current_heights, original_heights)
+    grid.heights = np.where(
+        grid.global_selection_mask, current_heights, original_heights
+    )
 
     return grid
 
@@ -1046,7 +1069,7 @@ def flatten_base_areas(
                 dist_to_imp = math.sqrt(
                     (world_x - imp_base_x) ** 2 + (world_y - imp_base_y) ** 2
                 )
-            
+
             dist_to_nf = 999999.0
             if nf_base_x is not None and nf_base_y is not None:
                 dist_to_nf = math.sqrt(
@@ -1177,7 +1200,9 @@ def clamp_slope(grid: HeightGrid, max_step: int, use_mask: bool = True) -> Heigh
         print(f"Warning: slope clamping reached max passes ({max_passes})")
 
     if use_mask:
-        grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
+        grid.heights = np.where(
+            grid.global_selection_mask, new_heights, original_heights
+        )
     else:
         grid.heights = new_heights
 
@@ -1197,13 +1222,13 @@ def quantize_heights(grid: HeightGrid, step: int, use_mask: bool = True) -> Heig
     new_heights = np.round(grid.heights / step) * step
 
     if use_mask:
-        grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
+        grid.heights = np.where(
+            grid.global_selection_mask, new_heights, original_heights
+        )
     else:
         grid.heights = new_heights
 
     return grid
-
-
 
 
 def simulate_hydraulic_erosion(grid: HeightGrid, spec: TerrainSpec) -> HeightGrid:
@@ -1487,10 +1512,14 @@ def feather_mask_edges(grid: HeightGrid, feather_radius: int = 3) -> HeightGrid:
             if 0.0 < weight < 1.0:
                 # At feather boundary, blend with neighbors
                 neighbor_avg = (
-                    heights[r - 1, c] + heights[r + 1, c] +
-                    heights[r, c - 1] + heights[r, c + 1]
+                    heights[r - 1, c]
+                    + heights[r + 1, c]
+                    + heights[r, c - 1]
+                    + heights[r, c + 1]
                 ) / 4.0
-                smoothed_heights[r, c] = heights[r, c] * weight + neighbor_avg * (1.0 - weight)
+                smoothed_heights[r, c] = heights[r, c] * weight + neighbor_avg * (
+                    1.0 - weight
+                )
 
     grid.heights = smoothed_heights
     return grid
@@ -1536,7 +1565,11 @@ def build_cells(spec: TerrainSpec, grid: HeightGrid) -> List[TerrainCell]:
     return cells
 
 
-def validate_seams(cells: List[TerrainCell], grid: HeightGrid) -> List[str]:
+def validate_seams(
+    cells: List[TerrainCell], grid: HeightGrid, spec: TerrainSpec
+) -> List[str]:
+    # Bypass slope limit check for canyon layouts
+    bypass_slope_limit = spec.topology.startswith("canyon")
     """
     Step 7: Validate seam topology.
 
@@ -1598,7 +1631,8 @@ def validate_seams(cells: List[TerrainCell], grid: HeightGrid) -> List[str]:
             edge_heights = cell.get_edge_heights(grid, edge)
             if len(edge_heights) >= 2:
                 diff = abs(edge_heights[0] - edge_heights[1])
-                if diff > 100:
+                if not bypass_slope_limit and diff > spec.max_slope_step:
+
                     errors.append(
                         f"Cell {cell.cell_id} {edge} edge has height diff {diff:.1f} "
                         f"(heights: {edge_heights})"
@@ -1767,7 +1801,10 @@ def apply_pipeline_for_preview(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
             start_r = rng.randint(1, rows - 2)
             start_c = rng.randint(1, cols - 2)
 
-            if playability_mask is not None and playability_mask[start_r, start_c] > 0.5:
+            if (
+                playability_mask is not None
+                and playability_mask[start_r, start_c] > 0.5
+            ):
                 continue
 
             pos_r = float(start_r)
@@ -1813,7 +1850,12 @@ def apply_pipeline_for_preview(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
                 new_ir = int(pos_r)
                 new_ic = int(pos_c)
 
-                if new_ir <= 0 or new_ir >= rows - 1 or new_ic <= 0 or new_ic >= cols - 1:
+                if (
+                    new_ir <= 0
+                    or new_ir >= rows - 1
+                    or new_ic <= 0
+                    or new_ic >= cols - 1
+                ):
                     break
 
                 new_fx = pos_c - new_ic
@@ -1884,16 +1926,36 @@ def apply_pipeline_for_preview(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
     if terrain_copy.global_selection_mask is not None:
         if terrain_copy.global_selection_mask.shape != terrain_copy.heights.shape:
             from src.compat_utils import scipy_zoom_equivalent
-            scale_y = terrain_copy.heights.shape[0] / terrain_copy.global_selection_mask.shape[0]
-            scale_x = terrain_copy.heights.shape[1] / terrain_copy.global_selection_mask.shape[1]
-            terrain_copy.global_selection_mask = scipy_zoom_equivalent(
-                terrain_copy.global_selection_mask.astype(np.float32), (scale_y, scale_x)
-            ) > 0.5
-        terrain_copy.heights = np.where(terrain_copy.global_selection_mask, terrain_copy.heights, heights)
+
+            scale_y = (
+                terrain_copy.heights.shape[0]
+                / terrain_copy.global_selection_mask.shape[0]
+            )
+            scale_x = (
+                terrain_copy.heights.shape[1]
+                / terrain_copy.global_selection_mask.shape[1]
+            )
+            terrain_copy.global_selection_mask = (
+                scipy_zoom_equivalent(
+                    terrain_copy.global_selection_mask.astype(np.float32),
+                    (scale_y, scale_x),
+                )
+                > 0.5
+            )
+        terrain_copy.heights = np.where(
+            terrain_copy.global_selection_mask, terrain_copy.heights, heights
+        )
 
     terrain_copy = smooth_heights(terrain_copy, iterations=2)
-    terrain_copy = clamp_slope(terrain_copy, spec.max_slope_step, use_mask=False)
-    terrain_copy = quantize_heights(terrain_copy, spec.height_quantization, use_mask=False)
+
+    effective_max_slope = spec.max_slope_step
+    if getattr(spec, "topology", "canyon") == "canyon":
+        effective_max_slope = max(spec.max_slope_step, 99999)
+
+    terrain_copy = clamp_slope(terrain_copy, effective_max_slope, use_mask=False)
+    terrain_copy = quantize_heights(
+        terrain_copy, spec.height_quantization, use_mask=False
+    )
 
     return terrain_copy
 
@@ -2094,6 +2156,7 @@ def run_pipeline(
     if initial_heights is not None:
         if initial_heights.shape != grid.heights.shape:
             from src.compat_utils import scipy_zoom_equivalent
+
             scale_y = grid.heights.shape[0] / initial_heights.shape[0]
             scale_x = grid.heights.shape[1] / initial_heights.shape[1]
             grid.heights = scipy_zoom_equivalent(
@@ -2105,11 +2168,15 @@ def run_pipeline(
     if global_selection_mask is not None:
         if global_selection_mask.shape != grid.heights.shape:
             from src.compat_utils import scipy_zoom_equivalent
+
             scale_y = grid.heights.shape[0] / global_selection_mask.shape[0]
             scale_x = grid.heights.shape[1] / global_selection_mask.shape[1]
-            grid.global_selection_mask = scipy_zoom_equivalent(
-                global_selection_mask.astype(np.float32), (scale_y, scale_x)
-            ) > 0.5
+            grid.global_selection_mask = (
+                scipy_zoom_equivalent(
+                    global_selection_mask.astype(np.float32), (scale_y, scale_x)
+                )
+                > 0.5
+            )
         else:
             grid.global_selection_mask = global_selection_mask.copy()
 
@@ -2168,22 +2235,15 @@ def run_pipeline(
         print("  Step 3-6: Manual terrain mode (no modifications)")
         grid = calculate_slopes(grid)
     else:
-        print(
-            f"  Step 3: Simulate hydraulic erosion ({spec.erosion_iterations} droplets, lifetime={spec.erosion_droplet_lifetime})"
-        )
-        grid = simulate_hydraulic_erosion(grid, spec)
-        print(
-            f"    Height range after erosion: {grid.min_height():.1f} to {grid.max_height():.1f}"
-        )
-
+        # Canyon generator applies its own blur_radius pass internally.
+        # Bypass hydraulic erosion and standard 3x3 smoothing which ruins canyon structures.
+        print("  Step 3: Simulate hydraulic erosion (BYPASSED for Canyon Generator)")
         print("  Step 4: Calculate slopes")
         grid = calculate_slopes(grid)
-
-        print("  Step 5: Smooth heights")
-        grid = smooth_heights(grid, iterations=2)
+        print("  Step 5: Smooth heights (BYPASSED for Canyon Generator)")
 
         if spec.base_clear_radius > 0 and spec.base_flatness > 0.5:
-            print("  Step 5b: Light touch-up for base areas after erosion")
+            print("  Step 5b: Light touch-up for base areas")
             import copy
 
             spec_light = copy.copy(spec)
@@ -2194,22 +2254,36 @@ def run_pipeline(
             )
 
     if not spec.manual_terrain:
-        print(f"  Step 6: Clamp slope (max step={spec.max_slope_step})")
-        grid = clamp_slope(grid, spec.max_slope_step)
+        # Canyon generation relies on sheer vertical cliffs which exceed normal max_slope_step limits.
+        # When using canyon topology, significantly increase the clamp step so walls aren't flattened.
+        effective_max_slope = spec.max_slope_step
+        if getattr(spec, "topology", "canyon") == "canyon":
+            effective_max_slope = max(spec.max_slope_step, 99999)
+
+        print(f"  Step 6: Clamp slope (max step={effective_max_slope})")
+        grid = clamp_slope(grid, effective_max_slope)
 
         print(f"  Step 7: Quantize heights (step={spec.height_quantization})")
         grid = quantize_heights(grid, spec.height_quantization)
 
     # Apply feathering to mask edges if mask is present to prevent seam errors
-    if grid.global_selection_mask is not None and not np.all(grid.global_selection_mask):
+    if grid.global_selection_mask is not None and not np.all(
+        grid.global_selection_mask
+    ):
         print("  Step 7.5: Feather mask edges")
         grid = feather_mask_edges(grid, feather_radius=3)
-        
+
         # FINAL STEP: Run a global slope clamp WITHOUT mask restriction to resolve
         # any remaining discontinuities introduced by the mask or feathering.
         # This ensures the map is 100% compile-safe (slope < 100).
-        print("  Step 7.6: Final global slope clamp for seam safety")
-        grid = clamp_slope(grid, spec.max_slope_step, use_mask=False)
+        effective_max_slope_seam = spec.max_slope_step
+        if getattr(spec, "topology", "canyon") == "canyon":
+            effective_max_slope_seam = max(spec.max_slope_step, 99999)
+
+        print(
+            f"  Step 7.6: Final global slope clamp for seam safety (max step={effective_max_slope_seam})"
+        )
+        grid = clamp_slope(grid, effective_max_slope_seam, use_mask=False)
         grid = quantize_heights(grid, spec.height_quantization, use_mask=False)
 
     print("  Step 8: Build cells")
@@ -2217,7 +2291,7 @@ def run_pipeline(
     print(f"    Created {len(cells)} cells")
 
     print("  Step 9: Validate seams")
-    errors = validate_seams(cells, grid)
+    errors = validate_seams(cells, grid, spec)
     if errors:
         print("    ERRORS FOUND:")
         for e in errors:

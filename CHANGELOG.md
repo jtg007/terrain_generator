@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.10] - 2026-04-25
+### Terrain & Pipeline
+- Integrated entirely new Canyon Heightmap Generator replacing old FBM ridge noise.
+- Canyons generate with domain-warped FBM and a 3-zone transfer function for natural plateaus, vertical walls, and flat canyon floors.
+- Bypassed hydraulic erosion and 3x3 secondary smoothing passes during generation to preserve hard drop-offs on canyon walls.
+- Mapped previous procedural parameters into new Canyon parameters: "Roughness" is now "Canyon Warping", "Erosion" is now "Edge Smoothing" (Gaussian box blur proxy).
+- Repurposed "Canyon Steepness" to scale the transfer function threshold, creating steeper or smoother cliffs.
+- Cleaned up Topology preset list down to just "Canyon" as the base foundation for future updates.
+
+## [0.9.9] - 2026-04-24
+### Terrain & Generation
+- Fixed terrain generation so mountains can scale to the absolute maximum map height.
+- Implemented canyon wall steepness slider to make steep terrain block vehicles.
+- Decoupled skybox ceiling height from terrain max height to improve compiler optimization (VVIS).
+- Automatically generate bounding `toolsclip` brushes against skybox walls to seal map when terrain is outside bounds.
+- Added a Lane Elevation slider to control the base height of paths and lanes.
 ## [0.9.8] - 2026-04-24
 ### Highlights
 - Universal Masking (Stencil): New global selection mask system to protect/specific areas
