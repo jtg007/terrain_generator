@@ -889,6 +889,7 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
             rows=rows,
             cols=cols,
             distance_field=effective_mask,
+            physical_map_size=max(spec.size_x, spec.size_y),
             seed=spec.seed,
             feature_scale=getattr(spec, "feature_scale", 1.8),
             warp_strength=getattr(spec, "warp_strength", 0.018),

@@ -54,7 +54,7 @@ def _box_blur_1d(arr: np.ndarray, radius: int, axis: int) -> np.ndarray:
     slc_lo = [slice(None)] * arr.ndim
     slc_hi[axis] = slice(2 * radius, 2 * radius + n)
     slc_lo[axis] = slice(0, n)
-    return (cs[tuple(slc_hi)] - cs[tuple(slc_lo)]) / (2 * radius + n)
+    return (cs[tuple(slc_hi)] - cs[tuple(slc_lo)]) / (2 * radius + 1)
 
 def gaussian_blur(arr: np.ndarray, radius: int) -> np.ndarray:
     if radius < 1:
@@ -88,6 +88,7 @@ def generate_canyon_base(
     rows: int,
     cols: int,
     distance_field: np.ndarray,
+    physical_map_size: float = 8192.0,
     seed: int = 42,
     feature_scale: float = 1.8,
     warp_strength: float = 1.0,
@@ -123,11 +124,11 @@ def generate_canyon_base(
         heightmap = gaussian_blur(heightmap, blur_radius)
         return heightmap.astype(np.float32)
 
-    max_d = max(rows, cols) * 0.05
+    max_d = physical_map_size * 0.05
     warped_distance = distance_field + (warp_x + warp_y) * max_d
 
     # Normalize physical SDF to 0..1 scale based on max grid dimension for parameter compatibility
-    d_norm = warped_distance / float(max(rows, cols))
+    d_norm = warped_distance / physical_map_size
 
     # Since distance_field is negative inside the lane (playable area) and positive outside,
     # we want the lane boundary to be at 0. But the reference script expects d to be distance from the centerline.
