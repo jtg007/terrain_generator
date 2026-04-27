@@ -881,53 +881,38 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     else:
         from src.canyon_generator import generate_canyon_base
 
-        # 1. Generate base canyon noise terrain map [0, 1]
+        # If canyon_natural is true, we pass an infinity distance field so it doesn't carve
+        effective_mask = np.full((rows, cols), np.inf, dtype=np.float32) if getattr(spec, "canyon_natural", False) else hard_mask
+
+        # 1. Generate base canyon noise terrain map [0, 1] incorporating the path mask carving natively
         canyon_noise = generate_canyon_base(
             rows=rows,
             cols=cols,
+            distance_field=effective_mask,
             seed=spec.seed,
             feature_scale=getattr(spec, "feature_scale", 1.8),
-            warp_strength=getattr(spec, "warp_strength", 1.0),
-            plateau_threshold=getattr(spec, "plateau_threshold", 0.60),
-            canyon_threshold=getattr(spec, "canyon_threshold", 0.42),
-            blur_radius=getattr(spec, "blur_radius", 14),
+            warp_strength=getattr(spec, "warp_strength", 0.018),
+            lane_depth=getattr(spec, "lane_depth", 0.72),
+            wall_slope=getattr(spec, "wall_slope", 0.06),
+            plateau_noise=getattr(spec, "plateau_noise", 0.12),
+            roughness=getattr(spec, "roughness", 0.50),
+            blur_radius=getattr(spec, "blur_radius", 10),
             octaves=spec.noise_octaves,
         )
 
-        # Scale noise base to actual map height range
-        wilderness_target = (
+        # 2. Scale noise base to actual map height range
+        new_heights = (
             floor_height + (mountain_height - floor_height) * canyon_noise
         )
+
+        # 3. Handle specific topology inversions
         playable_height = np.full((rows, cols), floor_height, dtype=np.float32)
-
-        # 2. Blend the hard mask for the paths
-        # dist_field_val is negative inside the lane, positive outside.
-        # We want mask_val = 1.0 on the lane (dist_field_val <= 0) to carve out playable paths
-        # Ramp width creates the transition boundary
-        ramp_width = 150.0  # constant transition width for custom pathing
-
-        fade = np.clip(hard_mask / ramp_width, 0.0, 1.0)
-        mask_val = 1.0 - (fade * fade * (3.0 - 2.0 * fade))
-
-        if spec.canyon_natural:
-            new_heights = wilderness_target
-        else:
-            if spec.invert_lanes:
-                # User selected invert lanes: lane is raised, wilderness is low
-                new_heights = wilderness_target * mask_val + playable_height * (
-                    1.0 - mask_val
-                )
-            elif spec.topology == "island":
-                # For islands, the playable area should be the elevated mountain,
-                # and the wilderness should be the low floor (water level)
-                new_heights = wilderness_target * mask_val + playable_height * (
-                    1.0 - mask_val
-                )
-            else:
-                # Carve roads (playable height) into canyon noise (wilderness)
-                new_heights = playable_height * mask_val + wilderness_target * (
-                    1.0 - mask_val
-                )
+        if not getattr(spec, "canyon_natural", False):
+            if getattr(spec, "invert_lanes", False) or getattr(spec, "topology", "canyon") == "island":
+                # Reverse the heights for islands or inverted lanes.
+                # canyon_noise is high (wilderness) and low (lanes).
+                # We want the lanes to be high and the wilderness to be low.
+                new_heights = mountain_height - (new_heights - floor_height)
 
     grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
 

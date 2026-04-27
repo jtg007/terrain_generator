@@ -67,10 +67,12 @@ class TerrainSpec:
 
     # Canyon Generator Parameters
     feature_scale: float = 1.8
-    warp_strength: float = 1.0
-    plateau_threshold: float = 0.60
-    canyon_threshold: float = 0.42
-    blur_radius: int = 14
+    warp_strength: float = 0.018
+    roughness: float = 0.50
+    plateau_noise: float = 0.12
+    wall_slope: float = 0.06
+    lane_depth: float = 0.72
+    blur_radius: int = 10
 
     material: str = "nature/terrain/blend_dirt_grass_dmz_sscale"
     underlay_material: str = "TOOLS/TOOLSSKIP"
@@ -414,8 +416,9 @@ def create_default_spec() -> TerrainSpec:
         lane_elevation=0.15,
         feature_scale=1.8,
         warp_strength=1.0,
-        plateau_threshold=0.60,
-        canyon_threshold=0.42,
+        wall_slope=0.06,
+        plateau_noise=0.12,
+        lane_depth=0.72,
         blur_radius=14,
         material="common/nature/blend_grass_mountainwall_000",
         underlay_material="TOOLS/TOOLSSKIP",

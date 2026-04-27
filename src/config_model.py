@@ -40,10 +40,11 @@ class GUIConfigModel:
 
     # Canyon Generator Settings
     feature_scale: float = 1.8
-    warp_strength: float = 1.0
-    plateau_threshold: float = 0.60
-    canyon_threshold: float = 0.42
-    blur_radius: int = 14
+    warp_strength: float = 0.018
+    plateau_noise: float = 0.12
+    wall_slope: float = 0.06
+    lane_depth: float = 0.72
+    blur_radius: int = 10
 
     # Selected preset for UI tracking
     preset_name: str = "mixed"
@@ -231,8 +232,9 @@ class GUIConfigModel:
             lane_elevation=self.lane_elevation,
             feature_scale=self.feature_scale,
             warp_strength=self.warp_strength,
-            plateau_threshold=self.plateau_threshold,
-            canyon_threshold=self.canyon_threshold,
+            plateau_noise=self.plateau_noise,
+            wall_slope=self.wall_slope,
+            lane_depth=self.lane_depth,
             blur_radius=self.blur_radius,
             custom_image_path=self.custom_image_path,
             base_clear_radius=self.base_clear_radius,

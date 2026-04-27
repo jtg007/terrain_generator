@@ -762,19 +762,36 @@ class TerrainGeneratorGUI(QMainWindow):
         )
         config_layout.addLayout(mh_row)
 
-        # Canyon Steepness
+        # Canyon Depth (previously canyon_threshold)
+        cd_row = QHBoxLayout()
+        cd_row.setSpacing(8)
+        lbl_cd = QLabel("Canyon Depth")
+        lbl_cd.setObjectName("FieldLabel")
+        lbl_cd.setToolTip("How deep the canyon floor is relative to the mountains. High = deep trench, Low = shallow.")
+        cd_row.addWidget(lbl_cd)
+        self.slider_canyon_depth = QSlider(Qt.Horizontal)
+        self.slider_canyon_depth.setRange(1, 100)
+        self.slider_canyon_depth.setValue(72)
+        self.lbl_canyon_depth_val = QLabel("72%")
+        cd_row.addWidget(
+            make_slider_row(
+                self.slider_canyon_depth, self.lbl_canyon_depth_val, "%"
+            ),
+            1,
+        )
+        config_layout.addLayout(cd_row)
+
+        # Wall Steepness (previously plateau gap / plateau_threshold)
         cs_row = QHBoxLayout()
         cs_row.setSpacing(8)
         lbl_cs = QLabel("Wall Steepness")
         lbl_cs.setObjectName("FieldLabel")
-        lbl_cs.setToolTip(
-            "How steep the transition is from lane floor to mountain. High = steep canyon cliff, Low = smooth valley."
-        )
+        lbl_cs.setToolTip("How steep the canyon walls are. High = sharp cliff, Low = smooth valley.")
         cs_row.addWidget(lbl_cs)
         self.slider_canyon_steepness = QSlider(Qt.Horizontal)
         self.slider_canyon_steepness.setRange(1, 100)
-        self.slider_canyon_steepness.setValue(74)  # 100 - 26 = 74
-        self.lbl_canyon_steepness_val = QLabel("74%")
+        self.slider_canyon_steepness.setValue(94)  # Maps to a slope of ~0.06
+        self.lbl_canyon_steepness_val = QLabel("94%")
         cs_row.addWidget(
             make_slider_row(
                 self.slider_canyon_steepness, self.lbl_canyon_steepness_val, "%"
@@ -823,20 +840,44 @@ class TerrainGeneratorGUI(QMainWindow):
         )
         config_layout.addLayout(fs_row)
 
+        # Warp Strength
+        warp_row = QHBoxLayout()
+        warp_row.setSpacing(8)
+        lbl_w = QLabel("Wall Warping")
+        lbl_w.setObjectName("FieldLabel")
+        lbl_w.setToolTip("Low = straight canyons, High = twisty, organic canyon walls")
+        warp_row.addWidget(lbl_w)
+        self.slider_warp = QSlider(Qt.Horizontal)
+        self.slider_warp.setRange(0, 100) # maps to 0.0 to 0.1
+        self.lbl_warp_val = QLabel("1.8%")
+        warp_row.addWidget(make_slider_row(self.slider_warp, self.lbl_warp_val, "%"), 1)
+        config_layout.addLayout(warp_row)
+
         # Roughness
         rough_row = QHBoxLayout()
         rough_row.setSpacing(8)
-        lbl_r = QLabel("Canyon Warping")
+        lbl_r = QLabel("Roughness")
         lbl_r.setObjectName("FieldLabel")
-        lbl_r.setToolTip("Low = straight canyons, High = twisty, organic canyon walls")
+        lbl_r.setToolTip("Terrain surface roughness")
         rough_row.addWidget(lbl_r)
         self.slider_rough = QSlider(Qt.Horizontal)
         self.slider_rough.setRange(0, 100)
         self.lbl_rough_val = QLabel("50%")
-        rough_row.addWidget(
-            make_slider_row(self.slider_rough, self.lbl_rough_val, "%"), 1
-        )
+        rough_row.addWidget(make_slider_row(self.slider_rough, self.lbl_rough_val, "%"), 1)
         config_layout.addLayout(rough_row)
+
+        # Plateau Noise
+        pn_row = QHBoxLayout()
+        pn_row.setSpacing(8)
+        lbl_pn = QLabel("Plateau Noise")
+        lbl_pn.setObjectName("FieldLabel")
+        lbl_pn.setToolTip("FBM noise amplitude on plateaus")
+        pn_row.addWidget(lbl_pn)
+        self.slider_plateau_noise = QSlider(Qt.Horizontal)
+        self.slider_plateau_noise.setRange(0, 100) # maps to 0.0 to 1.0
+        self.lbl_plateau_noise_val = QLabel("12%")
+        pn_row.addWidget(make_slider_row(self.slider_plateau_noise, self.lbl_plateau_noise_val, "%"), 1)
+        config_layout.addLayout(pn_row)
 
         # Erosion
         eros_row = QHBoxLayout()
@@ -862,15 +903,14 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_mountain_height.valueChanged.connect(
             lambda v: self.lbl_mountain_height_val.setText(f"{v}%")
         )
-        self.slider_canyon_steepness.valueChanged.connect(
-            lambda v: self.lbl_canyon_steepness_val.setText(f"{v}%")
-        )
+        self.slider_canyon_steepness.valueChanged.connect(lambda v: self.lbl_canyon_steepness_val.setText(f"{v}%"))
+        self.slider_canyon_depth.valueChanged.connect(lambda v: self.lbl_canyon_depth_val.setText(f"{v}%"))
         self.slider_lane_elevation.valueChanged.connect(
             lambda v: self.lbl_lane_elevation_val.setText(f"{v}%")
         )
-        self.slider_rough.valueChanged.connect(
-            lambda v: self.lbl_rough_val.setText(f"{v}%")
-        )
+        self.slider_warp.valueChanged.connect(lambda v: self.lbl_warp_val.setText(f"{v/10.0}%"))
+        self.slider_rough.valueChanged.connect(lambda v: self.lbl_rough_val.setText(f"{v}%"))
+        self.slider_plateau_noise.valueChanged.connect(lambda v: self.lbl_plateau_noise_val.setText(f"{v}%"))
         self.slider_erosion.valueChanged.connect(
             lambda v: self.lbl_erosion_val.setText(f"{v}%")
         )
@@ -884,8 +924,11 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_lane_width.valueChanged.connect(self.sync_to_model)
         self.slider_mountain_height.valueChanged.connect(self.sync_to_model)
         self.slider_canyon_steepness.valueChanged.connect(self.sync_to_model)
+        self.slider_canyon_depth.valueChanged.connect(self.sync_to_model)
         self.slider_lane_elevation.valueChanged.connect(self.sync_to_model)
+        self.slider_warp.valueChanged.connect(self.sync_to_model)
         self.slider_rough.valueChanged.connect(self.sync_to_model)
+        self.slider_plateau_noise.valueChanged.connect(self.sync_to_model)
         self.slider_erosion.valueChanged.connect(self.sync_to_model)
         self.slider_feature_scale.valueChanged.connect(self.sync_to_model)
         self.slider_lane_node_radius.valueChanged.connect(self.sync_to_model)
@@ -1950,8 +1993,11 @@ class TerrainGeneratorGUI(QMainWindow):
             self.slider_lane_width,
             self.slider_mountain_height,
             self.slider_canyon_steepness,
+            self.slider_canyon_depth,
             self.slider_lane_elevation,
+            self.slider_warp,
             self.slider_rough,
+            self.slider_plateau_noise,
             self.slider_erosion,
             self.slider_feature_scale,
             self.slider_lane_node_radius,
@@ -1994,16 +2040,12 @@ class TerrainGeneratorGUI(QMainWindow):
             self.slider_mountain_height.setValue(
                 int(self.config_model.mountain_height_scale * 100)
             )
-            self.slider_canyon_steepness.setValue(
-                int(100 - (self.config_model.canyon_threshold * 100))
-            )
-            self.slider_lane_elevation.setValue(
-                int(min(1.0, self.config_model.lane_elevation) * 100)
-            )
-            # We map the old "roughness" slider to warp_strength [0.0 - 2.0]
-            self.slider_rough.setValue(
-                int((self.config_model.warp_strength / 2.0) * 100)
-            )
+            self.slider_canyon_depth.setValue(int(self.config_model.lane_depth * 100))
+            self.slider_canyon_steepness.setValue(max(1, min(100, int(100 - (self.config_model.wall_slope / 0.5 * 100)))))
+            self.slider_lane_elevation.setValue(int(min(1.0, self.config_model.lane_elevation) * 100))
+            self.slider_warp.setValue(int(self.config_model.warp_strength * 1000))  # 0.018 -> 18
+            self.slider_rough.setValue(int(self.config_model.roughness * 100))
+            self.slider_plateau_noise.setValue(int(self.config_model.plateau_noise * 100))
             # Map old erosion slider to blur_radius [0 - 30]
             self.slider_erosion.setValue(
                 int((self.config_model.blur_radius / 30.0) * 100)
@@ -2089,18 +2131,13 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.mountain_height_scale = (
             self.slider_mountain_height.value() / 100.0
         )
-        # canyon_steepness maps to canyon_threshold. Higher steepness = lower threshold (more vertical walls)
-        self.config_model.canyon_threshold = max(
-            0.01, (100 - self.slider_canyon_steepness.value()) / 100.0
-        )
-        self.config_model.plateau_threshold = min(
-            0.99, self.config_model.canyon_threshold + 0.18
-        )
-
+        self.config_model.lane_depth = self.slider_canyon_depth.value() / 100.0
+        steepness_factor = (100 - self.slider_canyon_steepness.value()) / 100.0
+        self.config_model.wall_slope = max(0.001, steepness_factor * 0.5)
         self.config_model.lane_elevation = self.slider_lane_elevation.value() / 100.0
-
-        # roughness maps to warp_strength [0.0 - 2.0]
-        self.config_model.warp_strength = (self.slider_rough.value() / 100.0) * 2.0
+        self.config_model.warp_strength = self.slider_warp.value() / 1000.0
+        self.config_model.roughness = self.slider_rough.value() / 100.0
+        self.config_model.plateau_noise = self.slider_plateau_noise.value() / 100.0
         # erosion_strength maps to blur_radius [0 - 30]
         self.config_model.blur_radius = int(
             (self.slider_erosion.value() / 100.0) * 30.0
