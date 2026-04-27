@@ -933,36 +933,50 @@ def load_custom_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     return grid
 
 
-def smooth_heights(grid: HeightGrid, iterations: int = 1) -> HeightGrid:
+def smooth_heights(grid: HeightGrid, spec: TerrainSpec, iterations: int = 1) -> HeightGrid:
     """
     Step 3: Smooth heights using 3x3 averaging kernel.
 
     Each vertex becomes the average of itself and 8 neighbors.
     Border vertices remain unchanged (no neighbors outside grid).
+    Preserves procedural detail by blending the smoothed array with the
+    original heights inversely proportional to `effective_roughness`.
     """
-    rows = grid.rows
-    cols = grid.cols
     original_heights = grid.heights.copy()
-
     current_heights = grid.heights.copy()
 
-    for _ in range(iterations):
-        new_heights = np.zeros_like(current_heights)
-        for r in range(rows):
-            for c in range(cols):
-                if r == 0 or r == rows - 1 or c == 0 or c == cols - 1:
-                    new_heights[r, c] = current_heights[r, c]
-                else:
-                    total = 0.0
-                    count = 0
-                    for dr in (-1, 0, 1):
-                        for dc in (-1, 0, 1):
-                            total += current_heights[r + dr, c + dc]
-                            count += 1
-                    new_heights[r, c] = total / count
-        current_heights = new_heights
+    roughness = getattr(spec, "roughness", 0.5)
 
-    grid.heights = np.where(grid.global_selection_mask, current_heights, original_heights)
+    # Calculate effective roughness using the playability mask
+    hard_mask = getattr(grid, "playability_mask", None)
+    if hard_mask is not None:
+        ramp_width = max(100.0, spec.transition_blur_sigma * 30.0)
+        shaping_ramp_width = ramp_width * 4.0
+
+        dist_field_val = hard_mask
+        dist_factor = np.clip(dist_field_val / shaping_ramp_width, 0.0, 1.0)
+        dist_factor = dist_factor * dist_factor * (3.0 - 2.0 * dist_factor)
+
+        if not getattr(spec, "generate_lanes", True):
+            dist_factor = np.ones_like(dist_field_val)
+
+        effective_roughness = roughness * dist_factor
+    else:
+        effective_roughness = np.full_like(grid.heights, roughness)
+
+    for _ in range(iterations):
+        padded = np.pad(current_heights, pad_width=1, mode='edge')
+        smoothed = (
+            padded[:-2, :-2] + padded[:-2, 1:-1] + padded[:-2, 2:] +
+            padded[1:-1, :-2] + padded[1:-1, 1:-1] + padded[1:-1, 2:] +
+            padded[2:, :-2] + padded[2:, 1:-1] + padded[2:, 2:]
+        ) / 9.0
+        current_heights = smoothed
+
+    # Blend proportional to effective roughness
+    blended_heights = current_heights * (1.0 - effective_roughness) + original_heights * effective_roughness
+
+    grid.heights = np.where(grid.global_selection_mask, blended_heights, original_heights)
 
     return grid
 
@@ -1891,7 +1905,7 @@ def apply_pipeline_for_preview(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
             ) > 0.5
         terrain_copy.heights = np.where(terrain_copy.global_selection_mask, terrain_copy.heights, heights)
 
-    terrain_copy = smooth_heights(terrain_copy, iterations=2)
+    terrain_copy = smooth_heights(terrain_copy, spec, iterations=2)
     terrain_copy = clamp_slope(terrain_copy, spec.max_slope_step, use_mask=False)
     terrain_copy = quantize_heights(terrain_copy, spec.height_quantization, use_mask=False)
 
@@ -2180,7 +2194,7 @@ def run_pipeline(
         grid = calculate_slopes(grid)
 
         print("  Step 5: Smooth heights")
-        grid = smooth_heights(grid, iterations=2)
+        grid = smooth_heights(grid, spec, iterations=2)
 
         if spec.base_clear_radius > 0 and spec.base_flatness > 0.5:
             print("  Step 5b: Light touch-up for base areas after erosion")
