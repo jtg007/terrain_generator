@@ -153,7 +153,7 @@ def generate_canyon_base(
     # ── Natural Canyon base generation ──────────────────
     base = fbm(p_terrain, gx + warp_x * warp_strength,
                           gy + warp_y * warp_strength,
-               octaves=octaves, gain=0.45)
+               octaves=octaves, gain=roughness)
     t = (base + 1.0) * 0.5
     natural_canyon = canyon_transfer(t, 1.0 - wall_slope, 1.0 - lane_depth)
 
