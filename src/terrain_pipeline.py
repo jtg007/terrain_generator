@@ -158,8 +158,8 @@ def generate_strategic_layout(
 
         map_min_dim = min(spec.size_x, spec.size_y)
         base_radius = spec.lane_node_radius if spec.lane_node_radius > 0 else map_min_dim * 0.15
-        node_radius = map_min_dim * 0.10 * getattr(spec, "lane_width_scale", 1.0)
-        lane_width = map_min_dim * 0.08 * getattr(spec, "lane_width_scale", 1.0)
+        node_radius = map_min_dim * 0.10
+        lane_width = map_min_dim * 0.08
 
         # Main bases
         b1_x, b1_y = spec.default_nf_base()
@@ -269,8 +269,7 @@ def generate_strategic_layout(
     veh_radius = rng.uniform(0.15, 0.25) * map_min_dim
     choke_length = rng.uniform(0.10, 0.20) * map_min_dim
 
-    lane_width *= spec.lane_width_scale
-    veh_radius *= spec.lane_width_scale
+    # Scaling is now handled globally in generate_playability_mask
 
     nodes = [imp_base, nf_base]
     connections = []
@@ -809,13 +808,13 @@ def generate_playability_mask(
     # Compute signed distance to the playability boundary
     distance_field = np.full((rows, cols), np.inf, dtype=np.float64)
 
-    # 1. Evaluate Nodes (BASE, VEHICLE_OPEN)
+    scale = getattr(spec, "lane_width_scale", 1.0)
     for node in nodes:
         if spec.lane_node_radius <= 0 and node.type == ZoneType.BASE:
             continue
         dist_grid = np.sqrt((WX - node.x) ** 2 + (WY - node.y) ** 2)
         if node.type in (ZoneType.BASE, ZoneType.VEHICLE_OPEN):
-            distance_field = np.minimum(distance_field, dist_grid - node.radius)
+            distance_field = np.minimum(distance_field, dist_grid - node.radius * scale)
 
     # 2. Evaluate Polyline Connections
     for conn in connections:
@@ -851,10 +850,11 @@ def generate_playability_mask(
 
             min_dist_grid = np.minimum(min_dist_grid, dist)
 
+        scale = getattr(spec, "lane_width_scale", 1.0)
         if conn.type in (ZoneType.MAIN_LANE, ZoneType.SIDE_ROUTE):
-            playable_width = conn.width
+            playable_width = conn.width * scale
         elif conn.type == ZoneType.CHOKEPOINT:
-            playable_width = conn.width * 0.5
+            playable_width = conn.width * 0.5 * scale
         else:
             continue
 
@@ -884,45 +884,57 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
         floor_height + (base_mountain_height - floor_height) * scaled_mountain_height
     )
 
+    # ── Terrain Generation ──────────────────
+    from src.canyon_generator import generate_canyon_base
+
+    # If canyon_natural is true, we pass an infinity distance field so it doesn't carve
+    effective_mask = np.full((rows, cols), np.inf, dtype=np.float32) if getattr(spec, "canyon_natural", False) else hard_mask
+
+    # Determine the base terrain to carve into
     if spec.manual_terrain:
-        # Fully flat, empty base
-        new_heights = np.full((rows, cols), floor_height, dtype=np.float32)
+        # In manual mode, we either carve into the existing heights or a flat plane
+        # If original_heights is mostly zeroes or just a floor, we use a flat plane.
+        # Otherwise we preserve what the user has built.
+        if original_heights is not None and np.any(original_heights > floor_height + 1.0):
+            base_t = original_heights
+        else:
+            base_t = np.full((rows, cols), floor_height, dtype=np.float32)
     else:
-        from src.canyon_generator import generate_canyon_base
+        # In procedural mode, we use existing heights if available, otherwise None (will gen fBm)
+        # We only use original_heights if they look like they contain actual terrain data.
+        base_t = original_heights if (original_heights is not None and np.any(original_heights > 0)) else None
 
-        # If canyon_natural is true, we pass an infinity distance field so it doesn't carve
-        effective_mask = np.full((rows, cols), np.inf, dtype=np.float32) if getattr(spec, "canyon_natural", False) else hard_mask
+    # Generate the terrain base [0, 1]
+    canyon_noise = generate_canyon_base(
+        rows=rows,
+        cols=cols,
+        distance_field=effective_mask,
+        physical_map_size=max(spec.size_x, spec.size_y),
+        seed=spec.seed,
+        feature_scale=getattr(spec, "feature_scale", 1.8),
+        warp_strength=getattr(spec, "warp_strength", 0.018),
+        lane_depth=getattr(spec, "lane_depth", 0.72),
+        wall_slope=getattr(spec, "wall_slope", 0.06),
+        plateau_noise=getattr(spec, "plateau_noise", 0.12),
+        roughness=getattr(spec, "roughness", 0.50),
+        blur_radius=getattr(spec, "blur_radius", 10),
+        octaves=spec.noise_octaves,
+        base_terrain=base_t,
+    )
 
-        # 1. Generate base canyon noise terrain map [0, 1] incorporating the path mask carving natively
-        canyon_noise = generate_canyon_base(
-            rows=rows,
-            cols=cols,
-            distance_field=effective_mask,
-            physical_map_size=max(spec.size_x, spec.size_y),
-            seed=spec.seed,
-            feature_scale=getattr(spec, "feature_scale", 1.8),
-            warp_strength=getattr(spec, "warp_strength", 0.018),
-            lane_depth=getattr(spec, "lane_depth", 0.72),
-            wall_slope=getattr(spec, "wall_slope", 0.06),
-            plateau_noise=getattr(spec, "plateau_noise", 0.12),
-            roughness=getattr(spec, "roughness", 0.50),
-            blur_radius=getattr(spec, "blur_radius", 10),
-            octaves=spec.noise_octaves,
-        )
+    # Scale noise base to actual map height range
+    new_heights = (
+        floor_height + (mountain_height - floor_height) * canyon_noise
+    )
 
-        # 2. Scale noise base to actual map height range
-        new_heights = (
-            floor_height + (mountain_height - floor_height) * canyon_noise
-        )
-
-        # 3. Handle specific topology inversions
-        playable_height = np.full((rows, cols), floor_height, dtype=np.float32)
-        if not getattr(spec, "canyon_natural", False):
-            if getattr(spec, "invert_lanes", False) or getattr(spec, "topology", "canyon") == "island":
-                # Reverse the heights for islands or inverted lanes.
-                # canyon_noise is high (wilderness) and low (lanes).
-                # We want the lanes to be high and the wilderness to be low.
-                new_heights = mountain_height - (new_heights - floor_height)
+    # 3. Handle specific topology inversions
+    playable_height = np.full((rows, cols), floor_height, dtype=np.float32)
+    if not getattr(spec, "canyon_natural", False):
+        if getattr(spec, "invert_lanes", False) or getattr(spec, "topology", "canyon") == "island":
+            # Reverse the heights for islands or inverted lanes.
+            # canyon_noise is high (wilderness) and low (lanes).
+            # We want the lanes to be high and the wilderness to be low.
+            new_heights = mountain_height - (new_heights - floor_height)
 
     grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
 
@@ -2205,26 +2217,22 @@ def run_pipeline(
                 spec, grid.rows, grid.cols, nodes, connections
             )
             grid.playability_mask = hard_mask
-            print("  Step 2c: Generate heights with flat terrain (manual mode)")
-            grid = generate_heights(spec, grid)
         else:
             grid.playability_mask = None
-            print("  Step 2c: Generate heights with flat terrain (manual mode)")
-            grid = generate_heights(spec, grid)
+        print("  Step 2c: Generate heights with flat terrain (manual mode)")
+        grid = generate_heights(spec, grid)
     else:
         if spec.generate_lanes:
             print("  Step 2a: Generate playability mask (Smoothstep distance field)")
-            if spec.custom_layout_connections:
-                # Use ONLY custom connections; do not generate procedural layout connections
-                print("    Using custom drawn layout connections.")
-                nodes = list(spec.custom_layout_nodes) if spec.custom_layout_nodes else []
-                connections = list(spec.custom_layout_connections)
-            else:
-                # Procedural generation fallback
-                print("    No custom connections found. Fallback to procedural layout generation.")
-                nodes, connections = generate_strategic_layout(spec)
-                if spec.custom_layout_nodes is not None:
+            # Generate procedural layout base
+            nodes, connections = generate_strategic_layout(spec)
+            
+            if spec.custom_layout_nodes or spec.custom_layout_connections:
+                print("    Merging custom drawn layout items with procedural layout.")
+                if spec.custom_layout_nodes:
                     nodes.extend(spec.custom_layout_nodes)
+                if spec.custom_layout_connections:
+                    connections.extend(spec.custom_layout_connections)
 
             hard_mask = generate_playability_mask(
                 spec, grid.rows, grid.cols, nodes, connections

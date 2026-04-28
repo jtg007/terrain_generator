@@ -116,8 +116,9 @@ class PreviewWorker(QThread):
             spec.disable_buildings = True
             spec.disable_resource_nodes = True
 
-            if self.custom_nodes and self.custom_connections:
+            if self.custom_nodes is not None:
                 spec.custom_layout_nodes = self.custom_nodes
+            if self.custom_connections is not None:
                 spec.custom_layout_connections = self.custom_connections
 
             if self.custom_resources is not None:
@@ -890,7 +891,7 @@ class TerrainGeneratorGUI(QMainWindow):
         eros_row.addWidget(lbl_e)
         self.slider_erosion = QSlider(Qt.Horizontal)
         self.slider_erosion.setRange(0, 100)
-        self.lbl_erosion_val = QLabel("50%")
+        self.lbl_erosion_val = QLabel("0%")
         eros_row.addWidget(
             make_slider_row(self.slider_erosion, self.lbl_erosion_val, "%"), 1
         )
@@ -1131,13 +1132,12 @@ class TerrainGeneratorGUI(QMainWindow):
         self._inner_splitter.addWidget(self.preview_widget)
         self._inner_splitter.setStretchFactor(0, 0)
         self.preview_widget.layout_changed.connect(self.on_layout_changed)
+        self.preview_widget.lanes_changed.connect(self.on_lanes_changed)
         self.preview_widget.base_moved.connect(self.on_base_moved)
         self.preview_widget.resource_moved.connect(self.on_resource_moved)
         self.preview_widget.resource_added.connect(self.on_resource_added)
-        self._inner_splitter.setStretchFactor(1, 1)
-        self._inner_splitter.setSizes([380, 620])
         self._inner_splitter.setChildrenCollapsible(False)
-
+        self._force_full_regen = True
         main_area_layout.addWidget(self._inner_splitter)
 
         self.preview_timer = QTimer(self)
@@ -1245,8 +1245,17 @@ class TerrainGeneratorGUI(QMainWindow):
         self.preview_widget.redraw_fixed_entities()
 
         self.update_validation_status()
-        self.preview_timer.start(500)
         self._is_dirty = True
+
+    def on_lanes_changed(self):
+        """Lane topology changed — re-run the preview so the canyon is carved
+        along the new lane. The pipeline receives initial_heights so manual
+        sculpts stored in _height_overlay are composited back on top after
+        the run completes (handled in set_raw_heights / _rerender_heightmap).
+        """
+        self._is_dirty = True
+        self._force_full_regen = False
+        self.preview_timer.start(500)
 
     def on_resource_added(self, x, y):
         if self.config_model.custom_resources is None:
@@ -1277,7 +1286,7 @@ class TerrainGeneratorGUI(QMainWindow):
             )
 
             initial_heights = None
-            if hasattr(self.preview_widget, "_base_heights"):
+            if not self._force_full_regen and hasattr(self.preview_widget, "_base_heights"):
                 initial_heights = self.preview_widget._base_heights
 
             self.preview_worker = PreviewWorker(
@@ -1290,6 +1299,8 @@ class TerrainGeneratorGUI(QMainWindow):
             )
             self.preview_worker.finished.connect(self.on_preview_finished)
             self.preview_worker.start()
+            # Reset flag after starting. Default to full regen for the next trigger unless specified.
+            self._force_full_regen = True
         except Exception as e:
             import traceback
 
@@ -2041,15 +2052,20 @@ class TerrainGeneratorGUI(QMainWindow):
                 int(self.config_model.mountain_height_scale * 100)
             )
             self.slider_canyon_depth.setValue(int(self.config_model.lane_depth * 100))
-            self.slider_canyon_steepness.setValue(max(1, min(100, int(100 - (self.config_model.wall_slope / 0.5 * 100)))))
+            self.slider_canyon_steepness.setValue(max(1, min(100, int(self.config_model.wall_slope / 0.5 * 100))))
             self.slider_lane_elevation.setValue(int(min(1.0, self.config_model.lane_elevation) * 100))
             self.slider_warp.setValue(int(self.config_model.warp_strength * 1000))  # 0.018 -> 18
             self.slider_rough.setValue(int(self.config_model.roughness * 100))
             self.slider_plateau_noise.setValue(int(self.config_model.plateau_noise * 100))
-            # Map old erosion slider to blur_radius [0 - 30]
-            self.slider_erosion.setValue(
-                int((self.config_model.blur_radius / 30.0) * 100)
-            )
+            # blur_radius 0.0 → slider 0; 0.0 < x < 0.5 → slider 1; 0.5-10.0 → slider 1-100
+            br = self.config_model.blur_radius
+            if br <= 0.0:
+                _ero_slider = 0
+            elif br < 0.5:
+                _ero_slider = 1
+            else:
+                _ero_slider = max(1, min(100, int(round(1 + (br - 0.5) / 9.5 * 99))))
+            self.slider_erosion.setValue(_ero_slider)
 
             self.slider_feature_scale.setValue(
                 int(self.config_model.feature_scale * 100)
@@ -2132,16 +2148,18 @@ class TerrainGeneratorGUI(QMainWindow):
             self.slider_mountain_height.value() / 100.0
         )
         self.config_model.lane_depth = self.slider_canyon_depth.value() / 100.0
-        steepness_factor = (100 - self.slider_canyon_steepness.value()) / 100.0
+        steepness_factor = self.slider_canyon_steepness.value() / 100.0
         self.config_model.wall_slope = max(0.001, steepness_factor * 0.5)
         self.config_model.lane_elevation = self.slider_lane_elevation.value() / 100.0
         self.config_model.warp_strength = self.slider_warp.value() / 1000.0
         self.config_model.roughness = self.slider_rough.value() / 100.0
         self.config_model.plateau_noise = self.slider_plateau_noise.value() / 100.0
-        # erosion_strength maps to blur_radius [0 - 30]
-        self.config_model.blur_radius = int(
-            (self.slider_erosion.value() / 100.0) * 30.0
-        )
+        # Edge smoothing: 0 = off; 1-100 maps to 0.5-10.0 passes (immediately visible)
+        _es = self.slider_erosion.value()
+        if _es == 0:
+            self.config_model.blur_radius = 0.0
+        else:
+            self.config_model.blur_radius = 0.5 + (_es - 1) / 99.0 * 9.5
 
         self.config_model.feature_scale = self.slider_feature_scale.value() / 100.0
 
@@ -2173,6 +2191,7 @@ class TerrainGeneratorGUI(QMainWindow):
 
         self.update_validation_status()
         if hasattr(self, "preview_timer"):
+            self._force_full_regen = True
             self.preview_timer.start(500)
         self._is_dirty = True
 

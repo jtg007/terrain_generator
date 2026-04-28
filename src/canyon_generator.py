@@ -65,12 +65,34 @@ def _box_blur_1d(arr: np.ndarray, radius: int, axis: int) -> np.ndarray:
     slc_lo[axis] = slice(0, n)
     return (cs[tuple(slc_hi)] - cs[tuple(slc_lo)]) / (2 * radius + 1)
 
-def gaussian_blur(arr: np.ndarray, radius: int) -> np.ndarray:
-    if radius < 1:
+def gaussian_blur(arr: np.ndarray, passes: float) -> np.ndarray:
+    """
+    Apply gaussian-like blur using multiple 1-pixel box blur passes.
+    
+    Args:
+        arr: Input array
+        passes: Number of blur passes (0 = no blur, higher = more blur)
+               Each pass applies 3 iterations of 1-pixel box blur for smooth falloff.
+    """
+    passes = max(0.0, passes)
+    if passes < 0.1:
         return arr
-    for _ in range(3):
-        arr = _box_blur_1d(arr, radius, axis=0)
-        arr = _box_blur_1d(arr, radius, axis=1)
+    
+    full_passes = int(passes)
+    fractional = passes - full_passes
+    
+    for _ in range(full_passes):
+        for _ in range(3):
+            arr = _box_blur_1d(arr, 1, axis=0)
+            arr = _box_blur_1d(arr, 1, axis=1)
+    
+    if fractional > 0.01:
+        original = arr.copy()
+        for _ in range(3):
+            arr = _box_blur_1d(arr, 1, axis=0)
+            arr = _box_blur_1d(arr, 1, axis=1)
+        arr = original * (1.0 - fractional) + arr * fractional
+    
     return arr
 
 
@@ -117,8 +139,9 @@ def generate_canyon_base(
     wall_slope:        float = 0.06,     # fraction of map width over which wall rises
     plateau_noise:     float = 0.12,     # FBM amplitude on plateau surface
     roughness:         float = 0.50,
-    blur_radius:       int   = 2,
-    octaves:           int   = 4
+    blur_radius:       float = 2.0,
+    octaves:           int   = 4,
+    base_terrain:      Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """
     Carve a heightmap from `distance_field`.
@@ -151,11 +174,20 @@ def generate_canyon_base(
     warp_y = fbm(p_warp2, gx * wscale + 8.3, gy * wscale + 2.8, octaves=4, gain=0.5)
 
     # ── Natural Canyon base generation ──────────────────
-    base = fbm(p_terrain, gx + warp_x * warp_strength,
-                          gy + warp_y * warp_strength,
-               octaves=octaves, gain=roughness)
-    t = (base + 1.0) * 0.5
-    natural_canyon = canyon_transfer(t, 1.0 - wall_slope, 1.0 - lane_depth)
+    if base_terrain is not None:
+        # Use provided terrain as the natural base, normalized to [0, 1]
+        t_min = base_terrain.min()
+        t_max = base_terrain.max()
+        if t_max > t_min:
+            natural_canyon = (base_terrain - t_min) / (t_max - t_min)
+        else:
+            natural_canyon = np.zeros_like(base_terrain)
+    else:
+        base = fbm(p_terrain, gx + warp_x * warp_strength,
+                              gy + warp_y * warp_strength,
+                   octaves=octaves, gain=roughness)
+        t = (base + 1.0) * 0.5
+        natural_canyon = canyon_transfer(t, 1.0 - wall_slope, 1.0 - lane_depth)
 
     # ── Fallback: no distance field → pure noise canyons ──────────────────
     if distance_field is None or np.all(distance_field == np.inf):
@@ -208,20 +240,23 @@ def generate_canyon_base(
     )
 
     # ── Terrain noise on plateau surface ──────────────────────────────────
-    # Sample noise at a frequency that gives medium-sized bumps on the plateau
-    nscale  = 3.5
-    terrain = fbm(p_terrain, gx * nscale + 0.5, gy * nscale + 0.5,
-                  octaves=octaves, gain=roughness)
-    terrain = (terrain + 1.0) * 0.5   # → [0, 1]
+    if base_terrain is not None:
+        heightmap = base_height
+    else:
+        # Sample noise at a frequency that gives medium-sized bumps on the plateau
+        nscale  = 3.5
+        terrain = fbm(p_terrain, gx * nscale + 0.5, gy * nscale + 0.5,
+                      octaves=octaves, gain=roughness)
+        terrain = (terrain + 1.0) * 0.5   # → [0, 1]
 
-    # Noise weight: full amplitude on plateau, fades to zero inside lanes
-    # so canyon floors stay clean and flat. We use natural_canyon as base,
-    # so the added noise here should just be a small extra bump if any.
-    noise_weight = smoothstep(0.0, wall_slope, d_norm) * plateau_noise
-    heightmap    = np.clip(
-        base_height + (terrain - 0.5) * noise_weight * 2.0,
-        0.0, 1.0
-    )
+        # Noise weight: full amplitude on plateau, fades to zero inside lanes
+        # so canyon floors stay clean and flat. We use natural_canyon as base,
+        # so the added noise here should just be a small extra bump if any.
+        noise_weight = smoothstep(0.0, wall_slope, d_norm) * plateau_noise
+        heightmap    = np.clip(
+            base_height + (terrain - 0.5) * noise_weight * 2.0,
+            0.0, 1.0
+        )
 
     # ── Final blur (replicates Source engine heightmap softness) ──────────
     heightmap = gaussian_blur(heightmap, blur_radius)

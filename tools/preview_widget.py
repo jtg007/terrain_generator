@@ -395,6 +395,7 @@ class MapPreviewWidget(QWidget):
     resource_moved = Signal(int, float, float)  # (index, x, y)
     resource_added = Signal(float, float)  # (x, y)
     layout_changed = Signal()  # emitted when nodes/links change to update preview
+    lanes_changed = Signal()   # emitted only for node/lane topology changes (no heightmap regen)
     lane_width_changed = Signal(float)  # Emits absolute width in units
 
     def __init__(self, parent=None):
@@ -714,7 +715,7 @@ class MapPreviewWidget(QWidget):
         self._active_mouse_button = None
 
         # Clear radii for entity zones
-        self.base_clear_radius = 512
+        self.base_clear_radius = 0
         self.resource_clear_radius = 256
         self.lane_node_radius = 512
 
@@ -1630,11 +1631,13 @@ class MapPreviewWidget(QWidget):
         self.redraw_fixed_entities()
         self.base_moved.emit("imp", 0.0, 0.0)
         self.base_moved.emit("nf", 0.0, 0.0)
+        self.lanes_changed.emit()
         self.layout_changed.emit()
 
     def record_action(self, action_type, item):
         self.history.append((action_type, item))
         self.redo_history.clear()
+        self.lanes_changed.emit()
         self.layout_changed.emit()
 
     def undo(self):

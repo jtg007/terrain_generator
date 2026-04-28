@@ -72,7 +72,7 @@ class TerrainSpec:
     plateau_noise: float = 0.12
     wall_slope: float = 0.06
     lane_depth: float = 0.72
-    blur_radius: int = 10
+    blur_radius: float = 0.0
 
     material: str = "nature/terrain/blend_dirt_grass_dmz_sscale"
     underlay_material: str = "TOOLS/TOOLSSKIP"
@@ -88,7 +88,7 @@ class TerrainSpec:
     custom_layout_nodes: Optional[List[LayoutNode]] = None
     custom_layout_connections: Optional[List[LayoutConnection]] = None
 
-    base_clear_radius: int = 512
+    base_clear_radius: int = 0
     base_flatness: float = 0.8
     resource_clear_radius: int = 256
     lane_node_radius: int = 512

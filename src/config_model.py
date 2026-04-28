@@ -44,7 +44,7 @@ class GUIConfigModel:
     plateau_noise: float = 0.12
     wall_slope: float = 0.06
     lane_depth: float = 0.72
-    blur_radius: int = 10
+    blur_radius: float = 0.0
 
     # Selected preset for UI tracking
     preset_name: str = "mixed"
@@ -57,7 +57,7 @@ class GUIConfigModel:
     use_nodetail_texture: bool = False
 
     # Base flattening settings
-    base_clear_radius: int = 512
+    base_clear_radius: int = 0
     base_flatness: float = 0.8
     resource_clear_radius: int = 256
     lane_node_radius: int = 512
