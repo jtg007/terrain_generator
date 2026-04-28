@@ -150,14 +150,16 @@ def generate_canyon_base(
     warp_x = fbm(p_warp1, gx * wscale + 1.7, gy * wscale + 9.2, octaves=4, gain=0.5)
     warp_y = fbm(p_warp2, gx * wscale + 8.3, gy * wscale + 2.8, octaves=4, gain=0.5)
 
+    # ── Natural Canyon base generation ──────────────────
+    base = fbm(p_terrain, gx + warp_x * warp_strength,
+                          gy + warp_y * warp_strength,
+               octaves=octaves, gain=0.45)
+    t = (base + 1.0) * 0.5
+    natural_canyon = canyon_transfer(t, 1.0 - wall_slope, 1.0 - lane_depth)
+
     # ── Fallback: no distance field → pure noise canyons ──────────────────
     if distance_field is None or np.all(distance_field == np.inf):
-        base = fbm(p_terrain, gx + warp_x * warp_strength,
-                              gy + warp_y * warp_strength,
-                   octaves=octaves, gain=roughness)
-        t = (base + 1.0) * 0.5
-        heightmap = canyon_transfer(t, 1.0 - wall_slope, 1.0 - lane_depth)
-        return gaussian_blur(heightmap, blur_radius).astype(np.float32)
+        return gaussian_blur(natural_canyon, blur_radius).astype(np.float32)
 
     # ══════════════════════════════════════════════════════════════════════
     #  FIX 1 – normalise SDF by pixel dimensions, not physical_map_size.
@@ -194,16 +196,15 @@ def generate_canyon_base(
     #          Empires maps; the darkest areas are a dark grey (~0.05-0.10).
     #          lane_depth=0.72 → floor_h ≈ 0.056  (very dark but not black)
     floor_h   = (1.0 - lane_depth) * 0.20   # 0.0 < floor_h < 0.20
-    plateau_h = 0.58                          # matches emp_slaughtered plateau brightness
 
     # Ramp: 0.0 at the lane edge → 1.0 at wall_slope distance
     wall_ramp = smoothstep(0.0, wall_slope, d_norm)
 
-    # Smooth height: floor inside lane, continuous ramp on wall, plateau outside
+    # Smooth height: floor inside lane, continuous ramp on wall, natural canyon outside
     base_height = np.where(
         d_norm < 0.0,
         floor_h,                                           # canyon floor
-        floor_h + wall_ramp * (plateau_h - floor_h)       # wall → plateau
+        floor_h + wall_ramp * (natural_canyon - floor_h)  # wall → natural canyon
     )
 
     # ── Terrain noise on plateau surface ──────────────────────────────────
@@ -214,7 +215,8 @@ def generate_canyon_base(
     terrain = (terrain + 1.0) * 0.5   # → [0, 1]
 
     # Noise weight: full amplitude on plateau, fades to zero inside lanes
-    # so canyon floors stay clean and flat.
+    # so canyon floors stay clean and flat. We use natural_canyon as base,
+    # so the added noise here should just be a small extra bump if any.
     noise_weight = smoothstep(0.0, wall_slope, d_norm) * plateau_noise
     heightmap    = np.clip(
         base_height + (terrain - 0.5) * noise_weight * 2.0,

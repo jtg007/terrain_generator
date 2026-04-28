@@ -1020,8 +1020,10 @@ def flatten_base_areas(
     base_radius = spec.base_clear_radius
     flatness = spec.base_flatness
 
-    # In manual mode, only use custom positions. In procedural mode, use defaults if not set.
-    if spec.manual_terrain:
+    # In manual mode or when custom layout lanes are drawn, only use custom base positions.
+    # We don't want default bases spawning if the user is explicitly drawing custom lanes
+    # but hasn't placed bases yet. In fully procedural mode, use defaults if not set.
+    if spec.manual_terrain or spec.custom_layout_connections:
         imp_base_x = spec.custom_imp_base_x
         imp_base_y = spec.custom_imp_base_y
         nf_base_x = spec.custom_nf_base_x
