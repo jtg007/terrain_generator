@@ -975,34 +975,40 @@ def load_custom_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     return grid
 
 
-def smooth_heights(grid: HeightGrid, iterations: int = 1) -> HeightGrid:
+def smooth_heights(grid: HeightGrid, iterations: int = 1, effective_roughness: float = 0.5) -> HeightGrid:
     """
     Step 3: Smooth heights using 3x3 averaging kernel.
 
     Each vertex becomes the average of itself and 8 neighbors.
     Border vertices remain unchanged (no neighbors outside grid).
     """
-    rows = grid.rows
-    cols = grid.cols
     original_heights = grid.heights.copy()
-
     current_heights = grid.heights.copy()
 
-    for _ in range(iterations):
-        new_heights = np.zeros_like(current_heights)
-        for r in range(rows):
-            for c in range(cols):
-                if r == 0 or r == rows - 1 or c == 0 or c == cols - 1:
-                    new_heights[r, c] = current_heights[r, c]
-                else:
-                    total = 0.0
-                    count = 0
-                    for dr in (-1, 0, 1):
-                        for dc in (-1, 0, 1):
-                            total += current_heights[r + dr, c + dc]
-                            count += 1
-                    new_heights[r, c] = total / count
-        current_heights = new_heights
+    if iterations > 0:
+        for _ in range(iterations):
+            # Pad the array by 1 on each edge, using the edge values
+            padded = np.pad(current_heights, 1, mode='edge')
+
+            # Create sum of 3x3 windows
+            smoothed = (
+                padded[:-2, :-2] + padded[:-2, 1:-1] + padded[:-2, 2:] +
+                padded[1:-1, :-2] + padded[1:-1, 1:-1] + padded[1:-1, 2:] +
+                padded[2:, :-2] + padded[2:, 1:-1] + padded[2:, 2:]
+            ) / 9.0
+
+            # Restore original border vertices (first/last row and col)
+            smoothed[0, :] = current_heights[0, :]
+            smoothed[-1, :] = current_heights[-1, :]
+            smoothed[:, 0] = current_heights[:, 0]
+            smoothed[:, -1] = current_heights[:, -1]
+
+            current_heights = smoothed
+
+        # Blend the smoothed result with original based on roughness
+        # Roughness 1.0 = mostly original, Roughness 0.0 = mostly smoothed
+        blend_factor = 1.0 - effective_roughness
+        current_heights = original_heights * (1.0 - blend_factor) + current_heights * blend_factor
 
     grid.heights = np.where(
         grid.global_selection_mask, current_heights, original_heights
@@ -1969,7 +1975,11 @@ def apply_pipeline_for_preview(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
             terrain_copy.global_selection_mask, terrain_copy.heights, heights
         )
 
-    terrain_copy = smooth_heights(terrain_copy, iterations=2)
+    terrain_copy = smooth_heights(
+        terrain_copy,
+        iterations=2,
+        effective_roughness=getattr(spec, "roughness", 0.50),
+    )
 
     effective_max_slope = spec.max_slope_step
     if getattr(spec, "topology", "canyon") == "canyon":
