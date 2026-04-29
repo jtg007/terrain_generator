@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QSplitter,
     QScrollArea,
+    QTabWidget,
     QToolButton,
 )
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPropertyAnimation, QAbstractAnimation, QParallelAnimationGroup
@@ -258,81 +259,6 @@ class GenerationWorker(QThread):
             traceback.print_exc()
             self.finished.emit(False, str(e), None)
 
-
-class CollapsibleBox(QWidget):
-    """
-    A collapsible custom widget with a clickable header.
-    """
-    def __init__(self, title="", parent=None):
-        super().__init__(parent)
-
-        self.toggle_button = QToolButton(self)
-        self.toggle_button.setText(f"▼ {title}")
-        self.toggle_button.setCheckable(True)
-        self.toggle_button.setChecked(True)
-        self.toggle_button.setStyleSheet("""
-            QToolButton {
-                border: none;
-                font-weight: bold;
-                font-size: 13px;
-                text-align: left;
-                padding: 4px;
-                color: #e5e7eb;
-            }
-            QToolButton:hover {
-                color: #3b82f6;
-            }
-        """)
-        self.toggle_button.clicked.connect(self.on_pressed)
-
-        self.toggle_animation = QParallelAnimationGroup(self)
-        self.toggle_animation.addAnimation(QPropertyAnimation(self, b"minimumHeight"))
-        self.toggle_animation.addAnimation(QPropertyAnimation(self, b"maximumHeight"))
-
-        self.content_area = QScrollArea(self)
-        self.content_area.setWidgetResizable(True)
-        self.content_area.setSizePolicy(
-            self.content_area.sizePolicy().Policy.Expanding,
-            self.content_area.sizePolicy().Policy.Fixed
-        )
-        self.content_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
-
-        self.content_widget = QWidget()
-        self.content_area.setWidget(self.content_widget)
-        self.content_layout = QVBoxLayout(self.content_widget)
-        self.content_layout.setContentsMargins(4, 4, 4, 4)
-        self.content_layout.setSpacing(6)
-
-        main_layout = QVBoxLayout(self)
-        main_layout.setSpacing(0)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.addWidget(self.toggle_button)
-        main_layout.addWidget(self.content_area)
-
-        for i in range(self.toggle_animation.animationCount()):
-            animation = self.toggle_animation.animationAt(i)
-            animation.setDuration(200)
-
-    def on_pressed(self):
-        checked = self.toggle_button.isChecked()
-        arrow = "▼" if checked else "▶"
-        title = self.toggle_button.text().split(" ", 1)[1]
-        self.toggle_button.setText(f"{arrow} {title}")
-
-        if not checked:
-            self.content_area.setMaximumHeight(0)
-        else:
-            self.content_area.setMaximumHeight(16777215) # QWIDGETSIZE_MAX
-
-    def setContentLayout(self, content_layout):
-        while content_layout.count():
-            item = content_layout.takeAt(0)
-            if item.widget():
-                self.content_layout.addWidget(item.widget())
-            elif item.layout():
-                self.content_layout.addLayout(item.layout())
-            elif item.spacerItem():
-                self.content_layout.addItem(item.spacerItem())
 
 
 class TerrainGeneratorGUI(QMainWindow):
@@ -593,9 +519,46 @@ class TerrainGeneratorGUI(QMainWindow):
         config_layout.setSpacing(6)
         config_layout.setContentsMargins(14, 10, 14, 10)
 
+        self.tab_widget = QTabWidget()
+        config_layout.addWidget(self.tab_widget)
+
+        self.tab_main = QScrollArea()
+        self.tab_main.setWidgetResizable(True)
+        self.tab_main.setFrameShape(QScrollArea.NoFrame)
+        self.tab_main_content = QWidget()
+        self.tab_main_layout = QVBoxLayout(self.tab_main_content)
+        self.tab_main_layout.setAlignment(Qt.AlignTop)
+        self.tab_main.setWidget(self.tab_main_content)
+
+        self.tab_shape = QScrollArea()
+        self.tab_shape.setWidgetResizable(True)
+        self.tab_shape.setFrameShape(QScrollArea.NoFrame)
+        self.tab_shape_content = QWidget()
+        self.tab_shape_layout = QVBoxLayout(self.tab_shape_content)
+        self.tab_shape_layout.setAlignment(Qt.AlignTop)
+        self.tab_shape.setWidget(self.tab_shape_content)
+
+        self.tab_gameplay = QScrollArea()
+        self.tab_gameplay.setWidgetResizable(True)
+        self.tab_gameplay.setFrameShape(QScrollArea.NoFrame)
+        self.tab_gameplay_content = QWidget()
+        self.tab_gameplay_layout = QVBoxLayout(self.tab_gameplay_content)
+        self.tab_gameplay_layout.setAlignment(Qt.AlignTop)
+        self.tab_gameplay.setWidget(self.tab_gameplay_content)
+
+        self.tab_widget.addTab(self.tab_main, "Main")
+        self.tab_widget.addTab(self.tab_shape, "Shape")
+        self.tab_widget.addTab(self.tab_gameplay, "Gameplay")
+
         # ─── GENERAL ───
-        sec_general = CollapsibleBox("GENERAL")
-        config_layout.addWidget(sec_general)
+        lbl_sec_general = QLabel("GENERAL")
+        lbl_sec_general.setObjectName("ConfigSection")
+        self.tab_main_layout.addWidget(lbl_sec_general)
+
+        sec_general = QWidget()
+        sec_general.content_layout = QVBoxLayout(sec_general)
+        sec_general.content_layout.setContentsMargins(0,0,0,0)
+        self.tab_main_layout.addWidget(sec_general)
 
         # Map Name
         name_row = QHBoxLayout()
@@ -648,8 +611,14 @@ class TerrainGeneratorGUI(QMainWindow):
 
 
         # ─── MAP DIMENSIONS ───
-        sec_dimensions = CollapsibleBox("MAP DIMENSIONS")
-        config_layout.addWidget(sec_dimensions)
+        lbl_sec_dimensions = QLabel("MAP DIMENSIONS")
+        lbl_sec_dimensions.setObjectName("ConfigSection")
+        self.tab_main_layout.addWidget(lbl_sec_dimensions)
+
+        sec_dimensions = QWidget()
+        sec_dimensions.content_layout = QVBoxLayout(sec_dimensions)
+        sec_dimensions.content_layout.setContentsMargins(0,0,0,0)
+        self.tab_main_layout.addWidget(sec_dimensions)
 
         dim_header = QHBoxLayout()
         dim_header.setSpacing(8)
@@ -754,8 +723,14 @@ class TerrainGeneratorGUI(QMainWindow):
         self.combo_power.currentIndexChanged.connect(self.sync_to_model)
 
         # ─── TERRAIN SHAPE ───
-        sec_terrain_shape = CollapsibleBox("TERRAIN SHAPE")
-        config_layout.addWidget(sec_terrain_shape)
+        lbl_sec_terrain_shape = QLabel("TERRAIN SHAPE")
+        lbl_sec_terrain_shape.setObjectName("ConfigSection")
+        self.tab_shape_layout.addWidget(lbl_sec_terrain_shape)
+
+        sec_terrain_shape = QWidget()
+        sec_terrain_shape.content_layout = QVBoxLayout(sec_terrain_shape)
+        sec_terrain_shape.content_layout.setContentsMargins(0,0,0,0)
+        self.tab_shape_layout.addWidget(sec_terrain_shape)
 
         # Topology
         topo_row = QHBoxLayout()
@@ -970,8 +945,14 @@ class TerrainGeneratorGUI(QMainWindow):
         sec_terrain_shape.content_layout.addLayout(eros_row)
 
         # ─── MAZE SETTINGS ───
-        self.sec_maze_settings = CollapsibleBox("MAZE SETTINGS")
-        config_layout.addWidget(self.sec_maze_settings)
+        self.lbl_sec_maze_settings = QLabel("MAZE SETTINGS")
+        self.lbl_sec_maze_settings.setObjectName("ConfigSection")
+        self.tab_shape_layout.addWidget(self.lbl_sec_maze_settings)
+
+        self.sec_maze_settings = QWidget()
+        self.sec_maze_settings.content_layout = QVBoxLayout(self.sec_maze_settings)
+        self.sec_maze_settings.content_layout.setContentsMargins(0,0,0,0)
+        self.tab_shape_layout.addWidget(self.sec_maze_settings)
 
         # Maze Size
         ms_row = QHBoxLayout()
@@ -1046,8 +1027,14 @@ class TerrainGeneratorGUI(QMainWindow):
 
 
         # ─── BASE AREAS ───
-        sec_base_areas = CollapsibleBox("BASE AREAS")
-        config_layout.addWidget(sec_base_areas)
+        lbl_sec_base_areas = QLabel("BASE AREAS")
+        lbl_sec_base_areas.setObjectName("ConfigSection")
+        self.tab_gameplay_layout.addWidget(lbl_sec_base_areas)
+
+        sec_base_areas = QWidget()
+        sec_base_areas.content_layout = QVBoxLayout(sec_base_areas)
+        sec_base_areas.content_layout.setContentsMargins(0,0,0,0)
+        self.tab_gameplay_layout.addWidget(sec_base_areas)
 
         # Base Radius
         br_row = QHBoxLayout()
@@ -1113,8 +1100,14 @@ class TerrainGeneratorGUI(QMainWindow):
 
 
         # ─── MATERIALS ───
-        sec_materials = CollapsibleBox("MATERIALS")
-        config_layout.addWidget(sec_materials)
+        lbl_sec_materials = QLabel("MATERIALS")
+        lbl_sec_materials.setObjectName("ConfigSection")
+        self.tab_shape_layout.addWidget(lbl_sec_materials)
+
+        sec_materials = QWidget()
+        sec_materials.content_layout = QVBoxLayout(sec_materials)
+        sec_materials.content_layout.setContentsMargins(0,0,0,0)
+        self.tab_shape_layout.addWidget(sec_materials)
 
         mat_row = QHBoxLayout()
         mat_row.setSpacing(8)
@@ -1143,8 +1136,14 @@ class TerrainGeneratorGUI(QMainWindow):
 
 
         # ─── SETTINGS ───
-        sec_settings = CollapsibleBox("SETTINGS")
-        config_layout.addWidget(sec_settings)
+        lbl_sec_settings = QLabel("SETTINGS")
+        lbl_sec_settings.setObjectName("ConfigSection")
+        self.tab_gameplay_layout.addWidget(lbl_sec_settings)
+
+        sec_settings = QWidget()
+        sec_settings.content_layout = QVBoxLayout(sec_settings)
+        sec_settings.content_layout.setContentsMargins(0,0,0,0)
+        self.tab_gameplay_layout.addWidget(sec_settings)
 
         spawn_grid = QGridLayout()
         spawn_grid.setSpacing(4)
@@ -1223,11 +1222,7 @@ class TerrainGeneratorGUI(QMainWindow):
         scroll_content = QWidget()
         scroll_content.setLayout(config_layout)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(scroll_content)
-        scroll.setFrameShape(QScrollArea.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll = scroll_content # The tabs themselves have scroll areas inside now
         scroll.setMinimumWidth(240)
 
         # ── Data & Tools Setup ──
@@ -1265,8 +1260,12 @@ class TerrainGeneratorGUI(QMainWindow):
         """Show or hide maze settings depending on current topology."""
         if self.combo_topology.currentText() == "Canyon Maze":
             self.sec_maze_settings.setVisible(True)
+            if hasattr(self, "lbl_sec_maze_settings"):
+                self.lbl_sec_maze_settings.setVisible(True)
         else:
             self.sec_maze_settings.setVisible(False)
+            if hasattr(self, "lbl_sec_maze_settings"):
+                self.lbl_sec_maze_settings.setVisible(False)
 
     def validate_current_layout(self):
         """Validates layout and returns (invalid_entity_ids, error_messages)."""
@@ -1637,6 +1636,29 @@ class TerrainGeneratorGUI(QMainWindow):
         QPushButton#CompileButton:disabled {{
             background: #1e2e24;
             color: {TEXT_DIM};
+        }}
+
+        /* ── QTabWidget ── */
+        QTabWidget::pane {{
+            border: none;
+            background: transparent;
+        }}
+        QTabBar::tab {{
+            background: transparent;
+            color: #888888;
+            padding: 8px 16px;
+            font-weight: 600;
+            font-size: 11px;
+            border-bottom: 2px solid transparent;
+        }}
+        QTabBar::tab:hover {{
+            color: #ffffff;
+            background: #2a2a34;
+        }}
+        QTabBar::tab:selected {{
+            color: #4a90e2;
+            border-bottom: 2px solid #4a90e2;
+            background: #1a2332;
         }}
 
         /* ── Generic Buttons ── */
@@ -2130,6 +2152,8 @@ class TerrainGeneratorGUI(QMainWindow):
             self.slider_erosion,
             self.slider_feature_scale,
             self.slider_lane_node_radius,
+            self.slider_maze_size,
+            self.slider_lane_numbers,
             self.slider_base_radius,
             self.slider_base_flatness,
             self.combo_power,
@@ -2188,6 +2212,11 @@ class TerrainGeneratorGUI(QMainWindow):
             self.slider_feature_scale.setValue(
                 int(self.config_model.feature_scale * 100)
             )
+
+            self.slider_maze_size.setValue(self.config_model.maze_size)
+            self.lbl_maze_size_val.setText(f"{self.config_model.maze_size}%")
+            self.slider_lane_numbers.setValue(self.config_model.lane_numbers)
+            self.lbl_lane_numbers_val.setText(str(self.config_model.lane_numbers))
 
             self.slider_base_radius.setValue(self.config_model.base_clear_radius)
             self.slider_base_flatness.setValue(
@@ -2282,6 +2311,8 @@ class TerrainGeneratorGUI(QMainWindow):
             self.config_model.blur_radius = 0.5 + (_es - 1) / 99.0 * 9.5
 
         self.config_model.feature_scale = self.slider_feature_scale.value() / 100.0
+        self.config_model.maze_size = self.slider_maze_size.value()
+        self.config_model.lane_numbers = self.slider_lane_numbers.value()
 
         self.config_model.base_clear_radius = self.slider_base_radius.value()
         self.config_model.base_flatness = self.slider_base_flatness.value() / 100.0
