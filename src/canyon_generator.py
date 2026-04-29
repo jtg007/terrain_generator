@@ -141,7 +141,7 @@ def generate_canyon_base(
     roughness:         float = 0.50,
     blur_radius:       float = 2.0,
     octaves:           int   = 4,
-    base_terrain:      Optional[np.ndarray] = None,
+    base_terrain:      np.ndarray = None,
 ) -> np.ndarray:
     """
     Carve a heightmap from `distance_field`.
