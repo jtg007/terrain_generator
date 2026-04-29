@@ -42,6 +42,8 @@ class GUIConfigModel:
     feature_scale: float = 1.8
     warp_strength: float = 0.018
     plateau_noise: float = 0.12
+    maze_size: int = 50
+    lane_numbers: int = 4
     wall_slope: float = 0.06
     lane_depth: float = 0.72
     blur_radius: float = 0.0
@@ -237,6 +239,8 @@ class GUIConfigModel:
             wall_slope=self.wall_slope,
             lane_depth=self.lane_depth,
             blur_radius=self.blur_radius,
+            maze_size=self.maze_size,
+            lane_numbers=self.lane_numbers,
             custom_image_path=self.custom_image_path,
             base_clear_radius=self.base_clear_radius,
             base_flatness=self.base_flatness,
