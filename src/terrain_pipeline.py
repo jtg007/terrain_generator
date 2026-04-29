@@ -169,16 +169,26 @@ def generate_strategic_layout(
         nodes.extend([b1, b2])
 
         # A grid-like structure of nodes to create paths
-        grid_size = 4
-        spacing = spec.size_x / grid_size
+        grid_size = getattr(spec, "lane_numbers", 4)
+        maze_scale = getattr(spec, "maze_size", 50) / 100.0
+        maze_dim_x = spec.size_x * maze_scale
+        maze_dim_y = spec.size_y * maze_scale
+
+        spacing_x = maze_dim_x / grid_size
+        spacing_y = maze_dim_y / grid_size
+
+        # Center the maze
+        offset_x = spec.origin_x + (spec.size_x - maze_dim_x) / 2
+        offset_y = spec.origin_y + (spec.size_y - maze_dim_y) / 2
+
         grid_nodes = []
         for ix in range(1, grid_size):
             for iy in range(1, grid_size):
                 # add some jitter
-                jx = (ix * spacing) + rng.uniform(-spacing * 0.3, spacing * 0.3)
-                jy = (iy * spacing) + rng.uniform(-spacing * 0.3, spacing * 0.3)
-                jx = jx + spec.origin_x
-                jy = jy + spec.origin_y
+                jx = (ix * spacing_x) + rng.uniform(-spacing_x * 0.3, spacing_x * 0.3)
+                jy = (iy * spacing_y) + rng.uniform(-spacing_y * 0.3, spacing_y * 0.3)
+                jx = jx + offset_x
+                jy = jy + offset_y
 
                 gn = LayoutNode(jx, jy, node_radius, ZoneType.VEHICLE_OPEN)
                 nodes.append(gn)
@@ -222,7 +232,12 @@ def generate_strategic_layout(
         # Ensure minimal viable connectivity (base -> b1_node -> ... -> b2_node -> base)
         # We rely on rng and high chance for connections to generally make it playable
         # To be safe, force a specific central path.
-        path = [(1, 1), (2, 1), (2, 2), (3, 2), (3, 3)]
+        path = []
+        for i in range(1, grid_size):
+            path.append((i, i))
+            if i < grid_size - 1:
+                path.append((i + 1, i))
+
         for i in range(len(path) - 1):
             n1 = get_gn(*path[i])
             n2 = get_gn(*path[i + 1])

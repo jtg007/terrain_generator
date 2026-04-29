@@ -37,8 +37,9 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QSplitter,
     QScrollArea,
+    QToolButton,
 )
-from PySide6.QtCore import Qt, QThread, Signal, QTimer
+from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPropertyAnimation, QAbstractAnimation, QParallelAnimationGroup
 from PySide6.QtGui import (
     QIcon,
     QImage,
@@ -256,6 +257,82 @@ class GenerationWorker(QThread):
 
             traceback.print_exc()
             self.finished.emit(False, str(e), None)
+
+
+class CollapsibleBox(QWidget):
+    """
+    A collapsible custom widget with a clickable header.
+    """
+    def __init__(self, title="", parent=None):
+        super().__init__(parent)
+
+        self.toggle_button = QToolButton(self)
+        self.toggle_button.setText(f"▼ {title}")
+        self.toggle_button.setCheckable(True)
+        self.toggle_button.setChecked(True)
+        self.toggle_button.setStyleSheet("""
+            QToolButton {
+                border: none;
+                font-weight: bold;
+                font-size: 13px;
+                text-align: left;
+                padding: 4px;
+                color: #e5e7eb;
+            }
+            QToolButton:hover {
+                color: #3b82f6;
+            }
+        """)
+        self.toggle_button.clicked.connect(self.on_pressed)
+
+        self.toggle_animation = QParallelAnimationGroup(self)
+        self.toggle_animation.addAnimation(QPropertyAnimation(self, b"minimumHeight"))
+        self.toggle_animation.addAnimation(QPropertyAnimation(self, b"maximumHeight"))
+
+        self.content_area = QScrollArea(self)
+        self.content_area.setWidgetResizable(True)
+        self.content_area.setSizePolicy(
+            self.content_area.sizePolicy().Policy.Expanding,
+            self.content_area.sizePolicy().Policy.Fixed
+        )
+        self.content_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+
+        self.content_widget = QWidget()
+        self.content_area.setWidget(self.content_widget)
+        self.content_layout = QVBoxLayout(self.content_widget)
+        self.content_layout.setContentsMargins(4, 4, 4, 4)
+        self.content_layout.setSpacing(6)
+
+        main_layout = QVBoxLayout(self)
+        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(self.toggle_button)
+        main_layout.addWidget(self.content_area)
+
+        for i in range(self.toggle_animation.animationCount()):
+            animation = self.toggle_animation.animationAt(i)
+            animation.setDuration(200)
+
+    def on_pressed(self):
+        checked = self.toggle_button.isChecked()
+        arrow = "▼" if checked else "▶"
+        title = self.toggle_button.text().split(" ", 1)[1]
+        self.toggle_button.setText(f"{arrow} {title}")
+
+        if not checked:
+            self.content_area.setMaximumHeight(0)
+        else:
+            self.content_area.setMaximumHeight(16777215) # QWIDGETSIZE_MAX
+
+    def setContentLayout(self, content_layout):
+        while content_layout.count():
+            item = content_layout.takeAt(0)
+            if item.widget():
+                self.content_layout.addWidget(item.widget())
+            elif item.layout():
+                self.content_layout.addLayout(item.layout())
+            elif item.spacerItem():
+                self.content_layout.addItem(item.spacerItem())
 
 
 class TerrainGeneratorGUI(QMainWindow):
@@ -504,12 +581,6 @@ class TerrainGeneratorGUI(QMainWindow):
             w.setLayout(row_layout)
             return w
 
-        # ── Helper: section divider inside scroll area ──
-        def make_section_label(text):
-            lbl = QLabel(text)
-            lbl.setObjectName("ConfigSection")
-            return lbl
-
         # ── Helper: thin horizontal line ──
         def make_divider():
             d = QWidget()
@@ -523,7 +594,8 @@ class TerrainGeneratorGUI(QMainWindow):
         config_layout.setContentsMargins(14, 10, 14, 10)
 
         # ─── GENERAL ───
-        config_layout.addWidget(make_section_label("GENERAL"))
+        sec_general = CollapsibleBox("GENERAL")
+        config_layout.addWidget(sec_general)
 
         # Map Name
         name_row = QHBoxLayout()
@@ -535,7 +607,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.txt_map_name.setText("gui_terrain")
         self.txt_map_name.setPlaceholderText("Enter map name...")
         name_row.addWidget(self.txt_map_name, 1)
-        config_layout.addLayout(name_row)
+        sec_general.content_layout.addLayout(name_row)
 
         # Seed
         seed_row = QHBoxLayout()
@@ -553,7 +625,7 @@ class TerrainGeneratorGUI(QMainWindow):
             lambda: self.spin_seed.setValue(random.randint(0, 999999999))
         )
         seed_row.addWidget(self.btn_random_seed)
-        config_layout.addLayout(seed_row)
+        sec_general.content_layout.addLayout(seed_row)
         self.spin_seed.valueChanged.connect(self.sync_to_model)
 
         # Custom Image
@@ -570,16 +642,17 @@ class TerrainGeneratorGUI(QMainWindow):
         self.lbl_image_path = QLabel("None")
         self.lbl_image_path.setObjectName("HintLabel")
         img_row.addWidget(self.lbl_image_path, 1)
-        config_layout.addLayout(img_row)
+        sec_general.content_layout.addLayout(img_row)
         self.chk_custom_image.toggled.connect(self.toggle_custom_image)
         self.btn_browse.clicked.connect(self.browse_image)
 
-        config_layout.addWidget(make_divider())
 
         # ─── MAP DIMENSIONS ───
+        sec_dimensions = CollapsibleBox("MAP DIMENSIONS")
+        config_layout.addWidget(sec_dimensions)
+
         dim_header = QHBoxLayout()
         dim_header.setSpacing(8)
-        dim_header.addWidget(make_section_label("MAP DIMENSIONS"))
         dim_header.addStretch()
         self.btn_size_help = QPushButton("Size Help")
         self.btn_size_help.setObjectName("SmallButton")
@@ -588,7 +661,7 @@ class TerrainGeneratorGUI(QMainWindow):
         )
         self.btn_size_help.clicked.connect(self.show_map_size_help)
         dim_header.addWidget(self.btn_size_help)
-        config_layout.addLayout(dim_header)
+        sec_dimensions.content_layout.addLayout(dim_header)
 
         dim_grid = QGridLayout()
         dim_grid.setSpacing(6)
@@ -644,7 +717,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.combo_power.addItems(["2 (5×5)", "3 (9×9)", "4 (17×17)"])
         dim_grid.addWidget(self.combo_power, 2, 1)
 
-        config_layout.addLayout(dim_grid)
+        sec_dimensions.content_layout.addLayout(dim_grid)
 
         size_auto_row = QHBoxLayout()
         size_auto_row.setSpacing(8)
@@ -666,12 +739,12 @@ class TerrainGeneratorGUI(QMainWindow):
         )
         self.btn_auto_tile_size.clicked.connect(self.auto_compute_tile_size_from_target)
         size_auto_row.addWidget(self.btn_auto_tile_size)
-        config_layout.addLayout(size_auto_row)
+        sec_dimensions.content_layout.addLayout(size_auto_row)
 
         # Live map-size info label
         self.lbl_map_info = QLabel()
         self.lbl_map_info.setObjectName("HintLabel")
-        config_layout.addWidget(self.lbl_map_info)
+        sec_dimensions.content_layout.addWidget(self.lbl_map_info)
 
         self.spin_tiles_x.valueChanged.connect(self.sync_to_model)
         self.spin_tiles_y.valueChanged.connect(self.sync_to_model)
@@ -680,10 +753,9 @@ class TerrainGeneratorGUI(QMainWindow):
         self.spin_skybox_ceiling.valueChanged.connect(self.sync_to_model)
         self.combo_power.currentIndexChanged.connect(self.sync_to_model)
 
-        config_layout.addWidget(make_divider())
-
         # ─── TERRAIN SHAPE ───
-        config_layout.addWidget(make_section_label("TERRAIN SHAPE"))
+        sec_terrain_shape = CollapsibleBox("TERRAIN SHAPE")
+        config_layout.addWidget(sec_terrain_shape)
 
         # Topology
         topo_row = QHBoxLayout()
@@ -701,7 +773,7 @@ class TerrainGeneratorGUI(QMainWindow):
         )
         self.combo_topology.setCurrentIndex(0)
         topo_row.addWidget(self.combo_topology, 1)
-        config_layout.addLayout(topo_row)
+        sec_terrain_shape.content_layout.addLayout(topo_row)
 
         # Lane Node Radius
         lnr_row = QHBoxLayout()
@@ -722,7 +794,7 @@ class TerrainGeneratorGUI(QMainWindow):
             ),
             1,
         )
-        config_layout.addLayout(lnr_row)
+        sec_terrain_shape.content_layout.addLayout(lnr_row)
 
         # Lane Width
         lw_row = QHBoxLayout()
@@ -740,7 +812,7 @@ class TerrainGeneratorGUI(QMainWindow):
         lw_row.addWidget(
             make_slider_row(self.slider_lane_width, self.lbl_lane_width_val, "%"), 1
         )
-        config_layout.addLayout(lw_row)
+        sec_terrain_shape.content_layout.addLayout(lw_row)
 
         # Mountain Height
         mh_row = QHBoxLayout()
@@ -761,7 +833,7 @@ class TerrainGeneratorGUI(QMainWindow):
             ),
             1,
         )
-        config_layout.addLayout(mh_row)
+        sec_terrain_shape.content_layout.addLayout(mh_row)
 
         # Canyon Depth (previously canyon_threshold)
         cd_row = QHBoxLayout()
@@ -780,7 +852,7 @@ class TerrainGeneratorGUI(QMainWindow):
             ),
             1,
         )
-        config_layout.addLayout(cd_row)
+        sec_terrain_shape.content_layout.addLayout(cd_row)
 
         # Wall Steepness (previously plateau gap / plateau_threshold)
         cs_row = QHBoxLayout()
@@ -799,7 +871,7 @@ class TerrainGeneratorGUI(QMainWindow):
             ),
             1,
         )
-        config_layout.addLayout(cs_row)
+        sec_terrain_shape.content_layout.addLayout(cs_row)
 
         # Lane Elevation
         le_row = QHBoxLayout()
@@ -820,7 +892,7 @@ class TerrainGeneratorGUI(QMainWindow):
             ),
             1,
         )
-        config_layout.addLayout(le_row)
+        sec_terrain_shape.content_layout.addLayout(le_row)
 
         # Feature Scale
         fs_row = QHBoxLayout()
@@ -839,7 +911,7 @@ class TerrainGeneratorGUI(QMainWindow):
             make_slider_row(self.slider_feature_scale, self.lbl_feature_scale_val, "%"),
             1,
         )
-        config_layout.addLayout(fs_row)
+        sec_terrain_shape.content_layout.addLayout(fs_row)
 
         # Warp Strength
         warp_row = QHBoxLayout()
@@ -852,7 +924,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_warp.setRange(0, 100) # maps to 0.0 to 0.1
         self.lbl_warp_val = QLabel("1.8%")
         warp_row.addWidget(make_slider_row(self.slider_warp, self.lbl_warp_val, "%"), 1)
-        config_layout.addLayout(warp_row)
+        sec_terrain_shape.content_layout.addLayout(warp_row)
 
         # Roughness
         rough_row = QHBoxLayout()
@@ -865,7 +937,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_rough.setRange(0, 100)
         self.lbl_rough_val = QLabel("50%")
         rough_row.addWidget(make_slider_row(self.slider_rough, self.lbl_rough_val, "%"), 1)
-        config_layout.addLayout(rough_row)
+        sec_terrain_shape.content_layout.addLayout(rough_row)
 
         # Plateau Noise
         pn_row = QHBoxLayout()
@@ -878,7 +950,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_plateau_noise.setRange(0, 100) # maps to 0.0 to 1.0
         self.lbl_plateau_noise_val = QLabel("12%")
         pn_row.addWidget(make_slider_row(self.slider_plateau_noise, self.lbl_plateau_noise_val, "%"), 1)
-        config_layout.addLayout(pn_row)
+        sec_terrain_shape.content_layout.addLayout(pn_row)
 
         # Erosion
         eros_row = QHBoxLayout()
@@ -895,7 +967,39 @@ class TerrainGeneratorGUI(QMainWindow):
         eros_row.addWidget(
             make_slider_row(self.slider_erosion, self.lbl_erosion_val, "%"), 1
         )
-        config_layout.addLayout(eros_row)
+        sec_terrain_shape.content_layout.addLayout(eros_row)
+
+        # ─── MAZE SETTINGS ───
+        self.sec_maze_settings = CollapsibleBox("MAZE SETTINGS")
+        config_layout.addWidget(self.sec_maze_settings)
+
+        # Maze Size
+        ms_row = QHBoxLayout()
+        ms_row.setSpacing(8)
+        lbl_ms = QLabel("Maze Size")
+        lbl_ms.setObjectName("FieldLabel")
+        lbl_ms.setToolTip("Scale for the bounding box the maze generates within (10% to 90%)")
+        ms_row.addWidget(lbl_ms)
+        self.slider_maze_size = QSlider(Qt.Horizontal)
+        self.slider_maze_size.setRange(10, 90)
+        self.slider_maze_size.setValue(50)
+        self.lbl_maze_size_val = QLabel("50%")
+        ms_row.addWidget(make_slider_row(self.slider_maze_size, self.lbl_maze_size_val, "%"), 1)
+        self.sec_maze_settings.content_layout.addLayout(ms_row)
+
+        # Lane Numbers (Density)
+        ln_row = QHBoxLayout()
+        ln_row.setSpacing(8)
+        lbl_ln = QLabel("Lane Numbers")
+        lbl_ln.setObjectName("FieldLabel")
+        lbl_ln.setToolTip("Grid density of the maze pathways (2 to 10)")
+        ln_row.addWidget(lbl_ln)
+        self.slider_lane_numbers = QSlider(Qt.Horizontal)
+        self.slider_lane_numbers.setRange(2, 10)
+        self.slider_lane_numbers.setValue(4)
+        self.lbl_lane_numbers_val = QLabel("4")
+        ln_row.addWidget(make_slider_row(self.slider_lane_numbers, self.lbl_lane_numbers_val), 1)
+        self.sec_maze_settings.content_layout.addLayout(ln_row)
 
         # Connect slider value displays
         self.slider_lane_width.valueChanged.connect(
@@ -921,7 +1025,11 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_lane_node_radius.valueChanged.connect(
             lambda v: self.lbl_lane_node_radius_val.setText(str(v))
         )
+        self.slider_maze_size.valueChanged.connect(lambda v: self.lbl_maze_size_val.setText(f"{v}%"))
+        self.slider_lane_numbers.valueChanged.connect(lambda v: self.lbl_lane_numbers_val.setText(str(v)))
+
         self.combo_topology.currentIndexChanged.connect(self.sync_to_model)
+        self.combo_topology.currentIndexChanged.connect(self._update_maze_visibility)
         self.slider_lane_width.valueChanged.connect(self.sync_to_model)
         self.slider_mountain_height.valueChanged.connect(self.sync_to_model)
         self.slider_canyon_steepness.valueChanged.connect(self.sync_to_model)
@@ -933,11 +1041,13 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_erosion.valueChanged.connect(self.sync_to_model)
         self.slider_feature_scale.valueChanged.connect(self.sync_to_model)
         self.slider_lane_node_radius.valueChanged.connect(self.sync_to_model)
+        self.slider_maze_size.valueChanged.connect(self.sync_to_model)
+        self.slider_lane_numbers.valueChanged.connect(self.sync_to_model)
 
-        config_layout.addWidget(make_divider())
 
         # ─── BASE AREAS ───
-        config_layout.addWidget(make_section_label("BASE AREAS"))
+        sec_base_areas = CollapsibleBox("BASE AREAS")
+        config_layout.addWidget(sec_base_areas)
 
         # Base Radius
         br_row = QHBoxLayout()
@@ -952,7 +1062,7 @@ class TerrainGeneratorGUI(QMainWindow):
         br_row.addWidget(
             make_slider_row(self.slider_base_radius, self.lbl_base_radius_val), 1
         )
-        config_layout.addLayout(br_row)
+        sec_base_areas.content_layout.addLayout(br_row)
 
         # Base Flatness
         bf_row = QHBoxLayout()
@@ -969,7 +1079,7 @@ class TerrainGeneratorGUI(QMainWindow):
         bf_row.addWidget(
             make_slider_row(self.slider_base_flatness, self.lbl_base_flat_val, "%"), 1
         )
-        config_layout.addLayout(bf_row)
+        sec_base_areas.content_layout.addLayout(bf_row)
 
         # Resource Node Clear Radius
         res_row = QHBoxLayout()
@@ -984,7 +1094,7 @@ class TerrainGeneratorGUI(QMainWindow):
         res_row.addWidget(
             make_slider_row(self.slider_resource_clear, self.lbl_resource_clear_val), 1
         )
-        config_layout.addLayout(res_row)
+        sec_base_areas.content_layout.addLayout(res_row)
 
         self.slider_base_radius.valueChanged.connect(
             lambda v: self.lbl_base_radius_val.setText(str(v))
@@ -1001,10 +1111,10 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_base_radius.valueChanged.connect(self.update_node_clear_radii)
         self.slider_resource_clear.valueChanged.connect(self.update_node_clear_radii)
 
-        config_layout.addWidget(make_divider())
 
         # ─── MATERIALS ───
-        config_layout.addWidget(make_section_label("MATERIALS"))
+        sec_materials = CollapsibleBox("MATERIALS")
+        config_layout.addWidget(sec_materials)
 
         mat_row = QHBoxLayout()
         mat_row.setSpacing(8)
@@ -1016,7 +1126,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.combo_material.addItems(self.terrain_materials)
         self.combo_material.setCurrentText("common/nature/blend_grass_mountainwall_000")
         mat_row.addWidget(self.combo_material, 1)
-        config_layout.addLayout(mat_row)
+        sec_materials.content_layout.addLayout(mat_row)
         self.combo_material.currentIndexChanged.connect(self.sync_to_model)
 
         sky_row = QHBoxLayout()
@@ -1028,13 +1138,13 @@ class TerrainGeneratorGUI(QMainWindow):
         self.combo_skybox.addItems(self.skyboxes)
         self.combo_skybox.setCurrentText("empsky_overcast3yellow")
         sky_row.addWidget(self.combo_skybox, 1)
-        config_layout.addLayout(sky_row)
+        sec_materials.content_layout.addLayout(sky_row)
         self.combo_skybox.currentIndexChanged.connect(self.sync_to_model)
 
-        config_layout.addWidget(make_divider())
 
         # ─── SETTINGS ───
-        config_layout.addWidget(make_section_label("SETTINGS"))
+        sec_settings = CollapsibleBox("SETTINGS")
+        config_layout.addWidget(sec_settings)
 
         spawn_grid = QGridLayout()
         spawn_grid.setSpacing(4)
@@ -1088,7 +1198,7 @@ class TerrainGeneratorGUI(QMainWindow):
         spawn_grid.addWidget(self.chk_minimal_map, 2, 0)
         spawn_grid.addWidget(self.chk_terrain_only, 2, 1)
         spawn_grid.addWidget(self.chk_nodetail, 3, 0, 1, 2)
-        config_layout.addLayout(spawn_grid)
+        sec_settings.content_layout.addLayout(spawn_grid)
 
         preview_grid = QGridLayout()
         preview_grid.setSpacing(4)
@@ -1099,10 +1209,9 @@ class TerrainGeneratorGUI(QMainWindow):
         preview_grid.addWidget(self.chk_manual_terrain, 1, 0, 1, 2)
         preview_grid.addWidget(self.chk_invert_lanes, 2, 0, 1, 2)
         preview_grid.addWidget(self.chk_preview_pipeline, 3, 0, 1, 2)
-        config_layout.addLayout(preview_grid)
+        sec_settings.content_layout.addLayout(preview_grid)
 
         # ─── VALIDATION ───
-        config_layout.addWidget(make_divider())
         self.lbl_validation = QLabel("✓  All checks passed")
         self.lbl_validation.setObjectName("ValidationLabel")
         self.lbl_validation.setWordWrap(True)
@@ -1149,6 +1258,15 @@ class TerrainGeneratorGUI(QMainWindow):
         self._root_splitter.setStretchFactor(0, 0)
         self._root_splitter.setStretchFactor(1, 1)
         self._root_splitter.setSizes([220, 930])
+
+        self._update_maze_visibility()
+
+    def _update_maze_visibility(self):
+        """Show or hide maze settings depending on current topology."""
+        if self.combo_topology.currentText() == "Canyon Maze":
+            self.sec_maze_settings.setVisible(True)
+        else:
+            self.sec_maze_settings.setVisible(False)
 
     def validate_current_layout(self):
         """Validates layout and returns (invalid_entity_ids, error_messages)."""
@@ -2116,6 +2234,8 @@ class TerrainGeneratorGUI(QMainWindow):
             self.lbl_image_path.setText("None")
 
         self.update_validation_status()
+
+        self._update_maze_visibility()
 
         # Sync clear radii to preview widget after UI update
         self.update_node_clear_radii()
