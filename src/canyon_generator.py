@@ -185,11 +185,16 @@ def _box_blur_1d(arr: np.ndarray, radius: int, axis: int) -> np.ndarray:
     pad = [(0, 0)] * arr.ndim
     pad[axis] = (radius, radius)
     padded = np.pad(arr, pad, mode='edge')
-    cs = np.cumsum(padded, axis=axis)
+
+    pad_zero = [(0, 0)] * arr.ndim
+    pad_zero[axis] = (1, 0)
+    cs = np.cumsum(np.pad(padded, pad_zero, mode='constant'), axis=axis)
+
     slc_hi = [slice(None)] * arr.ndim
     slc_lo = [slice(None)] * arr.ndim
-    slc_hi[axis] = slice(2 * radius, 2 * radius + n)
+    slc_hi[axis] = slice(2 * radius + 1, 2 * radius + 1 + n)
     slc_lo[axis] = slice(0, n)
+
     return (cs[tuple(slc_hi)] - cs[tuple(slc_lo)]) / (2 * radius + 1)
 
 def gaussian_blur(arr: np.ndarray, passes: float) -> np.ndarray:
@@ -354,13 +359,13 @@ def generate_canyon_base(
         # We need dh / wall_slope_px <= max_slope_per_px
         # dh = natural_canyon - floor_h
         # wall_slope_px = wall_slope * ref_px
-        # max_dh = max_slope_per_px * wall_slope_px
+        # max_dh = max_slope_per_px * wall_slope_px / 1.5
 
         wall_slope_px = wall_slope * ref_px
         # limit the plateau height so that the wall ramp doesn't exceed max slope
         # wall ramp rises dh over wall_slope_px.
         # max allowed dh (in 0..1 scale) is max_slope_per_px * wall_slope_px
-        max_dh = max_slope_per_px * wall_slope_px
+        max_dh = max_slope_per_px * wall_slope_px / 1.5
 
         # Limit plateau height to respect slope constraint
         clamped_natural_canyon = np.minimum(natural_canyon, floor_h + max_dh)
@@ -372,7 +377,7 @@ def generate_canyon_base(
             floor_h,
             np.where(
                 d_norm < 0.0,
-                floor_h + smoothstep(-safe_margin, 0.0, d_norm) * 0.05 * (clamped_natural_canyon - floor_h),
+                floor_h + smoothstep(-safe_margin, 0.0, d_norm) * np.minimum(0.05 * (clamped_natural_canyon - floor_h), max_slope_per_px * safe_margin * ref_px / 1.5),
                 floor_h + wall_ramp * (clamped_natural_canyon - floor_h)
             )
         )

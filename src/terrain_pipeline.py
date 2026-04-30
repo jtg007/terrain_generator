@@ -920,10 +920,16 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
         base_t = original_heights if (original_heights is not None and np.any(original_heights > 0)) else None
 
     # Generate the terrain base [0, 1]
+
+    # distance_field from playability mask is in world units.
+    # generate_canyon_base expects distance field in pixels!
+    units_per_px = min(spec.size_x / cols, spec.size_y / rows)
+    distance_field_px = effective_mask / units_per_px
+
     canyon_noise, report = generate_canyon_base(
         rows=rows,
         cols=cols,
-        distance_field=effective_mask,
+        distance_field=distance_field_px,
         map_world_size_x=spec.size_x,
         map_world_size_y=spec.size_y,
         height_world_units=mountain_height - floor_height,
@@ -934,7 +940,7 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
         wall_slope=getattr(spec, "wall_slope", 0.06),
         plateau_noise=getattr(spec, "plateau_noise", 0.12),
         roughness=getattr(spec, "roughness", 0.50),
-        blur_radius=getattr(spec, "blur_radius", 10),
+        blur_radius=getattr(spec, "blur_radius", 2.0),
         octaves=spec.noise_octaves,
         base_terrain=base_t,
     )
