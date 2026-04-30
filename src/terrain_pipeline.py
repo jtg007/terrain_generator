@@ -900,7 +900,7 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     )
 
     # ── Terrain Generation ──────────────────
-    from src.canyon_generator import generate_canyon_base
+    from src.canyon_generator import generate_canyon_base, flatten_area
 
     # If canyon_natural is true, we pass an infinity distance field so it doesn't carve
     effective_mask = np.full((rows, cols), np.inf, dtype=np.float32) if getattr(spec, "canyon_natural", False) else hard_mask
@@ -920,11 +920,13 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
         base_t = original_heights if (original_heights is not None and np.any(original_heights > 0)) else None
 
     # Generate the terrain base [0, 1]
-    canyon_noise = generate_canyon_base(
+    canyon_noise, report = generate_canyon_base(
         rows=rows,
         cols=cols,
         distance_field=effective_mask,
-        physical_map_size=max(spec.size_x, spec.size_y),
+        map_world_size_x=spec.size_x,
+        map_world_size_y=spec.size_y,
+        height_world_units=mountain_height - floor_height,
         seed=spec.seed,
         feature_scale=getattr(spec, "feature_scale", 1.8),
         warp_strength=getattr(spec, "warp_strength", 0.018),
@@ -936,6 +938,13 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
         octaves=spec.noise_octaves,
         base_terrain=base_t,
     )
+
+    grid.report = report
+    if not report["pass"]:
+        print(f"WARNING: Heightmap validation failed: {report}")
+
+    for candidate in report.get("spawn_candidates", []):
+        canyon_noise = flatten_area(canyon_noise, candidate["pos"], candidate["radius_px"])
 
     # Scale noise base to actual map height range
     new_heights = (
@@ -2183,6 +2192,7 @@ def run_pipeline(
             "Invalid layout configuration:\n" + "\n".join(layout_result.errors)
         )
 
+    errors = []
     print("Running terrain pipeline...")
     print(
         f"  Spec: {spec.size_x}x{spec.size_y}, cell_size={spec.cell_size}, power={spec.displacement_power}"
@@ -2236,6 +2246,8 @@ def run_pipeline(
             grid.playability_mask = None
         print("  Step 2c: Generate heights with flat terrain (manual mode)")
         grid = generate_heights(spec, grid)
+        if hasattr(grid, 'report') and not grid.report.get("pass", True):
+            errors.append(f"Heightmap validation failed: {grid.report}")
     else:
         if spec.generate_lanes:
             print("  Step 2a: Generate playability mask (Smoothstep distance field)")
@@ -2263,6 +2275,8 @@ def run_pipeline(
             f"  Step 2c: Generate heights with fBm (seed={spec.seed}, octaves={spec.noise_octaves})"
         )
         grid = generate_heights(spec, grid)
+        if hasattr(grid, 'report') and not grid.report.get("pass", True):
+            errors.append(f"Heightmap validation failed: {grid.report}")
 
     print(f"    Height range: {grid.min_height():.1f} to {grid.max_height():.1f}")
 
@@ -2332,10 +2346,11 @@ def run_pipeline(
     print(f"    Created {len(cells)} cells")
 
     print("  Step 9: Validate seams")
-    errors = validate_seams(cells, grid, spec)
-    if errors:
-        print("    ERRORS FOUND:")
-        for e in errors:
+    seam_errors = validate_seams(cells, grid, spec)
+    errors.extend(seam_errors)
+    if seam_errors:
+        print("    ERRORS FOUND in seams:")
+        for e in seam_errors:
             print(f"      - {e}")
     else:
         print("    Validation passed!")
