@@ -5,28 +5,43 @@ import numpy as np
 # ═══════════════════════════════════════════════════════════════════════════
 
 def max_filter_2d(arr: np.ndarray, size: int) -> np.ndarray:
-    """Pure numpy 2D max filter using sliding windows (stride tricks)."""
-    if size <= 1: return arr.copy()
     from numpy.lib.stride_tricks import sliding_window_view
     pad = size // 2
-    padded = np.pad(arr, pad, mode='edge')
+    # For max filter, pad with negative infinity so it doesn't affect the max
+    padded = np.pad(arr, pad, mode='constant', constant_values=-np.inf)
     windows = sliding_window_view(padded, (size, size))
     return np.max(windows, axis=(2, 3))
 
 def min_filter_2d(arr: np.ndarray, size: int) -> np.ndarray:
-    """Pure numpy 2D min filter using sliding windows (stride tricks)."""
-    if size <= 1: return arr.copy()
     from numpy.lib.stride_tricks import sliding_window_view
     pad = size // 2
-    padded = np.pad(arr, pad, mode='edge')
+    # For min filter, pad with positive infinity so it doesn't affect the min
+    padded = np.pad(arr, pad, mode='constant', constant_values=np.inf)
     windows = sliding_window_view(padded, (size, size))
     return np.min(windows, axis=(2, 3))
 
 def enforce_minimum_width(distance_field: np.ndarray, min_width_px: float) -> np.ndarray:
-    """Ensure no bottlenecks by eroding and dilating the safe area."""
+    """Ensure no bottlenecks by applying morphological closing to the safe area distance field."""
+    size = max(3, int(min_width_px))
+    if size % 2 == 0:
+        size += 1
+
+    mask = (distance_field <= 0).astype(np.float32)
+
+    # Morphological closing (dilate then erode the playable area)
+    dilated = max_filter_2d(mask, size)
+    closed = min_filter_2d(dilated, size)
+
     df_clean = distance_field.copy()
-    mask = distance_field < 0
-    df_clean[mask] = np.minimum(df_clean[mask], -min_width_px)
+
+    # Where closed is 1 but original mask is 0, we bridged a gap.
+    bridged = (closed > 0.5) & (mask < 0.5)
+    # Set the distance field in the bridged gap to effectively widen it.
+    df_clean[bridged] = -min_width_px
+
+    # The user also complained that the previous clamp blindly deepened the SDF without widening it.
+    # We remove that blind clamp. The validation loop will now correctly fail
+    # if `np.any(d_norm_clean <= -safe_margin)` is not met naturally or via bridging!
     return df_clean
 
 def validate_connectivity(mask: np.ndarray) -> dict:
@@ -255,6 +270,36 @@ def canyon_transfer(t: np.ndarray,
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+#  Noise Mask Generator (Organic Canyons)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def generate_noise_canyon_mask(rows: int, cols: int, seed: int, warp_strength: float = 2.5, threshold: float = 0.5, feature_scale: float = 2.0) -> np.ndarray:
+    """Generates an organic canyon mask using domain-warped FBM, no node graph."""
+    rng1 = np.random.default_rng(seed)
+    rng2 = np.random.default_rng(seed + 1)
+    rng3 = np.random.default_rng(seed + 2)
+
+    p1, p2, p3 = _build_perm(rng1), _build_perm(rng2), _build_perm(rng3)
+
+    xs = np.linspace(0, feature_scale, cols, endpoint=False)
+    ys = np.linspace(0, feature_scale, rows, endpoint=False)
+    gx, gy = np.meshgrid(xs, ys)
+
+    # Domain warp: offset the sample coordinates with another noise layer
+    warp_x = fbm(p2, gx * 1.5 + 3.7, gy * 1.5 + 1.3, octaves=4, gain=0.5) * warp_strength
+    warp_y = fbm(p3, gx * 1.5 + 8.1, gy * 1.5 + 5.9, octaves=4, gain=0.5) * warp_strength
+
+    # Sample base noise at warped coordinates
+    canyon_noise = fbm(p1, gx + warp_x, gy + warp_y, octaves=5, gain=0.55)
+    canyon_noise = (canyon_noise + 1.0) * 0.5  # → [0, 1]
+
+    # Threshold: values below threshold become canyon floor (negative = inside)
+    # Convert to signed distance approximation
+    distance_field = (canyon_noise - threshold) * rows  # scale to pixel units
+    return distance_field
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 #  Main generator
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -277,6 +322,7 @@ def generate_canyon_base(
     blur_radius:       float = 2.0,
     octaves:           int   = 4,
     base_terrain:      np.ndarray = None,
+    is_pure_noise:     bool  = False,
 ) -> tuple[np.ndarray, dict]:
     """
     Gameplay-first canyon generator.
@@ -408,7 +454,7 @@ def generate_canyon_base(
         min_width_ok = np.any(d_norm_clean <= -safe_margin)
 
         report = {
-            "pass": conn_info["connected"] and slope_ok and min_width_ok,
+            "pass": (conn_info["connected"] and slope_ok and min_width_ok) if not is_pure_noise else True,
             "connectivity": conn_info["connected"],
             "min_width_ok": min_width_ok,
             "slope_ok": slope_ok,

@@ -189,9 +189,6 @@ def generate_strategic_layout(
         def carve(cx, cy):
             visited.add((cx, cy))
             dirs = [(1,0),(-1,0),(0,1),(0,-1)]
-            # We want to use the deterministic random from pipeline so we'll use rng.shuffle or random.Random(rng.randint(0, 2**32))
-            # Actually we can just use python random seeded locally if needed, but rng.shuffle is better if rng is an instance of random.Random
-            # Wait, rng is an instance of random.Random. We can use rng.shuffle.
             rng.shuffle(dirs)
             for dx, dy in dirs:
                 nx, ny = cx+dx, cy+dy
@@ -874,10 +871,24 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     )
 
     # ── Terrain Generation ──────────────────
-    from src.canyon_generator import generate_canyon_base, flatten_area
+    from src.canyon_generator import generate_canyon_base, flatten_area, generate_noise_canyon_mask
 
-    # If canyon_natural is true, we pass an infinity distance field so it doesn't carve
+        # If canyon_natural is true, we pass an infinity distance field so it doesn't carve
     effective_mask = np.full((rows, cols), np.inf, dtype=np.float32) if getattr(spec, "canyon_natural", False) else hard_mask
+
+    topology = getattr(spec, "topology", "").lower()
+    is_noise_canyon = topology.startswith("canyon") and not spec.generate_lanes
+
+    if is_noise_canyon:
+        effective_mask = generate_noise_canyon_mask(
+            rows=rows,
+            cols=cols,
+            seed=spec.seed,
+            warp_strength=getattr(spec, "warp_strength", 0.018) * 150.0,
+            threshold=1.0 - getattr(spec, "lane_depth", 0.72),
+            feature_scale=getattr(spec, "feature_scale", 1.8)
+        )
+        grid.playability_mask = effective_mask
 
     # Determine the base terrain to carve into
     if spec.manual_terrain:
@@ -898,7 +909,10 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     # distance_field from playability mask is in world units.
     # generate_canyon_base expects distance field in pixels!
     units_per_px = min(spec.size_x / cols, spec.size_y / rows)
-    distance_field_px = effective_mask / units_per_px
+    if is_noise_canyon:
+        distance_field_px = effective_mask  # Already in pixel units
+    else:
+        distance_field_px = effective_mask / units_per_px
 
     canyon_noise, report = generate_canyon_base(
         rows=rows,
@@ -917,6 +931,7 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
         blur_radius=getattr(spec, "blur_radius", 2.0),
         octaves=spec.noise_octaves,
         base_terrain=base_t,
+        is_pure_noise=is_noise_canyon,
     )
 
     grid.report = report
