@@ -169,7 +169,8 @@ def generate_strategic_layout(
         spacing_y = maze_dim_y / grid_size
 
         node_radius = min(spacing_x, spacing_y) * 0.25
-        lane_width = min(spacing_x, spacing_y) * 0.30 * getattr(spec, "lane_width_scale", 1.0)
+        # Ensure lane width has a safe minimum (192.0 is vehicle clearance) so connectivity check doesn't fail on tiny paths
+        lane_width = max(192.0, min(spacing_x, spacing_y) * 0.30 * getattr(spec, "lane_width_scale", 1.0))
 
         # Main bases
         b1_x, b1_y = spec.default_nf_base()
@@ -186,18 +187,30 @@ def generate_strategic_layout(
         maze_cells = {}
         visited = set()
 
-        def carve(cx, cy):
-            visited.add((cx, cy))
-            dirs = [(1,0),(-1,0),(0,1),(0,-1)]
-            rng.shuffle(dirs)
-            for dx, dy in dirs:
-                nx, ny = cx+dx, cy+dy
-                if 0 <= nx < grid_size and 0 <= ny < grid_size and (nx,ny) not in visited:
-                    n1 = maze_cells[(cx, cy)]
-                    n2 = maze_cells[(nx, ny)]
-                    conn = create_connection_path(n1, n2, lane_width, ZoneType.MAIN_LANE, spec)
-                    connections.append(conn)
-                    carve(nx, ny)
+        def carve(start_x, start_y):
+            stack = [(start_x, start_y)]
+            visited.add((start_x, start_y))
+
+            while stack:
+                cx, cy = stack[-1]
+                dirs = [(1,0),(-1,0),(0,1),(0,-1)]
+                rng.shuffle(dirs)
+
+                moved = False
+                for dx, dy in dirs:
+                    nx, ny = cx+dx, cy+dy
+                    if 0 <= nx < grid_size and 0 <= ny < grid_size and (nx,ny) not in visited:
+                        n1 = maze_cells[(cx, cy)]
+                        n2 = maze_cells[(nx, ny)]
+                        conn = create_connection_path(n1, n2, lane_width, ZoneType.MAIN_LANE, spec)
+                        connections.append(conn)
+                        visited.add((nx, ny))
+                        stack.append((nx, ny))
+                        moved = True
+                        break
+
+                if not moved:
+                    stack.pop()
 
         for ix in range(grid_size):
             for iy in range(grid_size):
@@ -800,7 +813,9 @@ def generate_playability_mask(
             continue
         dist_grid = np.sqrt((WX - node.x) ** 2 + (WY - node.y) ** 2)
         if node.type in (ZoneType.BASE, ZoneType.VEHICLE_OPEN):
-            distance_field = np.minimum(distance_field, dist_grid - node.radius * scale)
+            # Scale is applied to spacing-derived base radius, but base radius isn't scaled in UI usually.
+            # We must NOT double-apply scale here if radius already has it, but node.radius doesn't.
+            distance_field = np.minimum(distance_field, dist_grid - node.radius)
 
     # 2. Evaluate Polyline Connections
     for conn in connections:
@@ -836,14 +851,14 @@ def generate_playability_mask(
 
             min_dist_grid = np.minimum(min_dist_grid, dist)
 
-        scale = getattr(spec, "lane_width_scale", 1.0)
         if conn.type in (ZoneType.MAIN_LANE, ZoneType.SIDE_ROUTE):
-            playable_width = conn.width * scale
+            playable_width = conn.width
         elif conn.type == ZoneType.CHOKEPOINT:
-            playable_width = conn.width * 0.5 * scale
+            playable_width = conn.width * 0.5
         else:
             continue
 
+        # playable_width already includes the scale from when the connection was created.
         distance_field = np.minimum(distance_field, min_dist_grid - playable_width)
 
     # distance_field is now the continuous distance from the playable boundary.
