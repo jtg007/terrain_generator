@@ -169,7 +169,7 @@ def generate_strategic_layout(
         spacing_y = maze_dim_y / grid_size
 
         node_radius = min(spacing_x, spacing_y) * 0.25
-        lane_width = map_min_dim * 0.08 * getattr(spec, "lane_width_scale", 1.0)
+        lane_width = min(spacing_x, spacing_y) * 0.30 * getattr(spec, "lane_width_scale", 1.0)
 
         # Main bases
         b1_x, b1_y = spec.default_nf_base()
