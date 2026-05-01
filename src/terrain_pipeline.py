@@ -158,15 +158,6 @@ def generate_strategic_layout(
 
         map_min_dim = min(spec.size_x, spec.size_y)
         base_radius = spec.lane_node_radius if spec.lane_node_radius > 0 else map_min_dim * 0.15
-        node_radius = map_min_dim * 0.10
-        lane_width = map_min_dim * 0.08
-
-        # Main bases
-        b1_x, b1_y = spec.default_nf_base()
-        b2_x, b2_y = spec.default_imp_base()
-        b1 = LayoutNode(b1_x, b1_y, base_radius, ZoneType.BASE)
-        b2 = LayoutNode(b2_x, b2_y, base_radius, ZoneType.BASE)
-        nodes.extend([b1, b2])
 
         # A grid-like structure of nodes to create paths
         grid_size = getattr(spec, "lane_numbers", 4)
@@ -176,6 +167,16 @@ def generate_strategic_layout(
 
         spacing_x = maze_dim_x / grid_size
         spacing_y = maze_dim_y / grid_size
+
+        node_radius = min(spacing_x, spacing_y) * 0.25
+        lane_width = map_min_dim * 0.08 * getattr(spec, "lane_width_scale", 1.0)
+
+        # Main bases
+        b1_x, b1_y = spec.default_nf_base()
+        b2_x, b2_y = spec.default_imp_base()
+        b1 = LayoutNode(b1_x, b1_y, base_radius, ZoneType.BASE)
+        b2 = LayoutNode(b2_x, b2_y, base_radius, ZoneType.BASE)
+        nodes.extend([b1, b2])
 
         # Center the maze
         offset_x = spec.origin_x + (spec.size_x - maze_dim_x) / 2
@@ -249,7 +250,7 @@ def generate_strategic_layout(
                     ):
                         already_connected = True
                 if not already_connected:
-                    connections.append(LayoutConnection(n1, n2, 2.5, "main", []))
+                    connections.append(LayoutConnection(n1, n2, lane_width, ZoneType.MAIN_LANE, []))
 
         return nodes, connections
 
