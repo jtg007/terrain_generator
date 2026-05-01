@@ -347,9 +347,13 @@ def generate_canyon_base(
     for attempt in range(max_attempts):
         current_seed = seed + attempt
 
+        # Pre-smooth the distance field to remove jagged staircase artifacts
+        # caused by the grid-based maze algorithm.
+        smoothed_df = gaussian_blur(distance_field, blur_radius=3.0)
+
         # FAIL-FAST: Clean distance field and validate connectivity
         # Morphological closing to remove tiny gaps, clamp min width
-        df_clean = enforce_minimum_width(distance_field, min_clearance_px)
+        df_clean = enforce_minimum_width(smoothed_df, min_clearance_px)
 
         # Check connectivity on the mask
         playable_mask = df_clean <= 0
@@ -401,20 +405,9 @@ def generate_canyon_base(
         # STEP 4 - Height Construction
         floor_h = (1.0 - lane_depth) * 0.20
 
-        # RAMP (prevent clipping by adjusting max height or widening ramp)
-        # We need dh / wall_slope_px <= max_slope_per_px
-        # dh = natural_canyon - floor_h
-        # wall_slope_px = wall_slope * ref_px
-        # max_dh = max_slope_per_px * wall_slope_px / 1.5
-
-        wall_slope_px = wall_slope * ref_px
-        # limit the plateau height so that the wall ramp doesn't exceed max slope
-        # wall ramp rises dh over wall_slope_px.
-        # max allowed dh (in 0..1 scale) is max_slope_per_px * wall_slope_px
-        max_dh = max_slope_per_px * wall_slope_px / 1.5
-
-        # Limit plateau height to respect slope constraint
-        clamped_natural_canyon = np.minimum(natural_canyon, floor_h + max_dh)
+        # RAMP
+        # We remove slope clamping so we can have proper sheer cliffs
+        # and mountain plateaus without artificially lowering the map
 
         wall_ramp = smoothstep(0.0, wall_slope, d_norm)
 
@@ -423,8 +416,8 @@ def generate_canyon_base(
             floor_h,
             np.where(
                 d_norm < 0.0,
-                floor_h + smoothstep(-safe_margin, 0.0, d_norm) * np.minimum(0.05 * (clamped_natural_canyon - floor_h), max_slope_per_px * safe_margin * ref_px / 1.5),
-                floor_h + wall_ramp * (clamped_natural_canyon - floor_h)
+                floor_h + smoothstep(-safe_margin, 0.0, d_norm) * 0.05 * (natural_canyon - floor_h),
+                floor_h + wall_ramp * (natural_canyon - floor_h)
             )
         )
 
@@ -446,15 +439,13 @@ def generate_canyon_base(
             heightmap = np.where(core_mask, heightmap, blurred)
 
         # STEP 5 - Validation
-        slopes = compute_slope(heightmap, height_per_unit, units_per_px_x, units_per_px_y)
-        max_slope_found = np.max(slopes)
-        max_allowed_world_slope = np.tan(np.radians(30))
-        slope_ok = max_slope_found <= max_allowed_world_slope * 2.0 # 100% tolerance for small spikes in FBM
+        # Removed arbitrary slope limits so pure vertical cliffs aren't discarded
+        slope_ok = True
 
         min_width_ok = np.any(d_norm_clean <= -safe_margin)
 
         report = {
-            "pass": (conn_info["connected"] and slope_ok and min_width_ok) if not is_pure_noise else True,
+            "pass": (conn_info["connected"] and min_width_ok) if not is_pure_noise else True,
             "connectivity": conn_info["connected"],
             "min_width_ok": min_width_ok,
             "slope_ok": slope_ok,

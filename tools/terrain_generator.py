@@ -2194,7 +2194,10 @@ class TerrainGeneratorGUI(QMainWindow):
                 int(self.config_model.mountain_height_scale * 100)
             )
             self.slider_canyon_depth.setValue(int(self.config_model.lane_depth * 100))
-            self.slider_canyon_steepness.setValue(max(1, min(100, int(self.config_model.wall_slope / 0.5 * 100))))
+            # Wall steepness: 100% means sheer cliff (wall_slope near 0), 1% means smooth valley (wall_slope near 0.5)
+            # wall_slope = (1.0 - steepness_factor) * 0.5
+            steepness_factor = 1.0 - (self.config_model.wall_slope / 0.5)
+            self.slider_canyon_steepness.setValue(max(1, min(100, int(steepness_factor * 100))))
             self.slider_lane_elevation.setValue(int(min(1.0, self.config_model.lane_elevation) * 100))
             self.slider_warp.setValue(int(self.config_model.warp_strength * 1000))  # 0.018 -> 18
             self.slider_rough.setValue(int(self.config_model.roughness * 100))
@@ -2297,8 +2300,9 @@ class TerrainGeneratorGUI(QMainWindow):
             self.slider_mountain_height.value() / 100.0
         )
         self.config_model.lane_depth = self.slider_canyon_depth.value() / 100.0
+        # Wall steepness: 100% means sheer cliff (wall_slope near 0), 1% means smooth valley (wall_slope near 0.5)
         steepness_factor = self.slider_canyon_steepness.value() / 100.0
-        self.config_model.wall_slope = max(0.001, steepness_factor * 0.5)
+        self.config_model.wall_slope = max(0.001, (1.0 - steepness_factor) * 0.5)
         self.config_model.lane_elevation = self.slider_lane_elevation.value() / 100.0
         self.config_model.warp_strength = self.slider_warp.value() / 1000.0
         self.config_model.roughness = self.slider_rough.value() / 100.0
