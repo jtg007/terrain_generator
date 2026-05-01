@@ -349,7 +349,7 @@ def generate_canyon_base(
 
         # Pre-smooth the distance field to remove jagged staircase artifacts
         # caused by the grid-based maze algorithm.
-        smoothed_df = gaussian_blur(distance_field, blur_radius=3.0)
+        smoothed_df = gaussian_blur(distance_field, passes=3.0)
 
         # FAIL-FAST: Clean distance field and validate connectivity
         # Morphological closing to remove tiny gaps, clamp min width
