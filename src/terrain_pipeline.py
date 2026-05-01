@@ -182,75 +182,48 @@ def generate_strategic_layout(
         offset_x = spec.origin_x + (spec.size_x - maze_dim_x) / 2
         offset_y = spec.origin_y + (spec.size_y - maze_dim_y) / 2
 
-        grid_nodes = []
-        for ix in range(1, grid_size):
-            for iy in range(1, grid_size):
-                # add some jitter
-                jx = (ix * spacing_x) + rng.uniform(-spacing_x * 0.3, spacing_x * 0.3)
-                jy = (iy * spacing_y) + rng.uniform(-spacing_y * 0.3, spacing_y * 0.3)
-                jx = jx + offset_x
-                jy = jy + offset_y
+        import random
+        maze_cells = {}
+        visited = set()
 
-                gn = LayoutNode(jx, jy, node_radius, ZoneType.VEHICLE_OPEN)
-                nodes.append(gn)
-                grid_nodes.append((ix, iy, gn))
+        def carve(cx, cy):
+            visited.add((cx, cy))
+            dirs = [(1,0),(-1,0),(0,1),(0,-1)]
+            # We want to use the deterministic random from pipeline so we'll use rng.shuffle or random.Random(rng.randint(0, 2**32))
+            # Actually we can just use python random seeded locally if needed, but rng.shuffle is better if rng is an instance of random.Random
+            # Wait, rng is an instance of random.Random. We can use rng.shuffle.
+            rng.shuffle(dirs)
+            for dx, dy in dirs:
+                nx, ny = cx+dx, cy+dy
+                if 0 <= nx < grid_size and 0 <= ny < grid_size and (nx,ny) not in visited:
+                    n1 = maze_cells[(cx, cy)]
+                    n2 = maze_cells[(nx, ny)]
+                    conn = create_connection_path(n1, n2, lane_width, ZoneType.MAIN_LANE, spec)
+                    connections.append(conn)
+                    carve(nx, ny)
 
-        def get_gn(ix, iy):
-            for gx, gy, n in grid_nodes:
-                if gx == ix and gy == iy:
-                    return n
-            return None
+        for ix in range(grid_size):
+            for iy in range(grid_size):
+                wx = offset_x + ix * spacing_x + rng.uniform(-spacing_x*0.2, spacing_x*0.2)
+                wy = offset_y + iy * spacing_y + rng.uniform(-spacing_y*0.2, spacing_y*0.2)
+                # node_radius = 0 since corridors define space
+                node = LayoutNode(wx, wy, 0, ZoneType.VEHICLE_OPEN)
+                maze_cells[(ix, iy)] = node
+                nodes.append(node)
 
-        # Connect bases to the nearest grid nodes
-        connections.append(LayoutConnection(b1, get_gn(1, 1), lane_width, ZoneType.MAIN_LANE, []))
-        connections.append(
-            LayoutConnection(b2, get_gn(grid_size - 1, grid_size - 1), lane_width, ZoneType.MAIN_LANE, [])
-        )
+        # Force recursion limit up just in case, though grid_size is small
+        carve(0, 0)
 
-        # Connect grid nodes to form a maze structure
-        # ensuring all are connected but picking random paths to drop to create dead ends/maze
-        jitter_scale = map_min_dim * 0.05
-        for gx, gy, n in grid_nodes:
-            neighbors = []
-            if gx < grid_size - 1:
-                neighbors.append(get_gn(gx + 1, gy))
-            if gy < grid_size - 1:
-                neighbors.append(get_gn(gx, gy + 1))
+        # Connect bases to the nearest corners
+        # b1 to (0,0) and b2 to (grid_size-1, grid_size-1)
+        b1_maze = maze_cells[(0, 0)]
+        b2_maze = maze_cells[(grid_size - 1, grid_size - 1)]
 
-            for neighbor in neighbors:
-                if neighbor and rng.random() > 0.35:  # 65% chance to connect
-                    # add intermediate points for a squiggly path
-                    pts = []
-                    dist = math.hypot(neighbor.x - n.x, neighbor.y - n.y)
-                    steps = int(dist / 200)
-                    for s in range(1, steps):
-                        f = s / steps
-                        mx = n.x + (neighbor.x - n.x) * f + rng.uniform(-jitter_scale, jitter_scale)
-                        my = n.y + (neighbor.y - n.y) * f + rng.uniform(-jitter_scale, jitter_scale)
-                        pts.append((mx, my))
-                    connections.append(LayoutConnection(n, neighbor, lane_width, ZoneType.SIDE_ROUTE, pts))
+        conn_b1 = create_connection_path(b1, b1_maze, lane_width, ZoneType.MAIN_LANE, spec)
+        connections.append(conn_b1)
 
-        # Ensure minimal viable connectivity (base -> b1_node -> ... -> b2_node -> base)
-        # We rely on rng and high chance for connections to generally make it playable
-        # To be safe, force a specific central path.
-        path = []
-        for i in range(1, grid_size):
-            path.append((i, i))
-            if i < grid_size - 1:
-                path.append((i + 1, i))
-
-        for i in range(len(path) - 1):
-            n1 = get_gn(*path[i])
-            n2 = get_gn(*path[i + 1])
-            if n1 and n2:
-                already_connected = False
-                for c in connections:
-                    if (c.start_node == n1 and c.end_node == n2) or (
-                        c.start_node == n2 and c.end_node == n1
-                    ):
-                        already_connected = True
-                if not already_connected:
-                    connections.append(LayoutConnection(n1, n2, lane_width, ZoneType.MAIN_LANE, []))
+        conn_b2 = create_connection_path(b2, b2_maze, lane_width, ZoneType.MAIN_LANE, spec)
+        connections.append(conn_b2)
 
         return nodes, connections
 
