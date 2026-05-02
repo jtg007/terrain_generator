@@ -77,9 +77,6 @@ def create_connection_path(
     spec: TerrainSpec,
 ) -> LayoutConnection:
     import math
-    from src.noise import NoiseGenerator
-
-    noise = NoiseGenerator(spec.seed)
 
     dx = end_node.x - start_node.x
     dy = end_node.y - start_node.y
@@ -115,7 +112,7 @@ def create_connection_path(
         envelope = math.sin(t * math.pi)
 
         # 1D noise sampled along t
-        noise_val = noise.fbm(t * freq, spec.seed * 0.1, octaves=2)
+        noise_val = math.sin(t * freq * math.pi * 2 + spec.seed)
         offset = noise_val * envelope * max_offset
 
         px = base_x + nx * offset
@@ -942,7 +939,7 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
         lane_depth=getattr(spec, "lane_depth", 0.72),
         wall_slope=getattr(spec, "wall_slope", 0.06),
         plateau_noise=getattr(spec, "plateau_noise", 0.12),
-        roughness=getattr(spec, "roughness", 0.50),
+        roughness=getattr(spec, "canyon_roughness", 0.50),
         blur_radius=getattr(spec, "blur_radius", 2.0),
         octaves=spec.noise_octaves,
         base_terrain=base_t,
@@ -985,25 +982,22 @@ def load_custom_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
 
     original_heights = grid.heights.copy()
 
-    img = Image.open(spec.custom_image_path).convert("L")
+    img = Image.open(spec.custom_image_path)
+    if img.mode in ("I", "I;16", "I;16B", "I;16L", "I;16S"):
+        arr_norm = np.array(img, dtype=np.float32) / 65535.0
+    elif img.mode == "F":
+        arr = np.array(img, dtype=np.float32)
+        lo, hi = arr.min(), arr.max()
+        arr_norm = (arr - lo) / (hi - lo) if hi > lo else arr
+    else:
+        arr_norm = np.array(img.convert("L"), dtype=np.float32) / 255.0
 
-    # Fit and crop the image to the required vertex grid dimensions
-    # ImageOps.fit maintains aspect ratio while filling the target size exactly.
     img_fitted = ImageOps.fit(
-        img, (grid.cols, grid.rows), method=Image.Resampling.LANCZOS
+        Image.fromarray((arr_norm * 65535).astype(np.uint16), mode="I;16").convert("I"),
+        (grid.cols, grid.rows),
+        method=Image.Resampling.LANCZOS,
     )
-
-    # Extract pixel data mapped proportionally to maximum physical height
-    pixels = list(img_fitted.getdata())
-    max_height = spec.terrain_max_height
-
-    new_heights = np.zeros((grid.rows, grid.cols), dtype=np.float32)
-    idx = 0
-    for r in range(grid.rows):
-        for c in range(grid.cols):
-            val = pixels[idx] / 255.0
-            new_heights[r, c] = val * max_height
-            idx += 1
+    new_heights = (np.array(img_fitted, dtype=np.float32) / 65535.0) * spec.terrain_max_height
 
     grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
     return grid
@@ -1625,8 +1619,6 @@ def build_cells(spec: TerrainSpec, grid: HeightGrid) -> List[TerrainCell]:
 def validate_seams(
     cells: List[TerrainCell], grid: HeightGrid, spec: TerrainSpec
 ) -> List[str]:
-    # Bypass slope limit check for canyon layouts
-    bypass_slope_limit = getattr(spec, "topology", "").lower().startswith("canyon")
     """
     Step 7: Validate seam topology.
 
@@ -1638,6 +1630,8 @@ def validate_seams(
 
     Returns list of error messages (empty if valid).
     """
+    # Bypass slope limit check for canyon layouts
+    bypass_slope_limit = getattr(spec, "topology", "").lower().startswith("canyon")
     errors = []
 
     if not cells:
@@ -1860,7 +1854,7 @@ def apply_pipeline_for_preview(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
 
             if (
                 playability_mask is not None
-                and playability_mask[start_r, start_c] > 0.5
+                and playability_mask[start_r, start_c] < 256.0
             ):
                 continue
 
@@ -1876,7 +1870,7 @@ def apply_pipeline_for_preview(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
                 if ir <= 0 or ir >= rows - 1 or ic <= 0 or ic >= cols - 1:
                     break
 
-                if playability_mask is not None and playability_mask[ir, ic] > 0.5:
+                if playability_mask is not None and playability_mask[ir, ic] < 256.0:
                     break
 
                 fx = pos_c - ic
