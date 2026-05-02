@@ -395,10 +395,15 @@ def generate_canyon_base(
             base = fbm(p_terrain, gx, gy, octaves=octaves, gain=roughness)
             natural_canyon = (base + 1.0) * 0.5
 
+        # Effective wall slope capping relative to actual lane width
+        # This prevents wall gradients from swallowing entire lanes on small maps
+        lane_norm = (min_clearance_px * 2.0) / ref_px
+        effective_wall_slope = min(wall_slope, lane_norm * 0.4)
+
         # STEP 3 - Controlled warp
         # Only warp on the plateau side (d_norm > 0) to avoid shrinking corridors
         warp_pixels = (warp_x + warp_y) * warp_strength * ref_px * 0.015
-        warp_mask = smoothstep(0.0, wall_slope, d_norm_clean)
+        warp_mask = smoothstep(0.0, effective_wall_slope, d_norm_clean)
         warped_dist = df_clean + warp_pixels * warp_mask
         d_norm = warped_dist / ref_px
 
@@ -409,7 +414,7 @@ def generate_canyon_base(
         # We remove slope clamping so we can have proper sheer cliffs
         # and mountain plateaus without artificially lowering the map
 
-        wall_ramp = smoothstep(0.0, wall_slope, d_norm)
+        wall_ramp = smoothstep(0.0, effective_wall_slope, d_norm)
 
         base_height = np.where(
             d_norm < -safe_margin,
@@ -428,7 +433,7 @@ def generate_canyon_base(
             nscale  = 3.5
             terrain = fbm(p_terrain, gx * nscale + 0.5, gy * nscale + 0.5, octaves=octaves, gain=roughness)
             terrain = (terrain + 1.0) * 0.5
-            noise_weight = smoothstep(0.0, wall_slope, d_norm) * plateau_noise
+            noise_weight = smoothstep(0.0, effective_wall_slope, d_norm) * plateau_noise
             heightmap = np.clip(base_height + (terrain - 0.5) * noise_weight * 2.0, 0.0, 1.0)
 
         # Final blur only on plateau/ramp
