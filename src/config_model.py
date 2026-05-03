@@ -40,10 +40,10 @@ class GUIConfigModel:
 
     # Canyon Generator Settings
     feature_scale: float = 1.8
-    warp_strength: float = 0.018
+    warp_strength: float = 1.0
     plateau_noise: float = 0.12
-    maze_size: int = 50
-    lane_numbers: int = 4
+    maze_size: int = 90
+    lane_numbers: int = 6
     wall_slope: float = 0.06
     lane_depth: float = 0.72
     blur_radius: float = 0.0

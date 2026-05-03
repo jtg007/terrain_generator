@@ -67,11 +67,11 @@ class TerrainSpec:
 
     # Canyon Generator Parameters
     feature_scale: float = 1.8
-    warp_strength: float = 0.018
-    roughness: float = 0.50
+    warp_strength: float = 1.0
+    canyon_roughness: float = 0.50
     plateau_noise: float = 0.12
-    maze_size: int = 50
-    lane_numbers: int = 4
+    maze_size: int = 90
+    lane_numbers: int = 6
     wall_slope: float = 0.06
     lane_depth: float = 0.72
     blur_radius: float = 0.0
@@ -418,6 +418,7 @@ def create_default_spec() -> TerrainSpec:
         lane_elevation=0.15,
         feature_scale=1.8,
         warp_strength=1.0,
+        canyon_roughness=0.50,
         wall_slope=0.06,
         plateau_noise=0.12,
         lane_depth=0.72,

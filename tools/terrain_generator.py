@@ -896,8 +896,8 @@ class TerrainGeneratorGUI(QMainWindow):
         lbl_w.setToolTip("Low = straight canyons, High = twisty, organic canyon walls")
         warp_row.addWidget(lbl_w)
         self.slider_warp = QSlider(Qt.Horizontal)
-        self.slider_warp.setRange(0, 100) # maps to 0.0 to 0.1
-        self.lbl_warp_val = QLabel("1.8%")
+        self.slider_warp.setRange(0, 100) # maps to 0.0 to 1.0
+        self.lbl_warp_val = QLabel("100%")
         warp_row.addWidget(make_slider_row(self.slider_warp, self.lbl_warp_val, "%"), 1)
         sec_terrain_shape.content_layout.addLayout(warp_row)
 
@@ -962,9 +962,9 @@ class TerrainGeneratorGUI(QMainWindow):
         lbl_ms.setToolTip("Scale for the bounding box the maze generates within (10% to 90%)")
         ms_row.addWidget(lbl_ms)
         self.slider_maze_size = QSlider(Qt.Horizontal)
-        self.slider_maze_size.setRange(10, 90)
-        self.slider_maze_size.setValue(50)
-        self.lbl_maze_size_val = QLabel("50%")
+        self.slider_maze_size.setRange(10, 100)
+        self.slider_maze_size.setValue(90)
+        self.lbl_maze_size_val = QLabel("90%")
         ms_row.addWidget(make_slider_row(self.slider_maze_size, self.lbl_maze_size_val, "%"), 1)
         self.sec_maze_settings.content_layout.addLayout(ms_row)
 
@@ -977,8 +977,8 @@ class TerrainGeneratorGUI(QMainWindow):
         ln_row.addWidget(lbl_ln)
         self.slider_lane_numbers = QSlider(Qt.Horizontal)
         self.slider_lane_numbers.setRange(2, 10)
-        self.slider_lane_numbers.setValue(4)
-        self.lbl_lane_numbers_val = QLabel("4")
+        self.slider_lane_numbers.setValue(6)
+        self.lbl_lane_numbers_val = QLabel("6")
         ln_row.addWidget(make_slider_row(self.slider_lane_numbers, self.lbl_lane_numbers_val), 1)
         self.sec_maze_settings.content_layout.addLayout(ln_row)
 
@@ -994,7 +994,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_lane_elevation.valueChanged.connect(
             lambda v: self.lbl_lane_elevation_val.setText(f"{v}%")
         )
-        self.slider_warp.valueChanged.connect(lambda v: self.lbl_warp_val.setText(f"{v/10.0}%"))
+        self.slider_warp.valueChanged.connect(lambda v: self.lbl_warp_val.setText(f"{v}%"))
         self.slider_rough.valueChanged.connect(lambda v: self.lbl_rough_val.setText(f"{v}%"))
         self.slider_plateau_noise.valueChanged.connect(lambda v: self.lbl_plateau_noise_val.setText(f"{v}%"))
         self.slider_erosion.valueChanged.connect(
@@ -2194,9 +2194,12 @@ class TerrainGeneratorGUI(QMainWindow):
                 int(self.config_model.mountain_height_scale * 100)
             )
             self.slider_canyon_depth.setValue(int(self.config_model.lane_depth * 100))
-            self.slider_canyon_steepness.setValue(max(1, min(100, int(self.config_model.wall_slope / 0.5 * 100))))
+            # Wall steepness: 100% means sheer cliff (wall_slope near 0), 1% means smooth valley (wall_slope near 0.5)
+            # wall_slope = (1.0 - steepness_factor) * 0.5
+            steepness_factor = 1.0 - (self.config_model.wall_slope / 0.5)
+            self.slider_canyon_steepness.setValue(max(1, min(100, int(steepness_factor * 100))))
             self.slider_lane_elevation.setValue(int(min(1.0, self.config_model.lane_elevation) * 100))
-            self.slider_warp.setValue(int(self.config_model.warp_strength * 1000))  # 0.018 -> 18
+            self.slider_warp.setValue(int(self.config_model.warp_strength * 100))
             self.slider_rough.setValue(int(self.config_model.roughness * 100))
             self.slider_plateau_noise.setValue(int(self.config_model.plateau_noise * 100))
             # blur_radius 0.0 → slider 0; 0.0 < x < 0.5 → slider 1; 0.5-10.0 → slider 1-100
@@ -2297,10 +2300,11 @@ class TerrainGeneratorGUI(QMainWindow):
             self.slider_mountain_height.value() / 100.0
         )
         self.config_model.lane_depth = self.slider_canyon_depth.value() / 100.0
+        # Wall steepness: 100% means sheer cliff (wall_slope near 0), 1% means smooth valley (wall_slope near 0.5)
         steepness_factor = self.slider_canyon_steepness.value() / 100.0
-        self.config_model.wall_slope = max(0.001, steepness_factor * 0.5)
+        self.config_model.wall_slope = max(0.001, (1.0 - steepness_factor) * 0.5)
         self.config_model.lane_elevation = self.slider_lane_elevation.value() / 100.0
-        self.config_model.warp_strength = self.slider_warp.value() / 1000.0
+        self.config_model.warp_strength = self.slider_warp.value() / 100.0
         self.config_model.roughness = self.slider_rough.value() / 100.0
         self.config_model.plateau_noise = self.slider_plateau_noise.value() / 100.0
         # Edge smoothing: 0 = off; 1-100 maps to 0.5-10.0 passes (immediately visible)

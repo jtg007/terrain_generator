@@ -77,9 +77,6 @@ def create_connection_path(
     spec: TerrainSpec,
 ) -> LayoutConnection:
     import math
-    from src.noise import NoiseGenerator
-
-    noise = NoiseGenerator(spec.seed)
 
     dx = end_node.x - start_node.x
     dy = end_node.y - start_node.y
@@ -115,7 +112,7 @@ def create_connection_path(
         envelope = math.sin(t * math.pi)
 
         # 1D noise sampled along t
-        noise_val = noise.fbm(t * freq, spec.seed * 0.1, octaves=2)
+        noise_val = math.sin(t * freq * math.pi * 2 + spec.seed)
         offset = noise_val * envelope * max_offset
 
         px = base_x + nx * offset
@@ -157,99 +154,74 @@ def generate_strategic_layout(
         connections = []
 
         map_min_dim = min(spec.size_x, spec.size_y)
-        base_radius = spec.lane_node_radius if spec.lane_node_radius > 0 else map_min_dim * 0.15
-        node_radius = map_min_dim * 0.10
-        lane_width = map_min_dim * 0.08
-
-        # Main bases
-        b1_x, b1_y = spec.default_nf_base()
-        b2_x, b2_y = spec.default_imp_base()
-        b1 = LayoutNode(b1_x, b1_y, base_radius, ZoneType.BASE)
-        b2 = LayoutNode(b2_x, b2_y, base_radius, ZoneType.BASE)
-        nodes.extend([b1, b2])
-
         # A grid-like structure of nodes to create paths
         grid_size = getattr(spec, "lane_numbers", 4)
         maze_scale = getattr(spec, "maze_size", 50) / 100.0
         maze_dim_x = spec.size_x * maze_scale
         maze_dim_y = spec.size_y * maze_scale
 
-        spacing_x = maze_dim_x / grid_size
-        spacing_y = maze_dim_y / grid_size
+        spacing_denominator = max(grid_size - 1, 1)
+        spacing_x = maze_dim_x / spacing_denominator
+        spacing_y = maze_dim_y / spacing_denominator
+
+        lane_width_scale = getattr(spec, "lane_width_scale", 1.0)
+        node_radius = min(spacing_x, spacing_y) * 0.25 * lane_width_scale
+        # Ensure lane width has a safe minimum (192.0 is vehicle clearance) so connectivity check doesn't fail on tiny paths
+        # Ensure lane width has a safe minimum (192.0 is vehicle clearance) so connectivity check doesn't fail on tiny paths
+        # Cap it so we still have some canyon walls even at massive lane widths.
+        lane_width = max(192.0, min(min(spacing_x, spacing_y) * 0.30 * lane_width_scale, min(spacing_x, spacing_y) * 0.45))
 
         # Center the maze
         offset_x = spec.origin_x + (spec.size_x - maze_dim_x) / 2
         offset_y = spec.origin_y + (spec.size_y - maze_dim_y) / 2
 
-        grid_nodes = []
-        for ix in range(1, grid_size):
-            for iy in range(1, grid_size):
-                # add some jitter
-                jx = (ix * spacing_x) + rng.uniform(-spacing_x * 0.3, spacing_x * 0.3)
-                jy = (iy * spacing_y) + rng.uniform(-spacing_y * 0.3, spacing_y * 0.3)
-                jx = jx + offset_x
-                jy = jy + offset_y
+        import random
+        maze_cells = {}
+        visited = set()
 
-                gn = LayoutNode(jx, jy, node_radius, ZoneType.VEHICLE_OPEN)
-                nodes.append(gn)
-                grid_nodes.append((ix, iy, gn))
+        def carve(start_x, start_y):
+            stack = [(start_x, start_y)]
+            visited.add((start_x, start_y))
 
-        def get_gn(ix, iy):
-            for gx, gy, n in grid_nodes:
-                if gx == ix and gy == iy:
-                    return n
-            return None
+            while stack:
+                cx, cy = stack[-1]
+                dirs = [(1,0),(-1,0),(0,1),(0,-1)]
+                rng.shuffle(dirs)
 
-        # Connect bases to the nearest grid nodes
-        connections.append(LayoutConnection(b1, get_gn(1, 1), lane_width, ZoneType.MAIN_LANE, []))
-        connections.append(
-            LayoutConnection(b2, get_gn(grid_size - 1, grid_size - 1), lane_width, ZoneType.MAIN_LANE, [])
-        )
+                moved = False
+                for dx, dy in dirs:
+                    nx, ny = cx+dx, cy+dy
+                    if 0 <= nx < grid_size and 0 <= ny < grid_size and (nx,ny) not in visited:
+                        n1 = maze_cells[(cx, cy)]
+                        n2 = maze_cells[(nx, ny)]
+                        conn = create_connection_path(n1, n2, lane_width, ZoneType.MAIN_LANE, spec)
+                        connections.append(conn)
+                        visited.add((nx, ny))
+                        stack.append((nx, ny))
+                        moved = True
+                        break
 
-        # Connect grid nodes to form a maze structure
-        # ensuring all are connected but picking random paths to drop to create dead ends/maze
-        jitter_scale = map_min_dim * 0.05
-        for gx, gy, n in grid_nodes:
-            neighbors = []
-            if gx < grid_size - 1:
-                neighbors.append(get_gn(gx + 1, gy))
-            if gy < grid_size - 1:
-                neighbors.append(get_gn(gx, gy + 1))
+                if not moved:
+                    stack.pop()
 
-            for neighbor in neighbors:
-                if neighbor and rng.random() > 0.35:  # 65% chance to connect
-                    # add intermediate points for a squiggly path
-                    pts = []
-                    dist = math.hypot(neighbor.x - n.x, neighbor.y - n.y)
-                    steps = int(dist / 200)
-                    for s in range(1, steps):
-                        f = s / steps
-                        mx = n.x + (neighbor.x - n.x) * f + rng.uniform(-jitter_scale, jitter_scale)
-                        my = n.y + (neighbor.y - n.y) * f + rng.uniform(-jitter_scale, jitter_scale)
-                        pts.append((mx, my))
-                    connections.append(LayoutConnection(n, neighbor, lane_width, ZoneType.SIDE_ROUTE, pts))
+        for ix in range(grid_size):
+            for iy in range(grid_size):
+                wx = offset_x + ix * spacing_x + rng.uniform(
+                    -spacing_x * 0.2,
+                    spacing_x * 0.2,
+                )
+                wy = offset_y + iy * spacing_y + rng.uniform(
+                    -spacing_y * 0.2,
+                    spacing_y * 0.2,
+                )
+                wx = max(offset_x, min(offset_x + maze_dim_x, wx))
+                wy = max(offset_y, min(offset_y + maze_dim_y, wy))
+                node = LayoutNode(wx, wy, node_radius, ZoneType.VEHICLE_OPEN)
+                maze_cells[(ix, iy)] = node
+                nodes.append(node)
 
-        # Ensure minimal viable connectivity (base -> b1_node -> ... -> b2_node -> base)
-        # We rely on rng and high chance for connections to generally make it playable
-        # To be safe, force a specific central path.
-        path = []
-        for i in range(1, grid_size):
-            path.append((i, i))
-            if i < grid_size - 1:
-                path.append((i + 1, i))
-
-        for i in range(len(path) - 1):
-            n1 = get_gn(*path[i])
-            n2 = get_gn(*path[i + 1])
-            if n1 and n2:
-                already_connected = False
-                for c in connections:
-                    if (c.start_node == n1 and c.end_node == n2) or (
-                        c.start_node == n2 and c.end_node == n1
-                    ):
-                        already_connected = True
-                if not already_connected:
-                    connections.append(LayoutConnection(n1, n2, 2.5, "main", []))
+        # Force recursion limit up just in case, though grid_size is small
+        carve(0, 0)
 
         return nodes, connections
 
@@ -823,13 +795,14 @@ def generate_playability_mask(
     # Compute signed distance to the playability boundary
     distance_field = np.full((rows, cols), np.inf, dtype=np.float64)
 
-    scale = getattr(spec, "lane_width_scale", 1.0)
     for node in nodes:
-        if spec.lane_node_radius <= 0 and node.type == ZoneType.BASE:
+        if node.type == ZoneType.BASE:
             continue
         dist_grid = np.sqrt((WX - node.x) ** 2 + (WY - node.y) ** 2)
-        if node.type in (ZoneType.BASE, ZoneType.VEHICLE_OPEN):
-            distance_field = np.minimum(distance_field, dist_grid - node.radius * scale)
+        if node.type == ZoneType.VEHICLE_OPEN:
+            # Scale is applied to spacing-derived base radius, but base radius isn't scaled in UI usually.
+            # We must NOT double-apply scale here if radius already has it, but node.radius doesn't.
+            distance_field = np.minimum(distance_field, dist_grid - node.radius)
 
     # 2. Evaluate Polyline Connections
     for conn in connections:
@@ -865,14 +838,14 @@ def generate_playability_mask(
 
             min_dist_grid = np.minimum(min_dist_grid, dist)
 
-        scale = getattr(spec, "lane_width_scale", 1.0)
         if conn.type in (ZoneType.MAIN_LANE, ZoneType.SIDE_ROUTE):
-            playable_width = conn.width * scale
+            playable_width = conn.width
         elif conn.type == ZoneType.CHOKEPOINT:
-            playable_width = conn.width * 0.5 * scale
+            playable_width = conn.width * 0.5
         else:
             continue
 
+        # playable_width already includes the scale from when the connection was created.
         distance_field = np.minimum(distance_field, min_dist_grid - playable_width)
 
     # distance_field is now the continuous distance from the playable boundary.
@@ -900,10 +873,24 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     )
 
     # ── Terrain Generation ──────────────────
-    from src.canyon_generator import generate_canyon_base
+    from src.canyon_generator import generate_canyon_base, generate_noise_canyon_mask
 
-    # If canyon_natural is true, we pass an infinity distance field so it doesn't carve
+        # If canyon_natural is true, we pass an infinity distance field so it doesn't carve
     effective_mask = np.full((rows, cols), np.inf, dtype=np.float32) if getattr(spec, "canyon_natural", False) else hard_mask
+
+    topology = getattr(spec, "topology", "").lower()
+    is_noise_canyon = topology.startswith("canyon") and not spec.generate_lanes
+
+    if is_noise_canyon:
+        effective_mask = generate_noise_canyon_mask(
+            rows=rows,
+            cols=cols,
+            seed=spec.seed,
+            warp_strength=getattr(spec, "warp_strength", 0.018) * 150.0,
+            threshold=1.0 - getattr(spec, "lane_depth", 0.72),
+            feature_scale=getattr(spec, "feature_scale", 1.8)
+        )
+        grid.playability_mask = effective_mask
 
     # Determine the base terrain to carve into
     if spec.manual_terrain:
@@ -920,22 +907,38 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
         base_t = original_heights if (original_heights is not None and np.any(original_heights > 0)) else None
 
     # Generate the terrain base [0, 1]
-    canyon_noise = generate_canyon_base(
+
+    # distance_field from playability mask is in world units.
+    # generate_canyon_base expects distance field in pixels!
+    units_per_px = min(spec.size_x / cols, spec.size_y / rows)
+    if is_noise_canyon:
+        distance_field_px = effective_mask  # Already in pixel units
+    else:
+        distance_field_px = effective_mask / units_per_px
+
+    canyon_noise, report = generate_canyon_base(
         rows=rows,
         cols=cols,
-        distance_field=effective_mask,
-        physical_map_size=max(spec.size_x, spec.size_y),
+        distance_field=distance_field_px,
+        map_world_size_x=spec.size_x,
+        map_world_size_y=spec.size_y,
+        height_world_units=mountain_height - floor_height,
         seed=spec.seed,
         feature_scale=getattr(spec, "feature_scale", 1.8),
         warp_strength=getattr(spec, "warp_strength", 0.018),
         lane_depth=getattr(spec, "lane_depth", 0.72),
         wall_slope=getattr(spec, "wall_slope", 0.06),
         plateau_noise=getattr(spec, "plateau_noise", 0.12),
-        roughness=getattr(spec, "roughness", 0.50),
-        blur_radius=getattr(spec, "blur_radius", 10),
+        roughness=getattr(spec, "canyon_roughness", 0.50),
+        blur_radius=getattr(spec, "blur_radius", 2.0),
         octaves=spec.noise_octaves,
         base_terrain=base_t,
+        is_pure_noise=is_noise_canyon,
     )
+
+    grid.report = report
+    if not report["pass"]:
+        print(f"WARNING: Heightmap validation failed: {report}")
 
     # Scale noise base to actual map height range
     new_heights = (
@@ -943,7 +946,6 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     )
 
     # 3. Handle specific topology inversions
-    playable_height = np.full((rows, cols), floor_height, dtype=np.float32)
     if not getattr(spec, "canyon_natural", False):
         if getattr(spec, "invert_lanes", False) or getattr(spec, "topology", "canyon") == "island":
             # Reverse the heights for islands or inverted lanes.
@@ -966,25 +968,22 @@ def load_custom_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
 
     original_heights = grid.heights.copy()
 
-    img = Image.open(spec.custom_image_path).convert("L")
+    img = Image.open(spec.custom_image_path)
+    if img.mode in ("I", "I;16", "I;16B", "I;16L", "I;16S"):
+        arr_norm = np.array(img, dtype=np.float32) / 65535.0
+    elif img.mode == "F":
+        arr = np.array(img, dtype=np.float32)
+        lo, hi = arr.min(), arr.max()
+        arr_norm = (arr - lo) / (hi - lo) if hi > lo else arr
+    else:
+        arr_norm = np.array(img.convert("L"), dtype=np.float32) / 255.0
 
-    # Fit and crop the image to the required vertex grid dimensions
-    # ImageOps.fit maintains aspect ratio while filling the target size exactly.
     img_fitted = ImageOps.fit(
-        img, (grid.cols, grid.rows), method=Image.Resampling.LANCZOS
+        Image.fromarray((arr_norm * 65535).astype(np.uint16), mode="I;16").convert("I"),
+        (grid.cols, grid.rows),
+        method=Image.Resampling.LANCZOS,
     )
-
-    # Extract pixel data mapped proportionally to maximum physical height
-    pixels = list(img_fitted.getdata())
-    max_height = spec.terrain_max_height
-
-    new_heights = np.zeros((grid.rows, grid.cols), dtype=np.float32)
-    idx = 0
-    for r in range(grid.rows):
-        for c in range(grid.cols):
-            val = pixels[idx] / 255.0
-            new_heights[r, c] = val * max_height
-            idx += 1
+    new_heights = (np.array(img_fitted, dtype=np.float32) / 65535.0) * spec.terrain_max_height
 
     grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
     return grid
@@ -1047,25 +1046,10 @@ def flatten_base_areas(
     base_radius = spec.base_clear_radius
     flatness = spec.base_flatness
 
-    # In manual mode or when custom layout lanes are drawn, only use custom base positions.
-    # We don't want default bases spawning if the user is explicitly drawing custom lanes
-    # but hasn't placed bases yet. In fully procedural mode, use defaults if not set.
-    if spec.manual_terrain or spec.custom_layout_connections:
-        imp_base_x = spec.custom_imp_base_x
-        imp_base_y = spec.custom_imp_base_y
-        nf_base_x = spec.custom_nf_base_x
-        nf_base_y = spec.custom_nf_base_y
-    else:
-        imp_base_x, imp_base_y = (
-            (spec.custom_imp_base_x, spec.custom_imp_base_y)
-            if spec.custom_imp_base_x is not None and spec.custom_imp_base_y is not None
-            else spec.default_imp_base()
-        )
-        nf_base_x, nf_base_y = (
-            (spec.custom_nf_base_x, spec.custom_nf_base_y)
-            if spec.custom_nf_base_x is not None and spec.custom_nf_base_y is not None
-            else spec.default_nf_base()
-        )
+    imp_base_x = spec.custom_imp_base_x
+    imp_base_y = spec.custom_imp_base_y
+    nf_base_x = spec.custom_nf_base_x
+    nf_base_y = spec.custom_nf_base_y
 
     # Determine local average heights for the bases instead of global floor height
     def get_local_avg(bx: float, by: float, r_area: float) -> float:
@@ -1606,8 +1590,6 @@ def build_cells(spec: TerrainSpec, grid: HeightGrid) -> List[TerrainCell]:
 def validate_seams(
     cells: List[TerrainCell], grid: HeightGrid, spec: TerrainSpec
 ) -> List[str]:
-    # Bypass slope limit check for canyon layouts
-    bypass_slope_limit = getattr(spec, "topology", "").lower().startswith("canyon")
     """
     Step 7: Validate seam topology.
 
@@ -1619,6 +1601,8 @@ def validate_seams(
 
     Returns list of error messages (empty if valid).
     """
+    # Bypass slope limit check for canyon layouts
+    bypass_slope_limit = getattr(spec, "topology", "").lower().startswith("canyon")
     errors = []
 
     if not cells:
@@ -1841,7 +1825,7 @@ def apply_pipeline_for_preview(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
 
             if (
                 playability_mask is not None
-                and playability_mask[start_r, start_c] > 0.5
+                and playability_mask[start_r, start_c] < 256.0
             ):
                 continue
 
@@ -1857,7 +1841,7 @@ def apply_pipeline_for_preview(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
                 if ir <= 0 or ir >= rows - 1 or ic <= 0 or ic >= cols - 1:
                     break
 
-                if playability_mask is not None and playability_mask[ir, ic] > 0.5:
+                if playability_mask is not None and playability_mask[ir, ic] < 256.0:
                     break
 
                 fx = pos_c - ic
@@ -2183,6 +2167,7 @@ def run_pipeline(
             "Invalid layout configuration:\n" + "\n".join(layout_result.errors)
         )
 
+    errors = []
     print("Running terrain pipeline...")
     print(
         f"  Spec: {spec.size_x}x{spec.size_y}, cell_size={spec.cell_size}, power={spec.displacement_power}"
@@ -2236,6 +2221,8 @@ def run_pipeline(
             grid.playability_mask = None
         print("  Step 2c: Generate heights with flat terrain (manual mode)")
         grid = generate_heights(spec, grid)
+        if hasattr(grid, 'report') and not grid.report.get("pass", True):
+            errors.append(f"Heightmap validation failed: {grid.report}")
     else:
         if spec.generate_lanes:
             print("  Step 2a: Generate playability mask (Smoothstep distance field)")
@@ -2263,6 +2250,8 @@ def run_pipeline(
             f"  Step 2c: Generate heights with fBm (seed={spec.seed}, octaves={spec.noise_octaves})"
         )
         grid = generate_heights(spec, grid)
+        if hasattr(grid, 'report') and not grid.report.get("pass", True):
+            errors.append(f"Heightmap validation failed: {grid.report}")
 
     print(f"    Height range: {grid.min_height():.1f} to {grid.max_height():.1f}")
 
@@ -2332,10 +2321,11 @@ def run_pipeline(
     print(f"    Created {len(cells)} cells")
 
     print("  Step 9: Validate seams")
-    errors = validate_seams(cells, grid, spec)
-    if errors:
-        print("    ERRORS FOUND:")
-        for e in errors:
+    seam_errors = validate_seams(cells, grid, spec)
+    errors.extend(seam_errors)
+    if seam_errors:
+        print("    ERRORS FOUND in seams:")
+        for e in seam_errors:
             print(f"      - {e}")
     else:
         print("    Validation passed!")
