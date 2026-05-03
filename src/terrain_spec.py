@@ -61,7 +61,7 @@ class TerrainSpec:
     skybox_ceiling: int = 4096
     roughness: float = 0.5
     topology: str = "random"
-    lane_width_scale: float = 1.0
+    lane_width_scale: float = 0.5
     mountain_height_scale: float = 1.0
     lane_elevation: float = 0.15
 
@@ -413,7 +413,7 @@ def create_default_spec() -> TerrainSpec:
         erosion_iterations=50000,
         erosion_droplet_lifetime=30,
         topology="random",
-        lane_width_scale=1.0,
+        lane_width_scale=0.5,
         mountain_height_scale=1.0,
         lane_elevation=0.15,
         feature_scale=1.8,
