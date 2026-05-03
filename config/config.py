@@ -6,8 +6,8 @@ Config Manager - Saves and loads user settings
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-from steam_paths import find_empires_path as _find_empires_path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from src.steam_paths import find_empires_path as _find_empires_path
 
 import json
 

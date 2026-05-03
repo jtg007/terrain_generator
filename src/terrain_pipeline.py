@@ -25,26 +25,15 @@ from typing import List, Tuple, Optional
 
 import numpy as np
 
-if getattr(sys, "frozen", False):
-    from terrain_spec import (
-        TerrainSpec,
-        HeightGrid,
-        TerrainCell,
-        UnderlayBrush,
-        ZoneType,
-        LayoutNode,
-        LayoutConnection,
-    )
-else:
-    from src.terrain_spec import (
-        TerrainSpec,
-        HeightGrid,
-        TerrainCell,
-        UnderlayBrush,
-        ZoneType,
-        LayoutNode,
-        LayoutConnection,
-    )
+from src.terrain_spec import (
+    TerrainSpec,
+    HeightGrid,
+    TerrainCell,
+    UnderlayBrush,
+    ZoneType,
+    LayoutNode,
+    LayoutConnection,
+)
 
 from PIL import Image, ImageOps
 
@@ -2348,10 +2337,7 @@ def run_pipeline(
 
 
 if __name__ == "__main__":
-    if getattr(sys, "frozen", False):
-        from terrain_spec import create_default_spec
-    else:
-        from src.terrain_spec import create_default_spec
+    from src.terrain_spec import create_default_spec
 
     result = run_pipeline(create_default_spec())
 

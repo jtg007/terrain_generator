@@ -34,7 +34,7 @@ class GUIConfigModel:
     skybox_ceiling: int = 4096  # Skybox Ceiling Height
 
     topology: str = "canyon"
-    lane_width_scale: float = 1.0
+    lane_width_scale: float = 0.5
     mountain_height_scale: float = 1.0
     lane_elevation: float = 0.15
 
