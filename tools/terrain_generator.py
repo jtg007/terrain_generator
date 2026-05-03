@@ -962,7 +962,7 @@ class TerrainGeneratorGUI(QMainWindow):
         lbl_ms.setToolTip("Scale for the bounding box the maze generates within (10% to 90%)")
         ms_row.addWidget(lbl_ms)
         self.slider_maze_size = QSlider(Qt.Horizontal)
-        self.slider_maze_size.setRange(10, 90)
+        self.slider_maze_size.setRange(10, 100)
         self.slider_maze_size.setValue(50)
         self.lbl_maze_size_val = QLabel("50%")
         ms_row.addWidget(make_slider_row(self.slider_maze_size, self.lbl_maze_size_val, "%"), 1)
