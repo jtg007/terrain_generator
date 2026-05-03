@@ -2190,18 +2190,26 @@ class TerrainGeneratorGUI(QMainWindow):
             self.slider_lane_width.setValue(
                 int(self.config_model.lane_width_scale * 100)
             )
+            self.lbl_lane_width_val.setText(f"{int(self.config_model.lane_width_scale * 100)}%")
             self.slider_mountain_height.setValue(
                 int(self.config_model.mountain_height_scale * 100)
             )
+            self.lbl_mountain_height_val.setText(f"{int(self.config_model.mountain_height_scale * 100)}%")
             self.slider_canyon_depth.setValue(int(self.config_model.lane_depth * 100))
+            self.lbl_canyon_depth_val.setText(f"{int(self.config_model.lane_depth * 100)}%")
             # Wall steepness: 100% means sheer cliff (wall_slope near 0), 1% means smooth valley (wall_slope near 0.5)
             # wall_slope = (1.0 - steepness_factor) * 0.5
             steepness_factor = 1.0 - (self.config_model.wall_slope / 0.5)
             self.slider_canyon_steepness.setValue(max(1, min(100, int(steepness_factor * 100))))
+            self.lbl_canyon_steepness_val.setText(f"{max(1, min(100, int(steepness_factor * 100)))}%")
             self.slider_lane_elevation.setValue(int(min(1.0, self.config_model.lane_elevation) * 100))
+            self.lbl_lane_elevation_val.setText(f"{int(min(1.0, self.config_model.lane_elevation) * 100)}%")
             self.slider_warp.setValue(int(self.config_model.warp_strength * 100))
+            self.lbl_warp_val.setText(f"{int(self.config_model.warp_strength * 100)}%")
             self.slider_rough.setValue(int(self.config_model.roughness * 100))
+            self.lbl_rough_val.setText(f"{int(self.config_model.roughness * 100)}%")
             self.slider_plateau_noise.setValue(int(self.config_model.plateau_noise * 100))
+            self.lbl_plateau_noise_val.setText(f"{int(self.config_model.plateau_noise * 100)}%")
             # blur_radius 0.0 → slider 0; 0.0 < x < 0.5 → slider 1; 0.5-10.0 → slider 1-100
             br = self.config_model.blur_radius
             if br <= 0.0:
@@ -2211,10 +2219,12 @@ class TerrainGeneratorGUI(QMainWindow):
             else:
                 _ero_slider = max(1, min(100, int(round(1 + (br - 0.5) / 9.5 * 99))))
             self.slider_erosion.setValue(_ero_slider)
+            self.lbl_erosion_val.setText(f"{_ero_slider}%")
 
             self.slider_feature_scale.setValue(
                 int(self.config_model.feature_scale * 100)
             )
+            self.lbl_feature_scale_val.setText(f"{int(self.config_model.feature_scale * 100)}%")
 
             self.slider_maze_size.setValue(self.config_model.maze_size)
             self.lbl_maze_size_val.setText(f"{self.config_model.maze_size}%")
