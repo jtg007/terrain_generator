@@ -50,6 +50,10 @@ icons_dir = PROJECT_ROOT / 'icons'
 if icons_dir.exists():
     datas.append((str(icons_dir), 'icons'))
 
+# Include models folder
+models_dir = PROJECT_ROOT / 'models'
+if models_dir.exists():
+    datas.append((str(models_dir), 'models'))
 
 
 a = Analysis(
