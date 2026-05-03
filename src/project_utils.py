@@ -6,14 +6,8 @@ from dataclasses import asdict, is_dataclass
 from typing import Dict, Any, List, Tuple, Optional
 from pathlib import Path
 
-# Use relative imports based on context (GUI vs CLI)
-import sys
-if getattr(sys, "frozen", False):
-    from config_model import GUIConfigModel
-    from terrain_spec import LayoutNode, LayoutConnection, ZoneType
-else:
-    from src.config_model import GUIConfigModel
-    from src.terrain_spec import LayoutNode, LayoutConnection, ZoneType
+from src.config_model import GUIConfigModel
+from src.terrain_spec import LayoutNode, LayoutConnection, ZoneType
 
 CURRENT_PROJECT_VERSION = 1
 

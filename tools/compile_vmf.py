@@ -19,8 +19,8 @@ import shutil
 from pathlib import Path
 
 # Import shared path detection
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-from steam_paths import is_windows, find_empires_path, find_empires_bin
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from src.steam_paths import is_windows, find_empires_path, find_empires_bin
 
 COMPILE_SAFE_NODETAIL_MATERIAL = "common/terrain/blend_grass01a_dirt01a_nodetail"
 DETAIL_HEAVY_TERRAIN_MATERIALS = [

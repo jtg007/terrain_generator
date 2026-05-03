@@ -13,16 +13,12 @@ import sys
 
 from ValveVMF import VMF, Solid, Side, DispInfo
 
-if getattr(sys, "frozen", False):
-    from terrain_spec import TerrainSpec, HeightGrid, TerrainCell, UnderlayBrush
-    from terrain_pipeline import get_cell_heightmap, get_cell_normals, get_cell_alphas
-else:
-    from src.terrain_spec import TerrainSpec, HeightGrid, TerrainCell, UnderlayBrush
-    from src.terrain_pipeline import (
-        get_cell_heightmap,
-        get_cell_normals,
-        get_cell_alphas,
-    )
+from src.terrain_spec import TerrainSpec, HeightGrid, TerrainCell, UnderlayBrush
+from src.terrain_pipeline import (
+    get_cell_heightmap,
+    get_cell_normals,
+    get_cell_alphas,
+)
 
 
 class ValveVMFWriter:

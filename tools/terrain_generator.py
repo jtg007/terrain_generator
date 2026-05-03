@@ -10,8 +10,6 @@ else:
     PROJECT_ROOT = Path(__file__).parent.parent
 
 sys.path.insert(0, str(PROJECT_ROOT))
-sys.path.insert(0, str(PROJECT_ROOT / "src"))
-sys.path.insert(0, str(PROJECT_ROOT / "config"))
 
 import os
 from contextlib import contextmanager
@@ -2166,6 +2164,10 @@ class TerrainGeneratorGUI(QMainWindow):
             self.chk_minimal_map,
             self.chk_terrain_only,
             self.chk_nodetail,
+            self.slider_resource_clear,
+            self.chk_manual_terrain,
+            self.chk_invert_lanes,
+            self.chk_preview_pipeline,
         ):
             self.spin_seed.setValue(self.config_model.seed)
             self.spin_tiles_x.setValue(self.config_model.tiles_x)

@@ -3,10 +3,7 @@ from pathlib import Path
 from typing import Tuple, Optional
 import sys
 
-if getattr(sys, "frozen", False):
-    from terrain_spec import TerrainSpec
-else:
-    from src.terrain_spec import TerrainSpec
+from src.terrain_spec import TerrainSpec
 
 # Keep a small safety margin from Hammer/VBSP hard bounds (±16384) to avoid
 # borderline compile failures like "HashVec: point outside valid range".

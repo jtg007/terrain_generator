@@ -49,13 +49,6 @@ if config_dir.exists():
             datas.append((str(fp), 'config'))
     # Exclude config.json - user-specific paths, created at runtime
 
-# Source modules - place at root level so imports work
-src_dir = PROJECT_ROOT / 'src'
-if src_dir.exists():
-    for f in src_dir.glob('*.py'):
-        if f.name != '__pycache__':
-            datas.append((str(f), '.'))
-
 # Tools vmflib
 vmflib_dir = PROJECT_ROOT / 'tools' / 'vmflib'
 if vmflib_dir.exists():
