@@ -25,37 +25,20 @@ else:
     except NameError:
         PROJECT_ROOT = Path.cwd()
 
-# Collect PySide6 data files (icons, translations, etc.)
-hiddenimports = collect_submodules('PySide6')
-hiddenimports += collect_submodules('shiboken6')
-hiddenimports += [
-    'PySide6.QtCore',
-    'PySide6.QtGui',
-    'PySide6.QtWidgets',
-    'PySide6.QtOpenGL',
-    'PySide6.QtNetwork',
-]
+# We explicitly let PyInstaller auto-detect PySide6 modules
+hiddenimports = []
 
 # Collect data files from packages
 datas = []
 
-# Config directory - bundle config.py and config files
+# Config directory - bundle data files only, not python code
 config_dir = PROJECT_ROOT / 'config'
 if config_dir.exists():
-    # Bundle config.py and config files
-    for f in ['config.py', 'presets.json', 'textures.json', 'skyboxes.json', 'requirements.txt']:
+    # Bundle only actual config data files
+    for f in ['presets.json', 'textures.json', 'skyboxes.json']:
         fp = config_dir / f
         if fp.exists():
             datas.append((str(fp), 'config'))
-    # Exclude config.json - user-specific paths, created at runtime
-
-# Tools vmflib
-vmflib_dir = PROJECT_ROOT / 'tools' / 'vmflib'
-if vmflib_dir.exists():
-    datas.append((str(vmflib_dir), 'tools' + os.sep + 'vmflib'))
-    for f in vmflib_dir.rglob('*.py'):
-        if '__pycache__' not in str(f):
-            datas.append((str(f), 'tools' + os.sep + 'vmflib'))
 
 # map_rules.json if exists
 rules_file = PROJECT_ROOT / 'map_rules.json'
@@ -67,10 +50,6 @@ icons_dir = PROJECT_ROOT / 'icons'
 if icons_dir.exists():
     datas.append((str(icons_dir), 'icons'))
 
-# Include models folder
-models_dir = PROJECT_ROOT / 'models'
-if models_dir.exists():
-    datas.append((str(models_dir), 'models'))
 
 
 a = Analysis(
