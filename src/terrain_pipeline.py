@@ -165,9 +165,12 @@ def generate_strategic_layout(
         spacing_x = maze_dim_x / grid_size
         spacing_y = maze_dim_y / grid_size
 
-        node_radius = min(spacing_x, spacing_y) * 0.25
+        lane_width_scale = getattr(spec, "lane_width_scale", 1.0)
+        node_radius = min(spacing_x, spacing_y) * 0.25 * lane_width_scale
         # Ensure lane width has a safe minimum (192.0 is vehicle clearance) so connectivity check doesn't fail on tiny paths
-        lane_width = max(192.0, min(spacing_x, spacing_y) * 0.30 * getattr(spec, "lane_width_scale", 1.0))
+        # Ensure lane width has a safe minimum (192.0 is vehicle clearance) so connectivity check doesn't fail on tiny paths
+        # Cap it so we still have some canyon walls even at massive lane widths.
+        lane_width = max(192.0, min(min(spacing_x, spacing_y) * 0.30 * lane_width_scale, min(spacing_x, spacing_y) * 0.45))
 
         # Main bases
         b1_x, b1_y = spec.default_nf_base()
@@ -213,8 +216,7 @@ def generate_strategic_layout(
             for iy in range(grid_size):
                 wx = offset_x + ix * spacing_x + rng.uniform(-spacing_x*0.2, spacing_x*0.2)
                 wy = offset_y + iy * spacing_y + rng.uniform(-spacing_y*0.2, spacing_y*0.2)
-                # node_radius = 0 since corridors define space
-                node = LayoutNode(wx, wy, 0, ZoneType.VEHICLE_OPEN)
+                node = LayoutNode(wx, wy, node_radius, ZoneType.VEHICLE_OPEN)
                 maze_cells[(ix, iy)] = node
                 nodes.append(node)
 
