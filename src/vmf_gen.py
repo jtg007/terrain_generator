@@ -962,21 +962,21 @@ def spawn_info_nodes(
     map_end_y = origin_y + map_height
     margin = 256
 
-    important_points = [
-        (imp_base_x, imp_base_y),
-        (nf_base_x, nf_base_y),
-        (0.0, 0.0),
-        (imp_base_x + 300, imp_base_y + 300),
-        (nf_base_x - 300, nf_base_y - 300),
-        (200, 0.0),
-        (-200, 0.0),
-        (0.0, 200),
-        (0.0, -200),
-    ]
+    important_points = []
+    if imp_base_x is not None and imp_base_y is not None:
+        important_points.extend(
+            [(imp_base_x, imp_base_y), (imp_base_x + 300, imp_base_y + 300)]
+        )
+    if nf_base_x is not None and nf_base_y is not None:
+        important_points.extend(
+            [(nf_base_x, nf_base_y), (nf_base_x - 300, nf_base_y - 300)]
+        )
+    important_points.extend([(0.0, 0.0), (200.0, 0.0), (-200.0, 0.0), (0.0, 200.0)])
 
     node_id = 100
 
-    for point_x, point_y in important_points[:4]:
+    clustered_points = important_points[:4]
+    for point_x, point_y in clustered_points:
         for _ in range(min_cluster_size):
             offset_x = random.uniform(
                 -clustering_threshold / 2, clustering_threshold / 2
@@ -1002,7 +1002,7 @@ def spawn_info_nodes(
             node.properties["targetname"] = f"node_{node_id}"
             node_id += 1
 
-    remaining_nodes = node_count - len(important_points[:4]) * min_cluster_size
+    remaining_nodes = node_count - len(clustered_points) * min_cluster_size
     for _ in range(max(0, remaining_nodes)):
         node_x = random.uniform(origin_x + margin, map_end_x - margin)
         node_y = random.uniform(origin_y + margin, map_end_y - margin)
@@ -1360,35 +1360,26 @@ class DisplacementVMF:
         nf_offset = min(nf_offset, max_offset)
         imp_offset = min(imp_offset, max_offset)
 
-        # In manual mode, only use custom positions. In procedural mode, use defaults if not set.
-        if self.spec.manual_terrain:
-            imp_base_x = int(self.spec.custom_imp_base_x) if self.spec.custom_imp_base_x is not None else None
-            imp_base_y = int(self.spec.custom_imp_base_y) if self.spec.custom_imp_base_y is not None else None
-            nf_base_x = int(self.spec.custom_nf_base_x) if self.spec.custom_nf_base_x is not None else None
-            nf_base_y = int(self.spec.custom_nf_base_y) if self.spec.custom_nf_base_y is not None else None
-        else:
-            imp_default_x, imp_default_y = self.spec.default_imp_base()
-            imp_base_x = (
-                int(self.spec.custom_imp_base_x)
-                if self.spec.custom_imp_base_x is not None
-                else int(imp_default_x)
-            )
-            imp_base_y = (
-                int(self.spec.custom_imp_base_y)
-                if self.spec.custom_imp_base_y is not None
-                else int(imp_default_y)
-            )
-            nf_default_x, nf_default_y = self.spec.default_nf_base()
-            nf_base_x = (
-                int(self.spec.custom_nf_base_x)
-                if self.spec.custom_nf_base_x is not None
-                else int(nf_default_x)
-            )
-            nf_base_y = (
-                int(self.spec.custom_nf_base_y)
-                if self.spec.custom_nf_base_y is not None
-                else int(nf_default_y)
-            )
+        imp_base_x = (
+            int(self.spec.custom_imp_base_x)
+            if self.spec.custom_imp_base_x is not None
+            else None
+        )
+        imp_base_y = (
+            int(self.spec.custom_imp_base_y)
+            if self.spec.custom_imp_base_y is not None
+            else None
+        )
+        nf_base_x = (
+            int(self.spec.custom_nf_base_x)
+            if self.spec.custom_nf_base_x is not None
+            else None
+        )
+        nf_base_y = (
+            int(self.spec.custom_nf_base_y)
+            if self.spec.custom_nf_base_y is not None
+            else None
+        )
 
         flatten_radius = self.spec.base_clear_radius
 

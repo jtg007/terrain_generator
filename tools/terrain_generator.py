@@ -963,8 +963,8 @@ class TerrainGeneratorGUI(QMainWindow):
         ms_row.addWidget(lbl_ms)
         self.slider_maze_size = QSlider(Qt.Horizontal)
         self.slider_maze_size.setRange(10, 100)
-        self.slider_maze_size.setValue(50)
-        self.lbl_maze_size_val = QLabel("50%")
+        self.slider_maze_size.setValue(90)
+        self.lbl_maze_size_val = QLabel("90%")
         ms_row.addWidget(make_slider_row(self.slider_maze_size, self.lbl_maze_size_val, "%"), 1)
         self.sec_maze_settings.content_layout.addLayout(ms_row)
 
@@ -977,8 +977,8 @@ class TerrainGeneratorGUI(QMainWindow):
         ln_row.addWidget(lbl_ln)
         self.slider_lane_numbers = QSlider(Qt.Horizontal)
         self.slider_lane_numbers.setRange(2, 10)
-        self.slider_lane_numbers.setValue(4)
-        self.lbl_lane_numbers_val = QLabel("4")
+        self.slider_lane_numbers.setValue(6)
+        self.lbl_lane_numbers_val = QLabel("6")
         ln_row.addWidget(make_slider_row(self.slider_lane_numbers, self.lbl_lane_numbers_val), 1)
         self.sec_maze_settings.content_layout.addLayout(ln_row)
 

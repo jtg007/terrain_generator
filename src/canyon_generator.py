@@ -25,6 +25,16 @@ def enforce_minimum_width(distance_field: np.ndarray, min_width_px: float) -> np
     size = max(3, int(min_width_px))
     if size % 2 == 0:
         size += 1
+    
+    # Cap kernel size to prevent circular artifacts on large lane widths
+    # Maximum kernel should not exceed ~5% of the smaller dimension
+    h, w = distance_field.shape
+    max_kernel = min(h, w) // 20
+    if max_kernel < 3:
+        max_kernel = 3
+    size = min(size, max_kernel)
+    if size % 2 == 0:
+        size += 1
 
     mask = (distance_field <= 0).astype(np.float32)
 
@@ -332,9 +342,6 @@ def generate_canyon_base(
     units_per_px_x = map_world_size_x / cols
     units_per_px_y = map_world_size_y / rows
     units_per_px = min(units_per_px_x, units_per_px_y)
-
-    height_per_unit = 1.0 / max(1.0, height_world_units)
-    max_slope_per_px = np.tan(np.radians(30)) * max(units_per_px_x, units_per_px_y) * height_per_unit
 
     min_clearance_px = min_clearance_units / units_per_px
     ref_px = float(max(rows, cols))

@@ -70,8 +70,8 @@ class TerrainSpec:
     warp_strength: float = 1.0
     canyon_roughness: float = 0.50
     plateau_noise: float = 0.12
-    maze_size: int = 50
-    lane_numbers: int = 4
+    maze_size: int = 90
+    lane_numbers: int = 6
     wall_slope: float = 0.06
     lane_depth: float = 0.72
     blur_radius: float = 0.0

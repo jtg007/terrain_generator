@@ -154,16 +154,15 @@ def generate_strategic_layout(
         connections = []
 
         map_min_dim = min(spec.size_x, spec.size_y)
-        base_radius = spec.lane_node_radius if spec.lane_node_radius > 0 else map_min_dim * 0.15
-
         # A grid-like structure of nodes to create paths
         grid_size = getattr(spec, "lane_numbers", 4)
         maze_scale = getattr(spec, "maze_size", 50) / 100.0
         maze_dim_x = spec.size_x * maze_scale
         maze_dim_y = spec.size_y * maze_scale
 
-        spacing_x = maze_dim_x / grid_size
-        spacing_y = maze_dim_y / grid_size
+        spacing_denominator = max(grid_size - 1, 1)
+        spacing_x = maze_dim_x / spacing_denominator
+        spacing_y = maze_dim_y / spacing_denominator
 
         lane_width_scale = getattr(spec, "lane_width_scale", 1.0)
         node_radius = min(spacing_x, spacing_y) * 0.25 * lane_width_scale
@@ -171,13 +170,6 @@ def generate_strategic_layout(
         # Ensure lane width has a safe minimum (192.0 is vehicle clearance) so connectivity check doesn't fail on tiny paths
         # Cap it so we still have some canyon walls even at massive lane widths.
         lane_width = max(192.0, min(min(spacing_x, spacing_y) * 0.30 * lane_width_scale, min(spacing_x, spacing_y) * 0.45))
-
-        # Main bases
-        b1_x, b1_y = spec.default_nf_base()
-        b2_x, b2_y = spec.default_imp_base()
-        b1 = LayoutNode(b1_x, b1_y, base_radius, ZoneType.BASE)
-        b2 = LayoutNode(b2_x, b2_y, base_radius, ZoneType.BASE)
-        nodes.extend([b1, b2])
 
         # Center the maze
         offset_x = spec.origin_x + (spec.size_x - maze_dim_x) / 2
@@ -214,25 +206,22 @@ def generate_strategic_layout(
 
         for ix in range(grid_size):
             for iy in range(grid_size):
-                wx = offset_x + ix * spacing_x + rng.uniform(-spacing_x*0.2, spacing_x*0.2)
-                wy = offset_y + iy * spacing_y + rng.uniform(-spacing_y*0.2, spacing_y*0.2)
+                wx = offset_x + ix * spacing_x + rng.uniform(
+                    -spacing_x * 0.2,
+                    spacing_x * 0.2,
+                )
+                wy = offset_y + iy * spacing_y + rng.uniform(
+                    -spacing_y * 0.2,
+                    spacing_y * 0.2,
+                )
+                wx = max(offset_x, min(offset_x + maze_dim_x, wx))
+                wy = max(offset_y, min(offset_y + maze_dim_y, wy))
                 node = LayoutNode(wx, wy, node_radius, ZoneType.VEHICLE_OPEN)
                 maze_cells[(ix, iy)] = node
                 nodes.append(node)
 
         # Force recursion limit up just in case, though grid_size is small
         carve(0, 0)
-
-        # Connect bases to the nearest corners
-        # b1 to (0,0) and b2 to (grid_size-1, grid_size-1)
-        b1_maze = maze_cells[(0, 0)]
-        b2_maze = maze_cells[(grid_size - 1, grid_size - 1)]
-
-        conn_b1 = create_connection_path(b1, b1_maze, lane_width, ZoneType.MAIN_LANE, spec)
-        connections.append(conn_b1)
-
-        conn_b2 = create_connection_path(b2, b2_maze, lane_width, ZoneType.MAIN_LANE, spec)
-        connections.append(conn_b2)
 
         return nodes, connections
 
@@ -806,12 +795,11 @@ def generate_playability_mask(
     # Compute signed distance to the playability boundary
     distance_field = np.full((rows, cols), np.inf, dtype=np.float64)
 
-    scale = getattr(spec, "lane_width_scale", 1.0)
     for node in nodes:
-        if spec.lane_node_radius <= 0 and node.type == ZoneType.BASE:
+        if node.type == ZoneType.BASE:
             continue
         dist_grid = np.sqrt((WX - node.x) ** 2 + (WY - node.y) ** 2)
-        if node.type in (ZoneType.BASE, ZoneType.VEHICLE_OPEN):
+        if node.type == ZoneType.VEHICLE_OPEN:
             # Scale is applied to spacing-derived base radius, but base radius isn't scaled in UI usually.
             # We must NOT double-apply scale here if radius already has it, but node.radius doesn't.
             distance_field = np.minimum(distance_field, dist_grid - node.radius)
@@ -885,7 +873,7 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     )
 
     # ── Terrain Generation ──────────────────
-    from src.canyon_generator import generate_canyon_base, flatten_area, generate_noise_canyon_mask
+    from src.canyon_generator import generate_canyon_base, generate_noise_canyon_mask
 
         # If canyon_natural is true, we pass an infinity distance field so it doesn't carve
     effective_mask = np.full((rows, cols), np.inf, dtype=np.float32) if getattr(spec, "canyon_natural", False) else hard_mask
@@ -952,16 +940,12 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     if not report["pass"]:
         print(f"WARNING: Heightmap validation failed: {report}")
 
-    for candidate in report.get("spawn_candidates", []):
-        canyon_noise = flatten_area(canyon_noise, candidate["pos"], candidate["radius_px"])
-
     # Scale noise base to actual map height range
     new_heights = (
         floor_height + (mountain_height - floor_height) * canyon_noise
     )
 
     # 3. Handle specific topology inversions
-    playable_height = np.full((rows, cols), floor_height, dtype=np.float32)
     if not getattr(spec, "canyon_natural", False):
         if getattr(spec, "invert_lanes", False) or getattr(spec, "topology", "canyon") == "island":
             # Reverse the heights for islands or inverted lanes.
@@ -1062,25 +1046,10 @@ def flatten_base_areas(
     base_radius = spec.base_clear_radius
     flatness = spec.base_flatness
 
-    # In manual mode or when custom layout lanes are drawn, only use custom base positions.
-    # We don't want default bases spawning if the user is explicitly drawing custom lanes
-    # but hasn't placed bases yet. In fully procedural mode, use defaults if not set.
-    if spec.manual_terrain or spec.custom_layout_connections:
-        imp_base_x = spec.custom_imp_base_x
-        imp_base_y = spec.custom_imp_base_y
-        nf_base_x = spec.custom_nf_base_x
-        nf_base_y = spec.custom_nf_base_y
-    else:
-        imp_base_x, imp_base_y = (
-            (spec.custom_imp_base_x, spec.custom_imp_base_y)
-            if spec.custom_imp_base_x is not None and spec.custom_imp_base_y is not None
-            else spec.default_imp_base()
-        )
-        nf_base_x, nf_base_y = (
-            (spec.custom_nf_base_x, spec.custom_nf_base_y)
-            if spec.custom_nf_base_x is not None and spec.custom_nf_base_y is not None
-            else spec.default_nf_base()
-        )
+    imp_base_x = spec.custom_imp_base_x
+    imp_base_y = spec.custom_imp_base_y
+    nf_base_x = spec.custom_nf_base_x
+    nf_base_y = spec.custom_nf_base_y
 
     # Determine local average heights for the bases instead of global floor height
     def get_local_avg(bx: float, by: float, r_area: float) -> float:
