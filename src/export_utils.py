@@ -5,12 +5,30 @@ from PIL import Image
 
 COMPILE_SAFE_NODETAIL_MATERIAL = "common/terrain/blend_grass01a_dirt01a_nodetail"
 
+SAFE_TEXTURE_PATTERNS = [
+    "snow",
+    "concrete",
+    "paving",
+    "water",
+    "tarmac",
+]
+
+
+def _is_texture_safe_for_large_maps(texture_path: str) -> bool:
+    """Check if a texture is safe for large maps based on known safe patterns.
+    
+    Textures containing safe patterns (snow, concrete, paving, water, tarmac)
+    don't spawn detail props and are safe for any map size.
+    """
+    tex_lower = texture_path.lower()
+    return any(pattern in tex_lower for pattern in SAFE_TEXTURE_PATTERNS)
+
 
 def get_texture_safety_status(textures_path: str | Path | None = None) -> dict[str, bool]:
     """Return a dict mapping texture paths to whether they're safe for large maps.
     
-    Textures are 'unsafe' if a _nodetail variant exists in the texture list.
-    Textures without _nodetail variants are considered 'safe'.
+    Uses pattern matching to identify safe textures (snow, concrete, water, etc.).
+    Textures that spawn detail props (grass, dirt, rock blends) are marked unsafe.
     """
     if textures_path is None:
         textures_path = Path(__file__).parent.parent / "config" / "textures.json"
@@ -23,17 +41,10 @@ def get_texture_safety_status(textures_path: str | Path | None = None) -> dict[s
     with open(textures_path, "r") as f:
         data = json.load(f)
     
-    all_textures = set(data.get("terrain_materials", []))
-    nodetail_variants = {t for t in all_textures if t.endswith("_nodetail")}
-    
-    unsafe_textures = set()
-    for nodetail_tex in nodetail_variants:
-        base_tex = nodetail_tex[: -len("_nodetail")]
-        if base_tex in all_textures:
-            unsafe_textures.add(base_tex)
+    all_textures = data.get("terrain_materials", [])
     
     return {
-        tex: (tex not in unsafe_textures)
+        tex: _is_texture_safe_for_large_maps(tex)
         for tex in all_textures
     }
 
