@@ -2085,9 +2085,18 @@ class MapPreviewWidget(QWidget):
                 connections.append(conn)
 
         # Resources are now exclusively tracked by self.resources, not VisualNodes
-        return nodes, connections, list(self.resources), self._height_overlay.copy() if self._height_overlay is not None else None, self._global_selection_mask.copy() if self._global_selection_mask is not None else None
+        return (
+            nodes,
+            connections,
+            list(self.resources),
+            self._height_overlay.copy() if self._height_overlay is not None else None,
+            self._global_selection_mask.copy() if self._global_selection_mask is not None else None,
+            self._texture_overlay.copy() if getattr(self, "_texture_overlay", None) is not None else None,
+            dict(getattr(self, "_texture_mapping", {})),
+            getattr(self, "_next_texture_id", 1)
+        )
 
-    def set_layout_to_editor(self, nodes, connections, resources, imp_base, nf_base, height_overlay, global_mask):
+    def set_layout_to_editor(self, nodes, connections, resources, imp_base, nf_base, height_overlay, global_mask, texture_overlay=None, texture_mapping=None, next_texture_id=1):
         """Restore the editor state from a saved project."""
         # 1. Clear current state (without adding to history)
         items_to_remove = []
@@ -2114,6 +2123,11 @@ class MapPreviewWidget(QWidget):
             self._height_overlay = height_overlay
         if global_mask is not None:
             self._global_selection_mask = global_mask
+        if texture_overlay is not None:
+            self._texture_overlay = texture_overlay
+        if texture_mapping is not None:
+            self._texture_mapping = texture_mapping
+            self._next_texture_id = next_texture_id
             
         self.history.clear()
         self.redo_history.clear()

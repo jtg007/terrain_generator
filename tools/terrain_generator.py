@@ -2539,7 +2539,7 @@ class TerrainGeneratorGUI(QMainWindow):
 
         # Run generation in background
         map_name = self.txt_map_name.text().strip() or "gui_terrain"
-        layout_nodes, layout_conns, layout_res, height_overlay, global_mask = (
+        layout_nodes, layout_conns, layout_res, height_overlay, global_mask, texture_overlay, texture_mapping, _ = (
             self.preview_widget.get_layout_from_editor()
         )
 
