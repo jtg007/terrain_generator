@@ -6,6 +6,85 @@ from PIL import Image
 COMPILE_SAFE_NODETAIL_MATERIAL = "common/terrain/blend_grass01a_dirt01a_nodetail"
 
 
+def get_texture_safety_status(textures_path: str | Path | None = None) -> dict[str, bool]:
+    """Return a dict mapping texture paths to whether they're safe for large maps.
+    
+    Textures are 'unsafe' if a _nodetail variant exists in the texture list.
+    Textures without _nodetail variants are considered 'safe'.
+    """
+    if textures_path is None:
+        textures_path = Path(__file__).parent.parent / "config" / "textures.json"
+    
+    textures_path = Path(textures_path)
+    if not textures_path.exists():
+        return {}
+    
+    import json
+    with open(textures_path, "r") as f:
+        data = json.load(f)
+    
+    all_textures = set(data.get("terrain_materials", []))
+    nodetail_variants = {t for t in all_textures if t.endswith("_nodetail")}
+    
+    unsafe_textures = set()
+    for nodetail_tex in nodetail_variants:
+        base_tex = nodetail_tex[: -len("_nodetail")]
+        if base_tex in all_textures:
+            unsafe_textures.add(base_tex)
+    
+    return {
+        tex: (tex not in unsafe_textures)
+        for tex in all_textures
+    }
+
+
+def choose_compile_safe_material(
+    requested_material: str,
+    map_width: int,
+    map_height: int,
+    use_nodetail_texture: bool = False,
+    textures_path: str | Path | None = None,
+) -> Tuple[str, Optional[str]]:
+    """Return (material_name, optional_warning)."""
+    map_area = map_width * map_height
+    large_map_threshold = 8192 * 8192
+
+    if use_nodetail_texture:
+        defaults = [
+            "common/nature/blend_grass_mountainwall_000",
+            "nature/terrain/blend_dirt_grass_dmz_sscale",
+            "common/stene/grass02",
+        ]
+        if requested_material in defaults:
+            return COMPILE_SAFE_NODETAIL_MATERIAL, None
+
+        if requested_material.endswith("_nodetail"):
+            return requested_material, None
+
+        warning = (
+            f"Custom material '{requested_material}' is used without a nodetail version. "
+            "Large maps may hit the detail prop limit."
+        )
+        return requested_material, warning
+
+    if map_area > large_map_threshold:
+        texture_safety = get_texture_safety_status(textures_path)
+        
+        is_unsafe = texture_safety.get(requested_material, False) is False
+        
+        if is_unsafe:
+            safe_fallback = COMPILE_SAFE_NODETAIL_MATERIAL
+            if requested_material != safe_fallback:
+                warning = (
+                    f"Texture '{requested_material}' spawns detail props and is not recommended for large maps ({map_width}x{map_height}). "
+                    f"Automatically switched to '{safe_fallback}' to prevent performance issues. "
+                    f"To use this texture, reduce map size or enable 'Use nodetail texture' option."
+                )
+                return safe_fallback, warning
+
+    return requested_material, None
+
+
 def heightgrid_to_heightmap(
     grid, target_rows: int = 0, target_cols: int = 0
 ) -> np.ndarray:
@@ -32,47 +111,6 @@ def heightgrid_to_heightmap(
         normalized = scipy_zoom_equivalent(normalized, (scale_y, scale_x))
 
     return normalized
-
-
-def choose_compile_safe_material(
-    requested_material: str,
-    map_width: int,
-    map_height: int,
-    use_nodetail_texture: bool = False,
-) -> Tuple[str, Optional[str]]:
-    """Return (material_name, optional_warning)."""
-    map_area = map_width * map_height
-    large_map_threshold = 8192 * 8192
-
-    if use_nodetail_texture:
-        defaults = [
-            "common/nature/blend_grass_mountainwall_000",
-            "nature/terrain/blend_dirt_grass_dmz_sscale",
-            "common/stene/grass02",
-        ]
-        if requested_material in defaults:
-            return COMPILE_SAFE_NODETAIL_MATERIAL, None
-
-        if requested_material.endswith("_nodetail"):
-            return requested_material, None
-
-        warning = (
-            f"Custom material '{requested_material}' is used without a nodetail version. "
-            "Large maps may hit the detail prop limit."
-        )
-        return requested_material, warning
-
-    if map_area > large_map_threshold:
-        safe_fallback = COMPILE_SAFE_NODETAIL_MATERIAL
-        if requested_material != safe_fallback:
-            warning = (
-                f"Map size ({map_width}x{map_height}) exceeds safe limit for detailed textures. "
-                f"Automatically switched to '{safe_fallback}' to prevent compile errors and performance issues. "
-                f"To use custom textures, reduce map size or enable 'Use nodetail texture' option."
-            )
-            return safe_fallback, warning
-
-    return requested_material, None
 
 
 from src.vmf_gen import PipelineSpec, DisplacementVMF

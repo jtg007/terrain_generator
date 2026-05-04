@@ -350,9 +350,19 @@ class TerrainGeneratorGUI(QMainWindow):
                 skyboxes = data.get("skyboxes", SAFE_EMPIRES_SKYBOXES)
                 if not skyboxes:
                     skyboxes = SAFE_EMPIRES_SKYBOXES
-                return materials, skyboxes
+                
+                from src.export_utils import get_texture_safety_status
+                safety = get_texture_safety_status(textures_path)
+                
+                labeled_materials = []
+                for mat in sorted(materials):
+                    is_safe = safety.get(mat, True)
+                    label = "✓ SAFE" if is_safe else "⚠ CAUTION"
+                    labeled_materials.append((f"{mat}  [{label}]", mat))
+                
+                return labeled_materials, skyboxes
         return (
-            ["common/nature/blend_grass_mountainwall_000"],
+            [("common/nature/blend_grass_mountainwall_000  [✓ SAFE]", "common/nature/blend_grass_mountainwall_000")],
             [DEFAULT_SAFE_SKYBOX],
         )
 
@@ -1114,8 +1124,11 @@ class TerrainGeneratorGUI(QMainWindow):
         lbl_mat.setToolTip("Ground surface blend material")
         mat_row.addWidget(lbl_mat)
         self.combo_material = QComboBox()
-        self.combo_material.addItems(self.terrain_materials)
-        self.combo_material.setCurrentText("common/nature/blend_grass_mountainwall_000")
+        for display_text, clean_path in self.terrain_materials:
+            self.combo_material.addItem(display_text, clean_path)
+        default_idx = self.combo_material.findData("common/nature/blend_grass_mountainwall_000")
+        if default_idx >= 0:
+            self.combo_material.setCurrentIndex(default_idx)
         mat_row.addWidget(self.combo_material, 1)
         sec_materials.content_layout.addLayout(mat_row)
         self.combo_material.currentIndexChanged.connect(self.sync_to_model)
@@ -2252,7 +2265,9 @@ class TerrainGeneratorGUI(QMainWindow):
             elif p == 3:
                 self.combo_power.setCurrentIndex(1)
 
-            self.combo_material.setCurrentText(self.config_model.terrain_material)
+            idx = self.combo_material.findData(self.config_model.terrain_material)
+            if idx >= 0:
+                self.combo_material.setCurrentIndex(idx)
             self.combo_skybox.setCurrentText(self.config_model.skybox)
 
             self.chk_disable_commander.setChecked(self.config_model.disable_commander)
@@ -2340,7 +2355,7 @@ class TerrainGeneratorGUI(QMainWindow):
         elif idx == 1:
             self.config_model.displacement_power = 3
 
-        self.config_model.terrain_material = self.combo_material.currentText()
+        self.config_model.terrain_material = self.combo_material.currentData()
         self.config_model.skybox = self.combo_skybox.currentText()
 
         self.config_model.disable_commander = self.chk_disable_commander.isChecked()
