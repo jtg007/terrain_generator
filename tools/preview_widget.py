@@ -499,6 +499,7 @@ class MapPreviewWidget(QWidget):
         self.btn_lower = add_tool(layout_t, "▼\nLower", 9)
         self.btn_flatten = add_tool(layout_t, "▬\nFlatten", 10)
         self.btn_mask = add_tool(layout_t, "🎭\nMask", 11)
+        self.btn_texture = add_tool(layout_t, "🎨\nTexture", 12)
 
         layout_t.addWidget(create_divider())
 
@@ -542,6 +543,15 @@ class MapPreviewWidget(QWidget):
         sliders_layout.addWidget(self.brush_strength_label, 1, 2)
 
         layout_t.addLayout(sliders_layout)
+
+        # Texture combobox (visible only in texture mode)
+        self.combo_texture = QComboBox()
+        self.combo_texture.setFixedWidth(120)
+        self.combo_texture.setToolTip("Select material to paint")
+        # Added to layout, but visibility handled by mode change
+        layout_t.addWidget(self.combo_texture)
+        self.combo_texture.setVisible(False)
+
         layout_t.addWidget(create_divider())
 
         self.btn_invert_terrain = QPushButton("⛰️\nInvert Terrain")
@@ -710,6 +720,9 @@ class MapPreviewWidget(QWidget):
         self._base_heights = None  # numpy float64 from pipeline
         self._height_overlay = None  # numpy float64 additive delta
         self._global_selection_mask = None # numpy bool
+        self._texture_overlay = None  # numpy int32 mapping to materials
+        self._texture_mapping = {}    # mapping from string material to integer id (and 0=default)
+        self._next_texture_id = 1
         self._sculpting = False
         self._flatten_target_height = None
         self._active_mouse_button = None
@@ -1030,6 +1043,9 @@ class MapPreviewWidget(QWidget):
         if self._height_overlay is None or self._height_overlay.shape != heights.shape:
             self._height_overlay = np.zeros_like(self._base_heights)
 
+        if self._texture_overlay is None or self._texture_overlay.shape != heights.shape:
+            self._texture_overlay = np.zeros(heights.shape, dtype=np.int32)
+
         # Only reset mask if explicitly None (not just shape mismatch)
         # Preserve existing mask when new heights arrive from pipeline
         if mask is not None:
@@ -1141,6 +1157,24 @@ class MapPreviewWidget(QWidget):
             # Only paint where mask is > threshold (like a hard brush)
             paint_area = mask > 0.5
             self._global_selection_mask[r_min:r_max, c_min:c_max][paint_area] = paint_value
+        elif mode == 12 and self._texture_overlay is not None:
+            # Texture brush mode:
+            material_str = self.combo_texture.currentData()
+            if material_str is None:
+                return
+
+            if material_str not in self._texture_mapping:
+                self._texture_mapping[material_str] = self._next_texture_id
+                self._next_texture_id += 1
+
+            mat_id = self._texture_mapping[material_str]
+
+            if self._active_mouse_button == Qt.RightButton:
+                mat_id = 0 # Erase custom texture
+
+            paint_area = mask > 0.5
+            self._texture_overlay[r_min:r_max, c_min:c_max][paint_area] = mat_id
+
         elif mode in (8, 9):
             raise_terrain = (mode == 8)
             delta = falloff * strength * (1.0 if raise_terrain else -1.0)
@@ -1211,6 +1245,14 @@ class MapPreviewWidget(QWidget):
             editable = self._global_selection_mask
             rgba_array[editable, 2] = np.clip(rgba_array[editable, 2] + 25, 0, 255)
             rgba_array[editable, 1] = np.clip(rgba_array[editable, 1] * 0.9, 0, 255)
+
+        if self.current_mode == 12 and self._texture_overlay is not None:
+            # Show a subtle tint for painted textures
+            painted = self._texture_overlay > 0
+            # Generate pseudo-random colors for different mat IDs to distinguish them
+            mat_colors = (self._texture_overlay[painted] * 50) % 255
+            rgba_array[painted, 0] = np.clip(rgba_array[painted, 0] * 0.7 + mat_colors * 0.3, 0, 255).astype(np.uint8)
+            rgba_array[painted, 1] = np.clip(rgba_array[painted, 1] * 0.7 + (255 - mat_colors) * 0.3, 0, 255).astype(np.uint8)
 
         self._preview_img_data = rgba_array
         bytes_per_line = 4 * w
@@ -1559,6 +1601,11 @@ class MapPreviewWidget(QWidget):
         if actual_mode != 10:
             self._flatten_target_height = None
 
+        if actual_mode == 12:
+            self.combo_texture.setVisible(True)
+        else:
+            self.combo_texture.setVisible(False)
+
         if actual_mode == 0:
             for item in self.scene.items():
                 if isinstance(item, VisualNode) or hasattr(item, "is_fixed_entity"):
@@ -1602,6 +1649,9 @@ class MapPreviewWidget(QWidget):
             if self._height_overlay is not None
             else None,
             "mask": self._global_selection_mask.copy() if self._global_selection_mask is not None else None,
+            "texture": self._texture_overlay.copy() if self._texture_overlay is not None else None,
+            "texture_mapping": dict(self._texture_mapping),
+            "next_texture_id": self._next_texture_id,
         }
 
         self.history.append(("clear_all", old_state))
@@ -1627,6 +1677,10 @@ class MapPreviewWidget(QWidget):
             self._height_overlay[:] = 0
         if self._global_selection_mask is not None:
             self._global_selection_mask[:] = True
+        if self._texture_overlay is not None:
+            self._texture_overlay[:] = 0
+        self._texture_mapping = {}
+        self._next_texture_id = 1
         self._rerender_heightmap()
         self.redraw_fixed_entities()
         self.base_moved.emit("imp", 0.0, 0.0)
@@ -1669,6 +1723,32 @@ class MapPreviewWidget(QWidget):
                 self._global_selection_mask[:] = item
             elif self._global_selection_mask is not None:
                 self._global_selection_mask[:] = True
+            self._rerender_heightmap()
+            return
+        elif action == "texture_change":
+            current = (
+                self._texture_overlay.copy()
+                if self._texture_overlay is not None
+                else None
+            )
+            self.redo_history.append(("texture_change", current))
+            if self._texture_overlay is not None and item is not None:
+                self._texture_overlay[:] = item
+            elif self._texture_overlay is not None:
+                self._texture_overlay[:] = 0
+            self._rerender_heightmap()
+            return
+        elif action == "texture_change":
+            current = (
+                self._texture_overlay.copy()
+                if self._texture_overlay is not None
+                else None
+            )
+            self.history.append(("texture_change", current))
+            if self._texture_overlay is not None and item is not None:
+                self._texture_overlay[:] = item
+            elif self._texture_overlay is not None:
+                self._texture_overlay[:] = 0
             self._rerender_heightmap()
             return
         elif action == "add":
@@ -1901,6 +1981,13 @@ class MapPreviewWidget(QWidget):
                     else None
                 )
                 self.history.append(("mask_change", snapshot))
+            elif self.current_mode == 12:
+                snapshot = (
+                    self._texture_overlay.copy()
+                    if self._texture_overlay is not None
+                    else None
+                )
+                self.history.append(("texture_change", snapshot))
             else:
                 # Save overlay snapshot for undo
                 snapshot = (
@@ -2089,8 +2176,8 @@ class MapPreviewWidget(QWidget):
             nodes,
             connections,
             list(self.resources),
-            self._height_overlay.copy() if self._height_overlay is not None else None,
-            self._global_selection_mask.copy() if self._global_selection_mask is not None else None,
+            self._height_overlay.copy() if getattr(self, "_height_overlay", None) is not None else None,
+            self._global_selection_mask.copy() if getattr(self, "_global_selection_mask", None) is not None else None,
             self._texture_overlay.copy() if getattr(self, "_texture_overlay", None) is not None else None,
             dict(getattr(self, "_texture_mapping", {})),
             getattr(self, "_next_texture_id", 1)

@@ -1133,6 +1133,12 @@ class TerrainGeneratorGUI(QMainWindow):
         sec_materials.content_layout.addLayout(mat_row)
         self.combo_material.currentIndexChanged.connect(self.sync_to_model)
 
+        # Copy materials to preview widget texture combo
+        for display_text, clean_path in self.terrain_materials:
+            self.preview_widget.combo_texture.addItem(display_text, clean_path)
+        if default_idx >= 0:
+            self.preview_widget.combo_texture.setCurrentIndex(default_idx)
+
         sky_row = QHBoxLayout()
         sky_row.setSpacing(8)
         lbl_sky = QLabel("Skybox")
@@ -1409,7 +1415,7 @@ class TerrainGeneratorGUI(QMainWindow):
             return
 
         try:
-            nodes, connections, resources, _, global_mask, _, _, _ = (
+            nodes, connections, resources, _, global_mask = (
                 self.preview_widget.get_layout_from_editor()
             )
 
@@ -2539,7 +2545,7 @@ class TerrainGeneratorGUI(QMainWindow):
 
         # Run generation in background
         map_name = self.txt_map_name.text().strip() or "gui_terrain"
-        layout_nodes, layout_conns, layout_res, height_overlay, global_mask, texture_overlay, texture_mapping, _ = (
+        layout_nodes, layout_conns, layout_res, height_overlay, global_mask = (
             self.preview_widget.get_layout_from_editor()
         )
 
@@ -2571,7 +2577,7 @@ class TerrainGeneratorGUI(QMainWindow):
             file_path += ".terrain"
 
         try:
-            nodes, conns, res, overlay, mask, tex_overlay, tex_mapping, next_tex_id = (
+            nodes, conns, res, overlay, mask = (
                 self.preview_widget.get_layout_from_editor()
             )
 
@@ -2583,9 +2589,6 @@ class TerrainGeneratorGUI(QMainWindow):
                 "nf_base": self.preview_widget.nf_base,
                 "height_overlay": overlay,
                 "global_mask": mask,
-                "texture_overlay": tex_overlay,
-                "texture_mapping": tex_mapping,
-                "next_texture_id": next_tex_id,
                 "map_name": self.txt_map_name.text().strip(),
             }
 
@@ -2636,9 +2639,6 @@ class TerrainGeneratorGUI(QMainWindow):
                 data["nf_base"],
                 data["height_overlay"],
                 data["global_mask"],
-                data.get("texture_overlay"),
-                data.get("texture_mapping"),
-                data.get("next_texture_id", 1),
             )
 
             self._is_dirty = False

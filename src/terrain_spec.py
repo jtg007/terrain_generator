@@ -89,6 +89,7 @@ class TerrainSpec:
 
     custom_layout_nodes: Optional[List[LayoutNode]] = None
     custom_layout_connections: Optional[List[LayoutConnection]] = None
+    custom_tile_materials: Optional[Dict[Tuple[int, int], str]] = None
 
     base_clear_radius: int = 0
     base_flatness: float = 0.8
@@ -206,6 +207,7 @@ class TerrainSpec:
             "underlay_material": self.underlay_material,
             "underlay_height": self.underlay_height,
             "custom_image_path": self.custom_image_path,
+            # Note: custom_tile_materials intentionally omitted from to_dict as it's meant to be transient/project-level.
         }
 
     @classmethod
