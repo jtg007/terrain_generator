@@ -41,8 +41,10 @@ def choose_compile_safe_material(
     use_nodetail_texture: bool = False,
 ) -> Tuple[str, Optional[str]]:
     """Return (material_name, optional_warning)."""
+    map_area = map_width * map_height
+    large_map_threshold = 8192 * 8192
+
     if use_nodetail_texture:
-        # Default materials from config and spec
         defaults = [
             "common/nature/blend_grass_mountainwall_000",
             "nature/terrain/blend_dirt_grass_dmz_sscale",
@@ -54,13 +56,21 @@ def choose_compile_safe_material(
         if requested_material.endswith("_nodetail"):
             return requested_material, None
 
-        # User picked a custom texture but "nodetail" is checked.
-        # We allow it, but provide a warning.
         warning = (
             f"Custom material '{requested_material}' is used without a nodetail version. "
             "Large maps may hit the detail prop limit."
         )
         return requested_material, warning
+
+    if map_area > large_map_threshold:
+        safe_fallback = COMPILE_SAFE_NODETAIL_MATERIAL
+        if requested_material != safe_fallback:
+            warning = (
+                f"Map size ({map_width}x{map_height}) exceeds safe limit for detailed textures. "
+                f"Automatically switched to '{safe_fallback}' to prevent compile errors and performance issues. "
+                f"To use custom textures, reduce map size or enable 'Use nodetail texture' option."
+            )
+            return safe_fallback, warning
 
     return requested_material, None
 
