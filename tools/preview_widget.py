@@ -1,14 +1,20 @@
-import math
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
-
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pyqtgraph.opengl as gl
-from PySide6.QtWidgets import QStackedWidget
-
-
+from PySide6.QtCore import Qt, Signal, QRectF, QPointF, QByteArray
+from PySide6.QtGui import (
+    QPainter,
+    QColor,
+    QPen,
+    QBrush,
+    QImage,
+    QPixmap,
+    QVector3D,
+)
+from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -25,22 +31,9 @@ from PySide6.QtWidgets import (
     QLabel,
     QSlider,
     QSizePolicy,
-    QScrollArea,
+    QComboBox,
     QStackedWidget,
 )
-import pyqtgraph.opengl as gl
-from PySide6.QtCore import Qt, Signal, QPoint, QRectF, QPointF
-from PySide6.QtGui import (
-    QPainter,
-    QColor,
-    QPen,
-    QBrush,
-    QImage,
-    QPixmap,
-    QPolygon,
-    QVector3D,
-)
-from PySide6.QtSvg import QSvgRenderer
 
 from src.terrain_spec import ZoneType, LayoutNode, LayoutConnection
 
@@ -52,7 +45,6 @@ else:
     PROJECT_ROOT = Path(__file__).parent.parent
 
 ICONS_DIR = PROJECT_ROOT / "icons"
-from PySide6.QtCore import QByteArray
 
 
 def _load_svg(path):
@@ -799,9 +791,9 @@ class MapPreviewWidget(QWidget):
                 self.scene.removeItem(item)
 
         # Store current radii for new items
-        base_r = getattr(self, "base_clear_radius", 512)
-        res_r = getattr(self, "resource_clear_radius", 256)
-        lane_r = getattr(self, "lane_node_radius", 512)
+        getattr(self, "base_clear_radius", 512)
+        getattr(self, "resource_clear_radius", 256)
+        getattr(self, "lane_node_radius", 512)
 
         # A helper class for non-node bases/resources that MapPreviewWidget used to draw natively
         class FixedEntityItem(QGraphicsItem):

@@ -36,9 +36,8 @@ from PySide6.QtWidgets import (
     QSplitter,
     QScrollArea,
     QTabWidget,
-    QToolButton,
 )
-from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPropertyAnimation, QAbstractAnimation, QParallelAnimationGroup
+from PySide6.QtCore import Qt, QThread, Signal, QTimer
 from PySide6.QtGui import (
     QIcon,
     QImage,
@@ -1133,11 +1132,7 @@ class TerrainGeneratorGUI(QMainWindow):
         sec_materials.content_layout.addLayout(mat_row)
         self.combo_material.currentIndexChanged.connect(self.sync_to_model)
 
-        # Copy materials to preview widget texture combo
-        for display_text, clean_path in self.terrain_materials:
-            self.preview_widget.combo_texture.addItem(display_text, clean_path)
-        if default_idx >= 0:
-            self.preview_widget.combo_texture.setCurrentIndex(default_idx)
+
 
         sky_row = QHBoxLayout()
         sky_row.setSpacing(8)
@@ -1246,6 +1241,11 @@ class TerrainGeneratorGUI(QMainWindow):
 
         self.preview_widget = MapPreviewWidget()
         self.preview_widget.setMinimumWidth(200)
+        # Copy materials to preview widget texture combo
+        for display_text, clean_path in self.terrain_materials:
+            self.preview_widget.combo_texture.addItem(display_text, clean_path)
+        if default_idx >= 0:
+            self.preview_widget.combo_texture.setCurrentIndex(default_idx)
 
         # Inner splitter: config scroll | tabs
         self._inner_splitter = QSplitter(Qt.Horizontal)
@@ -1401,6 +1401,7 @@ class TerrainGeneratorGUI(QMainWindow):
                 return
 
         self.config_model.custom_resources.append((x, y))
+        invalid_entities, _ = self.validate_current_layout()
         self.preview_widget.invalid_entities = invalid_entities
         self.preview_widget.redraw_fixed_entities()
         self.preview_timer.start(500)
@@ -1415,7 +1416,7 @@ class TerrainGeneratorGUI(QMainWindow):
             return
 
         try:
-            nodes, connections, resources, _, global_mask = (
+            nodes, connections, resources, _, global_mask, texture_overlay, texture_mapping, next_texture_id = (
                 self.preview_widget.get_layout_from_editor()
             )
 
@@ -1435,7 +1436,7 @@ class TerrainGeneratorGUI(QMainWindow):
             self.preview_worker.start()
             # Reset flag after starting. Default to full regen for the next trigger unless specified.
             self._force_full_regen = True
-        except Exception as e:
+        except Exception:
             import traceback
 
             traceback.print_exc()
@@ -2401,7 +2402,7 @@ class TerrainGeneratorGUI(QMainWindow):
             # Check layout from editor
             if hasattr(self, "preview_widget"):
                 try:
-                    nodes, _, _, _, _ = self.preview_widget.get_layout_from_editor()
+                    nodes, _, resources, _, _, _, _, _ = self.preview_widget.get_layout_from_editor()
                     if nodes:
                         temp_spec = self.config_model.make_spec()
 
@@ -2545,7 +2546,7 @@ class TerrainGeneratorGUI(QMainWindow):
 
         # Run generation in background
         map_name = self.txt_map_name.text().strip() or "gui_terrain"
-        layout_nodes, layout_conns, layout_res, height_overlay, global_mask = (
+        layout_nodes, layout_conns, layout_res, height_overlay, global_mask, texture_overlay, texture_mapping, next_texture_id = (
             self.preview_widget.get_layout_from_editor()
         )
 
@@ -2577,7 +2578,7 @@ class TerrainGeneratorGUI(QMainWindow):
             file_path += ".terrain"
 
         try:
-            nodes, conns, res, overlay, mask = (
+            nodes, conns, res, overlay, mask, texture_overlay, texture_mapping, next_texture_id = (
                 self.preview_widget.get_layout_from_editor()
             )
 
