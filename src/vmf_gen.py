@@ -277,30 +277,88 @@ def generate_skybox(
 def spawn_lighting(
     valve_map: vmf.ValveMap,
     rules: Dict[str, Any],
+    skyname: str = "",
 ) -> None:
-    """Spawn light_environment and env_sun entities based on rules."""
+    """Spawn light_environment and env_sun entities based on rules and skybox."""
     lighting = rules.get("lighting_environment", {})
     light_env = lighting.get("light_environment", {})
     env_sun = lighting.get("env_sun", {})
 
-    pitch_avg = light_env.get("pitch_stats", {}).get("avg", -20)
-    sun_yaw_avg = env_sun.get("yaw_stats", {}).get("avg", 0)
+    # Try to find specific lighting for the chosen skybox
+    specific_light = None
+    specific_sun = None
+    target_sky = skyname.strip().lower()
+    if target_sky and "individual_maps" in rules:
+        for m in rules["individual_maps"]:
+            if m.get("skyname", "").strip().lower() == target_sky:
+                if "light_environment" in m:
+                    specific_light = m["light_environment"]
+                    specific_sun = m.get("env_sun", {})
+                    break
+
+    if specific_light:
+        light_env = specific_light
+    if specific_sun is not None:
+        env_sun = specific_sun or {}
+
+    pitch_val = light_env.get("pitch", light_env.get("pitch_stats", {}).get("avg", -20))
+    # 'angles' usually looks like "0 120 0" or "-45 180 0". If absent, use yaw avg.
+    angles_val = light_env.get("angles")
+    if not angles_val:
+        sun_yaw_avg = env_sun.get("yaw_stats", {}).get("avg", 0) if isinstance(env_sun, dict) else 0
+        angles_val = f"0 {sun_yaw_avg} 0"
+
+    _light_val = light_env.get("_light", light_env.get("brightnessHDR", "255 193 141 300"))
+    if not _light_val: # In case it's empty string
+        _light_val = "255 193 141 300"
+
+    _ambient_val = light_env.get("_ambient", light_env.get("ambientHDR", "107 113 55 85"))
+    if not _ambient_val:
+        _ambient_val = "107 113 55 85"
+
+    _lightHDR_val = light_env.get("brightnessHDR", "-1 -1 -1 1")
+    if not _lightHDR_val:
+        _lightHDR_val = "-1 -1 -1 1"
+
+    _ambientHDR_val = light_env.get("ambientHDR", "-1 -1 -1 1")
+    if not _ambientHDR_val:
+        _ambientHDR_val = "-1 -1 -1 1"
 
     light_ent = vmf_lib.Entity("light_environment")
     light_ent.origin = "0.0 0.0 0.0"
-    light_ent.properties["pitch"] = str(int(pitch_avg))
-    light_ent.properties["angles"] = f"0 {sun_yaw_avg} 0"
-    light_ent.properties["brightnessHDR"] = light_env.get(
-        "brightnessHDR", "255 193 141 300"
-    )
-    light_ent.properties["ambientHDR"] = light_env.get("ambientHDR", "107 113 55 85")
+    light_ent.properties["pitch"] = str(int(float(pitch_val)))
+    light_ent.properties["angles"] = angles_val
+    light_ent.properties["_light"] = _light_val
+    light_ent.properties["_ambient"] = _ambient_val
+    light_ent.properties["_lightHDR"] = _lightHDR_val
+    light_ent.properties["_ambientHDR"] = _ambientHDR_val
     light_ent.properties["SunSpreadAngle"] = "2"
 
     sun_ent = vmf_lib.Entity("env_sun")
     sun_ent.origin = "0.0 0.0 0.0"
-    sun_ent.properties["pitch"] = str(int(-pitch_avg))
-    sun_ent.properties["angles"] = f"0 {sun_yaw_avg} 0"
-    sun_ent.properties["sun_color"] = env_sun.get("sun_color", "249 216 147")
+
+    # env_sun pitch is often negative of light_environment's pitch or simply the same angles
+    if specific_sun and isinstance(specific_sun, dict) and "pitch" in specific_sun:
+        sun_pitch = specific_sun["pitch"]
+    else:
+        sun_pitch = str(int(-float(pitch_val)))
+
+    sun_ent.properties["pitch"] = sun_pitch
+
+    sun_angles = specific_sun.get("angles") if isinstance(specific_sun, dict) else None
+    if not sun_angles:
+        sun_angles = angles_val
+
+    sun_ent.properties["angles"] = sun_angles
+    sun_ent.properties["use_angles"] = "1"
+
+    sun_color = env_sun.get("sun_color", "249 216 147") if isinstance(env_sun, dict) else "249 216 147"
+    if not sun_color:
+        sun_color = "249 216 147"
+    sun_ent.properties["rendercolor"] = sun_color
+
+    valve_map.world.children.append(light_ent)
+    valve_map.world.children.append(sun_ent)
 
 
 def flatten_terrain_at_location(
@@ -1498,7 +1556,7 @@ class DisplacementVMF:
             skyname,
         )
 
-        spawn_lighting(valve_map, rules)
+        spawn_lighting(valve_map, rules, skyname)
 
         skip_commander = (
             self.spec.disable_commander
