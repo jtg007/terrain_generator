@@ -1518,17 +1518,23 @@ class DisplacementVMF:
                 for i in range((2**power) + 1):
                     disp_info.allowed_verts.properties[f"row{i}"] = "-1"
 
+                # Determine material for this tile
+                tile_material = self.spec.terrain_material
+                if hasattr(self.spec, "custom_tile_materials") and self.spec.custom_tile_materials:
+                    if (col_idx, row_idx) in self.spec.custom_tile_materials:
+                        tile_material = self.spec.custom_tile_materials[(col_idx, row_idx)]
+
                 # Block centered at Z=-8 -> top face at Z=0, bottom at Z=-16
                 floor_block = Block(
                     Vertex(
                         int(offset_x + tile_size / 2), int(offset_y + tile_size / 2), -8
                     ),
                     (tile_size, tile_size, 16),
-                    self.spec.terrain_material,
+                    tile_material,
                 )
 
                 apply_nodraw_to_terrain_except_top(
-                    floor_block, self.spec.terrain_material
+                    floor_block, tile_material
                 )
                 floor_block.top().lightmapscale = 32
                 floor_block.top().children.append(disp_info)

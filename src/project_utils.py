@@ -70,6 +70,14 @@ def save_project(path: str, config: GUIConfigModel, layout_data: Dict[str, Any])
         sculpt_data["global_mask_shape"] = global_mask.shape
         sculpt_data["global_mask_dtype"] = str(global_mask.dtype)
 
+    texture_overlay = layout_data.get("texture_overlay")
+    if texture_overlay is not None:
+        sculpt_data["texture_overlay"] = array_to_b64(texture_overlay)
+        sculpt_data["texture_overlay_shape"] = texture_overlay.shape
+        sculpt_data["texture_overlay_dtype"] = str(texture_overlay.dtype)
+        sculpt_data["texture_mapping"] = layout_data.get("texture_mapping", {})
+        sculpt_data["next_texture_id"] = layout_data.get("next_texture_id", 1)
+
     # 4. Final project structure
     project = {
         "version": CURRENT_PROJECT_VERSION,
@@ -149,6 +157,14 @@ def load_project(path: str) -> Dict[str, Any]:
             tuple(sculpt_data["global_mask_shape"])
         )
 
+    texture_overlay = None
+    if "texture_overlay" in sculpt_data:
+        texture_overlay = b64_to_array(
+            sculpt_data["texture_overlay"],
+            np.dtype(sculpt_data["texture_overlay_dtype"]),
+            tuple(sculpt_data["texture_overlay_shape"])
+        )
+
     return {
         "config": config,
         "map_name": project.get("map_name", "gui_terrain"),
@@ -158,5 +174,8 @@ def load_project(path: str) -> Dict[str, Any]:
         "imp_base": layout_data.get("imp_base"),
         "nf_base": layout_data.get("nf_base"),
         "height_overlay": height_overlay,
-        "global_mask": global_mask
+        "global_mask": global_mask,
+        "texture_overlay": texture_overlay,
+        "texture_mapping": sculpt_data.get("texture_mapping", {}),
+        "next_texture_id": sculpt_data.get("next_texture_id", 1)
     }

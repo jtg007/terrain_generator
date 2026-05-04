@@ -1409,7 +1409,7 @@ class TerrainGeneratorGUI(QMainWindow):
             return
 
         try:
-            nodes, connections, resources, _, global_mask = (
+            nodes, connections, resources, _, global_mask, _, _, _ = (
                 self.preview_widget.get_layout_from_editor()
             )
 
@@ -2571,7 +2571,7 @@ class TerrainGeneratorGUI(QMainWindow):
             file_path += ".terrain"
 
         try:
-            nodes, conns, res, overlay, mask = (
+            nodes, conns, res, overlay, mask, tex_overlay, tex_mapping, next_tex_id = (
                 self.preview_widget.get_layout_from_editor()
             )
 
@@ -2583,6 +2583,9 @@ class TerrainGeneratorGUI(QMainWindow):
                 "nf_base": self.preview_widget.nf_base,
                 "height_overlay": overlay,
                 "global_mask": mask,
+                "texture_overlay": tex_overlay,
+                "texture_mapping": tex_mapping,
+                "next_texture_id": next_tex_id,
                 "map_name": self.txt_map_name.text().strip(),
             }
 
@@ -2633,6 +2636,9 @@ class TerrainGeneratorGUI(QMainWindow):
                 data["nf_base"],
                 data["height_overlay"],
                 data["global_mask"],
+                data.get("texture_overlay"),
+                data.get("texture_mapping"),
+                data.get("next_texture_id", 1),
             )
 
             self._is_dirty = False
