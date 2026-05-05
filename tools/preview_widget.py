@@ -1975,7 +1975,7 @@ class MapPreviewWidget(QWidget):
             self.resources = new_res_list
             self.redraw_fixed_entities()
             self.resource_added.emit(scene_pos.x(), scene_pos.y())
-        elif self.current_mode in (8, 9, 10, 11):  # Raise / Lower / Flatten / Mask
+        elif self.current_mode in (8, 9, 10, 11, 12):  # Raise / Lower / Flatten / Mask / Texture
             self._sculpting = True
             if self.current_mode == 10 and self._base_heights is not None:
                 # Sample target height for flatten tool at initial click
@@ -2063,7 +2063,7 @@ class MapPreviewWidget(QWidget):
                 self.current_freehand_item.update()
             return
 
-        if self._sculpting and self.current_mode in (8, 9, 10, 11):
+        if self._sculpting and self.current_mode in (8, 9, 10, 11, 12):
             scene_pos = self.view.mapToScene(event.pos())
             self._apply_brush(scene_pos.x(), scene_pos.y(), self.current_mode)
             return
