@@ -1238,7 +1238,7 @@ class MapPreviewWidget(QWidget):
             rgba_array[editable, 2] = np.clip(rgba_array[editable, 2] + 25, 0, 255)
             rgba_array[editable, 1] = np.clip(rgba_array[editable, 1] * 0.9, 0, 255)
 
-        if self.current_mode == 12 and self._texture_overlay is not None:
+        if self._texture_overlay is not None:
             # Show a subtle tint for painted textures
             painted = self._texture_overlay > 0
             # Generate pseudo-random colors for different mat IDs to distinguish them
@@ -1325,6 +1325,26 @@ class MapPreviewWidget(QWidget):
             rgb * (1.0 - high_blend[..., np.newaxis])
             + peak[np.newaxis, np.newaxis, :] * high_blend[..., np.newaxis]
         )
+
+        if getattr(self, "_texture_overlay", None) is not None:
+            # Downsample texture overlay to match 3D vertices
+            # _texture_overlay is same shape as original heights
+            texture_ds = self._texture_overlay[::step_h, ::step_w].T
+            painted = texture_ds > 0
+
+            # Apply deterministic debug color tinting in 3D for painted tiles
+            # We use the same deterministic pseudo-random math as 2D: (ID * 50) % 255
+            mat_colors = (texture_ds[painted] * 50) % 255
+
+            # Blend the tinted color over the base terrain colors (RGB space 0..1)
+            # 2D does: R = R*0.7 + mat*0.3, G = G*0.7 + (255-mat)*0.3, B unchanged
+            tint_r = mat_colors / 255.0
+            tint_g = (255 - mat_colors) / 255.0
+
+            rgb[painted, 0] = rgb[painted, 0] * 0.7 + tint_r * 0.3
+            rgb[painted, 1] = rgb[painted, 1] * 0.7 + tint_g * 0.3
+            # Blue remains at 70% of base to match 2D math exactly, but in 3D let's just scale it:
+            rgb[painted, 2] = rgb[painted, 2] * 0.7
 
         colors = np.empty((rgb.shape[0], rgb.shape[1], 4), dtype=np.float32)
         colors[..., :3] = np.clip(rgb, 0.0, 1.0)
