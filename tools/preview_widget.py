@@ -1164,8 +1164,34 @@ class MapPreviewWidget(QWidget):
             if self._active_mouse_button == Qt.RightButton:
                 mat_id = 0 # Erase custom texture
 
-            paint_area = mask > 0.5
-            self._texture_overlay[r_min:r_max, c_min:c_max][paint_area] = mat_id
+            # Calculate number of tiles
+            tiles_x = self.map_size_x // self.grid_size
+            tiles_y = self.map_size_y // self.grid_size
+
+            tile_h_px = max(1, h / tiles_y)
+            tile_w_px = max(1, w / tiles_x)
+
+            # Find intersecting tiles
+            t_r_min = max(0, int(r_min / tile_h_px))
+            t_r_max = min(tiles_y - 1, int(r_max / tile_h_px))
+            t_c_min = max(0, int(c_min / tile_w_px))
+            t_c_max = min(tiles_x - 1, int(c_max / tile_w_px))
+
+            for ty in range(t_r_min, t_r_max + 1):
+                for tx in range(t_c_min, t_c_max + 1):
+                    # For each tile, check if its center is within the brush
+                    cy = (ty + 0.5) * tile_h_px
+                    cx = (tx + 0.5) * tile_w_px
+                    if (cx - gx) ** 2 + (cy - gy) ** 2 <= brush_r_px ** 2:
+                        py_min = int(ty * tile_h_px)
+                        py_max = int((ty + 1) * tile_h_px)
+                        px_min = int(tx * tile_w_px)
+                        px_max = int((tx + 1) * tile_w_px)
+
+                        py_max = min(h, py_max)
+                        px_max = min(w, px_max)
+
+                        self._texture_overlay[py_min:py_max, px_min:px_max] = mat_id
 
         elif mode in (8, 9):
             raise_terrain = (mode == 8)
