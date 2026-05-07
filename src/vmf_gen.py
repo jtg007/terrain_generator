@@ -1241,6 +1241,7 @@ class PipelineSpec:
     custom_nf_base_y: Optional[float] = None
     custom_resources: Optional[List[Tuple[float, float]]] = None
     manual_terrain: bool = False
+    custom_tile_materials: Optional[Dict[Tuple[int, int], str]] = None
 
     def default_imp_base(self) -> Tuple[float, float]:
         """

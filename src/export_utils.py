@@ -209,6 +209,7 @@ def export_vmf(
         custom_nf_base_y=config_model.custom_nf_base_y,
         custom_resources=config_model.custom_resources,
         manual_terrain=config_model.manual_terrain,
+        custom_tile_materials=spec.custom_tile_materials,
     )
 
     vmf_gen = DisplacementVMF(vmf_spec)
