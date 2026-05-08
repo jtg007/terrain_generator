@@ -22,12 +22,13 @@ from src.terrain_pipeline import (
 )
 
 
-def verify_tile_pipeline(tx: int, ty: int, tile_overlay: np.ndarray, reverse_mapping: Dict[int, str]):
+def verify_tile_pipeline(tx: int, ty: int, spec: TerrainSpec):
     """Debug function to verify tile-to-material mapping."""
-    tile_id = int(tile_overlay[ty, tx])
-    material = reverse_mapping.get(tile_id, "<unmapped>")
-    print(f"Tile ({tx},{ty}) → ID {tile_id} → material '{material}'"
-          f" → VMF key: custom_tile_materials[{ty}][{tx}]")
+    if not spec.custom_tile_materials:
+        return
+    material = spec.custom_tile_materials.get((tx, ty), spec.material)
+    print(f"Tile ({tx},{ty}) → material '{material}'"
+          f" → VMF key: custom_tile_materials[({tx}, {ty})]")
 
 
 class ValveVMFWriter:
@@ -44,27 +45,19 @@ class ValveVMFWriter:
         grid: HeightGrid,
         spec: TerrainSpec,
         path: str,
-        tile_overlay: Optional[np.ndarray] = None,
-        texture_mapping: Optional[Dict[str, int]] = None,
     ):
         """Generiert die Solids und speichert die Datei."""
-        self.vmf.world.skyname = "sky_day01_01"
+        self.vmf.world.skyname = getattr(spec, "skybox", "empsky_overcast2") or "empsky_overcast2"
 
         tiles_x = spec.tiles_x
         tiles_y = spec.tiles_y
-        _reverse_texture_mapping = {}
-        if tile_overlay is not None:
-            assert tile_overlay.shape == (tiles_y, tiles_x), \
-                f"tile_overlay shape mismatch: {tile_overlay.shape}, expected {(tiles_y, tiles_x)}"
-            if texture_mapping:
-                _reverse_texture_mapping = {v: k for k, v in texture_mapping.items()}
-
+        if spec.custom_tile_materials:
             # Debug verification calls
-            verify_tile_pipeline(0, 0, tile_overlay, _reverse_texture_mapping)
-            verify_tile_pipeline(tiles_x // 2, tiles_y // 2, tile_overlay, _reverse_texture_mapping)
+            verify_tile_pipeline(0, 0, spec)
+            verify_tile_pipeline(tiles_x // 2, tiles_y // 2, spec)
 
         for cell in cells:
-            self._create_displacement_brush(cell, grid, spec, tile_overlay, _reverse_texture_mapping)
+            self._create_displacement_brush(cell, grid, spec)
 
         self._create_underlay_brush(underlay)
 
@@ -78,8 +71,6 @@ class ValveVMFWriter:
         cell: TerrainCell,
         grid: HeightGrid,
         spec: TerrainSpec,
-        tile_overlay: Optional[np.ndarray] = None,
-        reverse_mapping: Optional[Dict[int, str]] = None,
     ):
         """Erzeugt einen perfekten Basis-Brush und legt die Höhenkarte als DispInfo auf die Top-Fläche."""
         power = spec.displacement_power
@@ -112,10 +103,8 @@ class ValveVMFWriter:
 
         # Tile material assignment
         material = spec.material
-        if tile_overlay is not None and reverse_mapping:
-            tile_id = int(tile_overlay[tile_row, tile_col])
-            if tile_id != 0 and tile_id in reverse_mapping:
-                material = reverse_mapping[tile_id]
+        if spec.custom_tile_materials:
+            material = spec.custom_tile_materials.get((tile_col, tile_row), spec.material)
 
         top_side.material = material
         top_side.uaxis = "[1 0 0 0] 0.25"
@@ -243,11 +232,9 @@ def export_vmf(
     grid: HeightGrid,
     spec: TerrainSpec,
     path: str,
-    tile_overlay: Optional[np.ndarray] = None,
-    texture_mapping: Optional[Dict[str, int]] = None,
 ):
     writer = ValveVMFWriter()
-    writer.write_vmf(cells, underlay, grid, spec, path, tile_overlay, texture_mapping)
+    writer.write_vmf(cells, underlay, grid, spec, path)
 
 
 if __name__ == "__main__":

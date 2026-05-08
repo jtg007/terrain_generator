@@ -77,6 +77,7 @@ class TerrainSpec:
     blur_radius: float = 0.0
 
     material: str = "nature/terrain/blend_dirt_grass_dmz_sscale"
+    skybox: Optional[str] = None
     underlay_material: str = "TOOLS/TOOLSSKIP"
     underlay_height: int = 128
     custom_image_path: Optional[str] = None
@@ -90,6 +91,10 @@ class TerrainSpec:
     custom_layout_nodes: Optional[List[LayoutNode]] = None
     custom_layout_connections: Optional[List[LayoutConnection]] = None
     custom_tile_materials: Optional[Dict[Tuple[int, int], str]] = None
+    
+    # Theme & Optimization
+    current_theme: str = "Temperate"
+    corridor_detail_width: int = 2048
 
     base_clear_radius: int = 0
     base_flatness: float = 0.8

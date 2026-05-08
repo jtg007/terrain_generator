@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QGraphicsLineItem,
     QGraphicsItem,
     QGraphicsPixmapItem,
+    QGraphicsRectItem,
     QLabel,
     QSlider,
     QSizePolicy,
@@ -537,10 +538,20 @@ class MapPreviewWidget(QWidget):
 
         layout_t.addLayout(sliders_layout)
 
+        # Theme selector (visible only in texture mode)
+        self.combo_theme = QComboBox()
+        self.combo_theme.setObjectName("TileThemeCombo")
+        self.combo_theme.setFixedWidth(100)
+        self.combo_theme.setToolTip("Select material theme")
+        layout_t.addWidget(self.combo_theme)
+        self.combo_theme.setVisible(False)
+        self.combo_theme.currentIndexChanged.connect(self._on_theme_changed)
+
         # Texture combobox (visible only in texture mode)
         self.combo_texture = QComboBox()
+        self.combo_texture.setObjectName("TileMaterialCombo")
         self.combo_texture.setFixedWidth(120)
-        self.combo_texture.setToolTip("Select material to paint")
+        self.combo_texture.setToolTip("Paint material")
         # Added to layout, but visibility handled by mode change
         layout_t.addWidget(self.combo_texture)
         self.combo_texture.setVisible(False)
@@ -657,17 +668,192 @@ class MapPreviewWidget(QWidget):
                     super().mouseReleaseEvent(event)
                 self.parent_widget.on_mouse_release(event)
 
+        class CustomGLViewWidget(gl.GLViewWidget):
+            def __init__(self, parent_widget, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.parent_widget = parent_widget
+                self._last_hover_tile = (None, None)
+
+            def _pick_tile(self, mouse_x, mouse_y):
+                """Map screen click to VMF tile (tx, ty) using robust matrix inversion."""
+                try:
+                    w = self.width()
+                    h = self.height()
+                    if w == 0 or h == 0:
+                        return None, None
+
+                    # NDC: map pixel to -1..1
+                    x = (2.0 * mouse_x / w) - 1.0
+                    y = 1.0 - (2.0 * mouse_y / h)
+
+                    # Get pyqtgraph matrices
+                    vp = (0, 0, w, h)
+                    pm = self.projectionMatrix(region=vp, viewport=vp)
+                    vm = self.viewMatrix()
+                    
+                    # Combine and invert
+                    inv_mvp = (pm * vm).inverted()[0]
+                    
+                    # Near and far points in world space
+                    p0 = inv_mvp.map(QVector3D(x, y, -1.0))
+                    p1 = inv_mvp.map(QVector3D(x, y, 1.0))
+                    
+                    p0 = np.array([p0.x(), p0.y(), p0.z()])
+                    p1 = np.array([p1.x(), p1.y(), p1.z()])
+                    
+                    ray_dir = p1 - p0
+                    ray_dir /= np.linalg.norm(ray_dir)
+                    
+                    # Terrain is centered at z=0 in GL space (since we subtract mean_h)
+                    target_z = 0.0
+                    if abs(ray_dir[2]) < 1e-6:
+                        return None, None
+                    
+                    t = (target_z - p0[2]) / ray_dir[2]
+                    if t < 0:
+                        return None, None
+                        
+                    hit = p0 + t * ray_dir
+
+                    # Map world XY to tile index
+                    map_w = getattr(self, '_map_size_x', 8192)
+                    map_h = getattr(self, '_map_size_y', 8192)
+                    tiles_x = getattr(self, '_tiles_x', 16)
+                    tiles_y = getattr(self, '_tiles_y', 16)
+
+                    # Adjust for origin-centered grid (matching _update_3d_view)
+                    # rel_x: -map_w/2 -> 0, +map_w/2 -> 1
+                    rel_x = (hit[0] + map_w / 2.0) / map_w
+                    # rel_y: -map_h/2 -> 0, +map_h/2 -> 1
+                    rel_y = (hit[1] + map_h / 2.0) / map_h
+
+                    tx = int(rel_x * tiles_x)
+                    ty = int(rel_y * tiles_y)
+
+                    if 0 <= tx < tiles_x and 0 <= ty < tiles_y:
+                        return tx, ty
+                except Exception as e:
+                    print(f"[TilePaint] _pick_tile matrix error: {e}")
+                return None, None
+
+            def mousePressEvent(self, event):
+                if self.parent_widget.current_mode == 13:
+                    if event.button() == Qt.LeftButton:
+                        tx, ty = self._pick_tile(event.position().x(), event.position().y())
+                        if tx is not None:
+                            self.parent_widget._begin_tile_paint()
+                            self.parent_widget._paint_tile(tx, ty, erase=False)
+                        return   # consume left click
+                    if event.button() == Qt.RightButton:
+                        tx, ty = self._pick_tile(event.position().x(), event.position().y())
+                        if tx is not None:
+                            self.parent_widget._begin_tile_paint()
+                            self.parent_widget._paint_tile(tx, ty, erase=True)
+                        return   # consume right click
+                    # Middle button and anything else: fall through to orbit
+                super().mousePressEvent(event)
+
+            def mouseMoveEvent(self, event):
+                if self.parent_widget.current_mode == 13:
+                    tx, ty = self._pick_tile(event.position().x(), event.position().y())
+                    if event.buttons() & Qt.LeftButton:
+                        if tx is not None:
+                            self.parent_widget._paint_tile(tx, ty, erase=False)
+                        return
+                    if event.buttons() & Qt.RightButton:
+                        if tx is not None:
+                            self.parent_widget._paint_tile(tx, ty, erase=True)
+                        return
+                    if (tx, ty) != self._last_hover_tile:
+                        self._last_hover_tile = (tx, ty)
+                        self.parent_widget._set_tile_hover(tx, ty)
+                super().mouseMoveEvent(event)
+
+            def mouseReleaseEvent(self, event):
+                if self.parent_widget.current_mode == 13:
+                    self.parent_widget._end_tile_paint()
+                super().mouseReleaseEvent(event)
+
+            def wheelEvent(self, event):
+                # Always pass wheel to super — never intercept zoom
+                super().wheelEvent(event)
+
         self.scene = QGraphicsScene()
         self.view = CustomGraphicsView(self.scene, self)
         self.view.setRenderHint(QPainter.Antialiasing)
         self.view.setDragMode(QGraphicsView.NoDrag)
         self.view.setStyleSheet("background-color: #0d0d10; border: 1px solid #2e2e36;")
 
-        self.view_3d = gl.GLViewWidget()
+        self.view_3d = CustomGLViewWidget(self)
+        self.view_3d.setBackgroundColor((13, 13, 20, 255))
+
+        # --- 3D Controls Toolbar ---
+        _ctrl_style = """
+            QPushButton {
+                background: #1e1e2a; color: #c8cad4; border: 1px solid #35364a;
+                border-radius: 4px; padding: 3px 8px; font-size: 11px;
+            }
+            QPushButton:hover { background: #2a2b3d; border-color: #5b8dee; color: #e8eaf0; }
+            QPushButton:checked { background: #3a4a7a; border-color: #5b8dee; color: #ffffff; }
+        """
+        _sep_style = "color: #35364a; font-size: 13px;"
+
+        ctrl_bar = QWidget()
+        ctrl_bar.setFixedHeight(30)
+        ctrl_bar.setStyleSheet("background: #13131d; border-bottom: 1px solid #2a2b3a;")
+        ctrl_layout = QHBoxLayout(ctrl_bar)
+        ctrl_layout.setContentsMargins(6, 2, 6, 2)
+        ctrl_layout.setSpacing(4)
+
+        def _mk_btn(label, tip, checkable=False):
+            b = QPushButton(label)
+            b.setToolTip(tip)
+            b.setStyleSheet(_ctrl_style)
+            b.setCheckable(checkable)
+            b.setFixedHeight(22)
+            return b
+
+        self.btn_3d_reset   = _mk_btn("⟳ Reset",   "Reset camera to default perspective")
+        self.btn_3d_top     = _mk_btn("⬆ Top",     "Top-down view")
+        self.btn_3d_iso     = _mk_btn("⬡ Iso",     "Isometric view (45° elevation)")
+        self.btn_3d_side    = _mk_btn("⬛ Side",    "Side view")
+        self.btn_3d_wire    = _mk_btn("⬜ Wire",    "Toggle wireframe overlay", checkable=True)
+
+        self.btn_3d_reset.clicked.connect(self._3d_reset_camera)
+        self.btn_3d_top.clicked.connect(self._3d_view_top)
+        self.btn_3d_iso.clicked.connect(self._3d_view_iso)
+        self.btn_3d_side.clicked.connect(self._3d_view_side)
+        self.btn_3d_wire.toggled.connect(self._3d_toggle_wireframe)
+
+        sep = QLabel("│")
+        sep.setStyleSheet(_sep_style)
+
+        self.lbl_3d_zoom = QLabel("Zoom")
+        self.lbl_3d_zoom.setStyleSheet("color: #6a6c80; font-size: 10px; margin-left: 4px;")
+        self.btn_3d_zoom_in  = _mk_btn("+", "Zoom in")
+        self.btn_3d_zoom_out = _mk_btn("−", "Zoom out")
+        self.btn_3d_zoom_in.setFixedWidth(22)
+        self.btn_3d_zoom_out.setFixedWidth(22)
+        self.btn_3d_zoom_in.clicked.connect(lambda: self._3d_zoom(0.7))
+        self.btn_3d_zoom_out.clicked.connect(lambda: self._3d_zoom(1.4))
+
+        for w in [self.btn_3d_reset, self.btn_3d_top, self.btn_3d_iso, self.btn_3d_side,
+                  sep, self.btn_3d_wire]:
+            ctrl_layout.addWidget(w)
+        ctrl_layout.addStretch()
+        for w in [self.lbl_3d_zoom, self.btn_3d_zoom_out, self.btn_3d_zoom_in]:
+            ctrl_layout.addWidget(w)
+
+        view_3d_container = QWidget()
+        _v3d_layout = QVBoxLayout(view_3d_container)
+        _v3d_layout.setContentsMargins(0, 0, 0, 0)
+        _v3d_layout.setSpacing(0)
+        _v3d_layout.addWidget(ctrl_bar)
+        _v3d_layout.addWidget(self.view_3d)
 
         self.view_stack = QStackedWidget()
         self.view_stack.addWidget(self.view)
-        self.view_stack.addWidget(self.view_3d)
+        self.view_stack.addWidget(view_3d_container)
 
         layout.addWidget(self.view_stack)
 
@@ -699,6 +885,7 @@ class MapPreviewWidget(QWidget):
         # Grid
         self.grid_size = 512
         self.grid_items = []
+        self._show_2d_grid = False
         self.draw_grid()
 
         self.link_start_node = None
@@ -720,18 +907,44 @@ class MapPreviewWidget(QWidget):
         self._texture_overlay = None  # numpy int32 mapping to materials
         self._tile_overlay = None     # numpy int32 mapping to materials (per displacement tile)
         self._texture_mapping = {}    # mapping from string material to integer id (and 0=default)
+        self._all_themes = {}        # {theme_name: [material_entries]}
         self._next_texture_id = 1
         self._sculpting = False
+        self._tile_painting = False
+        self._tile_paint_snapshot = None
+        self._tile_hover = (None, None)
+        self._tile_hover_item = QGraphicsRectItem()
+        hover_pen = QPen(QColor(255, 255, 255, 230), 0)
+        hover_pen.setCosmetic(True)
+        self._tile_hover_item.setPen(hover_pen)
+        self._tile_hover_item.setBrush(QBrush(QColor(255, 255, 255, 32)))
+        self._tile_hover_item.setZValue(6)
+        self._tile_hover_item.setVisible(False)
+        self.scene.addItem(self._tile_hover_item)
         self._flatten_target_height = None
         self._active_mouse_button = None
-
         # Clear radii for entity zones
         self.base_clear_radius = 0
         self.resource_clear_radius = 256
         self.lane_node_radius = 512
 
+        self._last_z_array = None
+        self._last_x_array = None
+        self._last_y_array = None
+        self._surface_item = None
+        self._tile_mesh_items = []
+        self._tile_grid_lines = []
+        self.resource_clear_radius = 256
+        self.lane_node_radius = 512
+
 
     def draw_grid(self):
+        if not getattr(self, "_show_2d_grid", False):
+            for item in self.grid_items:
+                self.scene.removeItem(item)
+            self.grid_items.clear()
+            return
+
         for item in self.grid_items:
             self.scene.removeItem(item)
         self.grid_items.clear()
@@ -765,6 +978,8 @@ class MapPreviewWidget(QWidget):
         size_x,
         size_y,
         tile_size: int = 512,
+        tiles_x: int = 16,
+        tiles_y: int = 16,
     ):
         self.map_image = image
         self.origin_x = origin_x
@@ -772,15 +987,20 @@ class MapPreviewWidget(QWidget):
         self.map_size_x = size_x
         self.map_size_y = size_y
         self.grid_size = max(1, int(tile_size))
+        self._tiles_x = tiles_x
+        self._tiles_y = tiles_y
 
         self.scene.setSceneRect(
             self.origin_x, self.origin_y, self.map_size_x, self.map_size_y
         )
         # Update tile overlay shape if map dimensions changed
-        tiles_x = self.map_size_x // self.grid_size
-        tiles_y = self.map_size_y // self.grid_size
-        if self._tile_overlay is None or self._tile_overlay.shape != (tiles_y, tiles_x):
-            self._tile_overlay = np.zeros((tiles_y, tiles_x), dtype=np.int32)
+        if self._tile_overlay is None or self._tile_overlay.shape != (self._tiles_y, self._tiles_x):
+            old_overlay = self._tile_overlay
+            self._tile_overlay = np.zeros((self._tiles_y, self._tiles_x), dtype=np.int32)
+            if old_overlay is not None:
+                keep_y = min(old_overlay.shape[0], self._tiles_y)
+                keep_x = min(old_overlay.shape[1], self._tiles_x)
+                self._tile_overlay[:keep_y, :keep_x] = old_overlay[:keep_y, :keep_x]
 
         self.draw_grid()
         self.update_pixmap()
@@ -970,6 +1190,118 @@ class MapPreviewWidget(QWidget):
         else:
             self.map_pixmap_item.setPixmap(QPixmap())
 
+    def _tile_color(self, tile_id: int, alpha: int = 145) -> QColor:
+        if tile_id <= 0:
+            return QColor(255, 255, 255, alpha)
+        hue = (tile_id * 137) % 360
+        return QColor.fromHsv(hue, 135, 230, alpha)
+
+    def _tile_material_name(self, tile_id: int) -> str:
+        if tile_id <= 0:
+            return "Default"
+        for idx in range(self.combo_texture.count()):
+            if self._texture_mapping.get(self.combo_texture.itemData(idx)) == tile_id:
+                return self.combo_texture.itemText(idx)
+        return f"Material {tile_id}"
+
+    def _current_tile_material_id(self) -> Optional[int]:
+        material_str = self.combo_texture.currentData()
+        if material_str is None:
+            return None
+        if material_str not in self._texture_mapping:
+            self._texture_mapping[material_str] = self._next_texture_id
+            self._next_texture_id += 1
+        return self._texture_mapping[material_str]
+
+    def _scene_to_tile(self, scene_x: float, scene_y: float) -> Tuple[Optional[int], Optional[int]]:
+        if self.map_size_x <= 0 or self.map_size_y <= 0:
+            return None, None
+
+        tiles_x = max(1, int(getattr(self, "_tiles_x", 1)))
+        tiles_y = max(1, int(getattr(self, "_tiles_y", 1)))
+        rel_x = (scene_x - self.origin_x) / self.map_size_x
+        rel_y = (scene_y - self.origin_y) / self.map_size_y
+
+        if rel_x < 0.0 or rel_x >= 1.0 or rel_y < 0.0 or rel_y >= 1.0:
+            return None, None
+
+        tx = min(tiles_x - 1, int(rel_x * tiles_x))
+        ty = min(tiles_y - 1, int(rel_y * tiles_y))
+        return tx, ty
+
+    def _tile_rect(self, tx: int, ty: int) -> QRectF:
+        tile_w = self.map_size_x / max(1, int(getattr(self, "_tiles_x", 1)))
+        tile_h = self.map_size_y / max(1, int(getattr(self, "_tiles_y", 1)))
+        return QRectF(
+            self.origin_x + tx * tile_w,
+            self.origin_y + ty * tile_h,
+            tile_w,
+            tile_h,
+        )
+
+    def _set_tile_hover(self, tx: Optional[int], ty: Optional[int]):
+        self._tile_hover = (tx, ty)
+        if self.current_mode != 13 or tx is None or ty is None:
+            self._tile_hover_item.setVisible(False)
+            return
+        self._tile_hover_item.setRect(self._tile_rect(tx, ty))
+        self._tile_hover_item.setVisible(True)
+
+    def _begin_tile_paint(self):
+        if self._tile_overlay is None or self._tile_painting:
+            return
+        self._tile_painting = True
+        self._tile_paint_snapshot = self._tile_overlay.copy()
+
+    def _end_tile_paint(self):
+        if not self._tile_painting:
+            return
+
+        changed = (
+            self._tile_paint_snapshot is not None
+            and self._tile_overlay is not None
+            and not np.array_equal(self._tile_paint_snapshot, self._tile_overlay)
+        )
+        if changed:
+            self.history.append(("tile_texture_change", self._tile_paint_snapshot))
+            self.redo_history.clear()
+            self.layout_changed.emit()
+
+        self._tile_painting = False
+        self._tile_paint_snapshot = None
+
+    def _paint_tile_at_scene(self, scene_x: float, scene_y: float, erase: bool = False):
+        tx, ty = self._scene_to_tile(scene_x, scene_y)
+        if tx is None or ty is None:
+            self._set_tile_hover(None, None)
+            return
+        self._set_tile_hover(tx, ty)
+        self._paint_tile(tx, ty, erase=erase)
+
+    def _paint_tile(self, tx: int, ty: int, erase: bool = False):
+        if self._tile_overlay is None:
+            return
+        if not (0 <= ty < self._tile_overlay.shape[0] and 0 <= tx < self._tile_overlay.shape[1]):
+            return
+
+        mat_id = 0 if erase else self._current_tile_material_id()
+        if mat_id is None:
+            return
+        if int(self._tile_overlay[ty, tx]) == mat_id:
+            return
+
+        self._tile_overlay[ty, tx] = mat_id
+        self._rerender_heightmap(update_3d=False)
+        self._update_3d_tile_overlay()
+
+        mat_name = self._tile_material_name(mat_id)
+        color = self._tile_color(mat_id, alpha=255)
+        status_msg = (
+            f"Tile ({tx + 1}, {ty + 1})/{self._tiles_x}x{self._tiles_y}: "
+            f"<span style='color:{color.name()}; font-size: 16px;'>■</span> {mat_name}"
+        )
+        if hasattr(self.parent(), "statusBar") and self.parent().statusBar():
+            self.parent().statusBar().showMessage(status_msg)
 
     def _camera_from_2d_view(self):
         viewport_rect = self.view.viewport().rect()
@@ -1206,38 +1538,9 @@ class MapPreviewWidget(QWidget):
                         self._texture_overlay[py_min:py_max, px_min:px_max] = mat_id
 
         elif mode == 13 and self._tile_overlay is not None:
-            # Tile Paint Mode: paint individual VMF tiles
-            material_str = self.combo_texture.currentData()
-            if material_str is None:
-                return
-
-            if material_str not in self._texture_mapping:
-                self._texture_mapping[material_str] = self._next_texture_id
-                self._next_texture_id += 1
-
-            mat_id = self._texture_mapping[material_str]
-            if self._active_mouse_button == Qt.RightButton:
-                mat_id = 0
-
-            # Map screen pixel to tile grid cell
-            tiles_x = self.map_size_x // self.grid_size
-            tiles_y = self.map_size_y // self.grid_size
-
-            # gx/gy are already normalized 0..w and 0..h
-            tx = int(gx * tiles_x // w)
-            ty = int(gy * tiles_y // h)
-
-            if 0 <= tx < tiles_x and 0 <= ty < tiles_y:
-                self._tile_overlay[ty, tx] = mat_id
-
-                # Update status bar with material name
-                mat_name = material_str if mat_id != 0 else "Default"
-                hue = (mat_id * 137) % 360
-                color = QColor.fromHsv(hue, 200, 200)
-                swatch = f"<span style='color:{color.name()}; font-size: 16px;'>■</span>"
-                status_msg = f"Tile ({tx}, {ty}): {swatch} {mat_name}"
-                if hasattr(self.parent(), "statusBar") and self.parent().statusBar():
-                    self.parent().statusBar().showMessage(status_msg)
+            erase = self._active_mouse_button == Qt.RightButton
+            self._paint_tile_at_scene(scene_x, scene_y, erase=erase)
+            return
 
         elif mode in (8, 9):
             raise_terrain = (mode == 8)
@@ -1264,7 +1567,7 @@ class MapPreviewWidget(QWidget):
 
         self._rerender_heightmap()
 
-    def _rerender_heightmap(self):
+    def _rerender_heightmap(self, update_3d: bool = True):
         if self._base_heights is None:
             return
 
@@ -1318,6 +1621,47 @@ class MapPreviewWidget(QWidget):
             rgba_array[painted, 0] = np.clip(rgba_array[painted, 0] * 0.7 + mat_colors * 0.3, 0, 255).astype(np.uint8)
             rgba_array[painted, 1] = np.clip(rgba_array[painted, 1] * 0.7 + (255 - mat_colors) * 0.3, 0, 255).astype(np.uint8)
 
+        # Tile paint is 3D-only. Don't draw its coarse tile overlay or grid in 2D.
+        if (
+            getattr(self, "current_mode", None) == 13
+            and self._tile_overlay is not None
+            and self.view_stack.currentIndex() == 1
+        ):
+            tiles_y = getattr(self, "_tiles_y", 16)
+            tiles_x = getattr(self, "_tiles_x", 16)
+            img_h = h
+            img_w = w
+
+            for ty in range(tiles_y):
+                for tx in range(tiles_x):
+                    tile_id = int(self._tile_overlay[ty, tx])
+                    if tile_id <= 0:
+                        continue
+
+                    y0 = ty * img_h // tiles_y
+                    y1 = (ty + 1) * img_h // tiles_y
+                    x0 = tx * img_w // tiles_x
+                    x1 = (tx + 1) * img_w // tiles_x
+                    color = self._tile_color(tile_id, alpha=120)
+                    tint = np.array(
+                        [color.red(), color.green(), color.blue()],
+                        dtype=np.float32,
+                    )
+                    region = rgba_array[y0:y1, x0:x1, :3].astype(np.float32)
+                    rgba_array[y0:y1, x0:x1, :3] = np.clip(
+                        region * 0.55 + tint * 0.45,
+                        0,
+                        255,
+                    ).astype(np.uint8)
+
+            # a) Thin grid lines (1px, white, alpha 80) at tile boundaries:
+            for tx in range(1, tiles_x):
+                col = tx * img_w // tiles_x
+                rgba_array[:, col, :3] = [230, 235, 245]
+            for ty in range(1, tiles_y):
+                row = ty * img_h // tiles_y
+                rgba_array[row, :, :3] = [230, 235, 245]
+
         self._preview_img_data = rgba_array
         bytes_per_line = 4 * w
         qimg = QImage(
@@ -1329,7 +1673,8 @@ class MapPreviewWidget(QWidget):
         )
         self.map_image = qimg
         self.update_pixmap()
-        self.update_3d_view(combined)
+        if update_3d:
+            self.update_3d_view(combined)
 
     def update_3d_view(self, heights, camera_override=None):
         if heights is None:
@@ -1343,12 +1688,15 @@ class MapPreviewWidget(QWidget):
         # Downsample and transpose to keep world axes consistent:
         # heights is [row(y), col(x)] -> GLSurface expects z[x, y].
         orig_h, orig_w = heights.shape
-        step_h = max(1, orig_h // 128)
-        step_w = max(1, orig_w // 128)
-        z_data = heights[::step_h, ::step_w].T
+        DS_SIZE = 128
+        self._ds_size = DS_SIZE
+        step_h = max(1, orig_h // DS_SIZE)
+        step_w = max(1, orig_w // DS_SIZE)
+        z_data = heights[::step_h, ::step_w][:DS_SIZE, :DS_SIZE].T
 
         # Center terrain around zero for camera stability/visibility.
         mean_h = float(np.mean(heights))
+        self._terrain_mean_z = mean_h
         z_data = z_data - mean_h
 
         # Material-style preview: emulate blend alpha behavior used for VMF terrain.
@@ -1363,8 +1711,8 @@ class MapPreviewWidget(QWidget):
         dz_dy, dz_dx = np.gradient(heights, cell_h, cell_w)
         slope_full = np.sqrt(dz_dx * dz_dx + dz_dy * dz_dy)
 
-        slope_ds = slope_full[::step_h, ::step_w].T
-        height_norm = height_norm_full[::step_h, ::step_w].T
+        slope_ds = slope_full[::step_h, ::step_w][:DS_SIZE, :DS_SIZE].T
+        height_norm = height_norm_full[::step_h, ::step_w][:DS_SIZE, :DS_SIZE].T
 
         # Match pipeline defaults from terrain_pipeline.slope_to_alpha
         flat_threshold = 0.005
@@ -1401,7 +1749,7 @@ class MapPreviewWidget(QWidget):
         if getattr(self, "_texture_overlay", None) is not None:
             # Downsample texture overlay to match 3D vertices
             # _texture_overlay is same shape as original heights
-            texture_ds = self._texture_overlay[::step_h, ::step_w].T
+            texture_ds = self._texture_overlay[::step_h, ::step_w][:DS_SIZE, :DS_SIZE].T
             painted = texture_ds > 0
 
             # Apply deterministic debug color tinting in 3D for painted tiles
@@ -1426,15 +1774,57 @@ class MapPreviewWidget(QWidget):
         map_w = getattr(self, "map_size_x", orig_w)
         map_h = getattr(self, "map_size_y", orig_h)
         x = np.linspace(-map_w / 2, map_w / 2, x_count)
-        # Reverse Y linspace so lower index maps to the top (+y), matching 2D coordinate view
-        y = np.linspace(map_h / 2, -map_h / 2, y_count)
+        y = np.linspace(-map_h / 2, map_h / 2, y_count)
 
-        surface = gl.GLSurfacePlotItem(
-            x=x, y=y, z=z_data, colors=colors, computeNormals=False, smooth=True
+        self._last_z_array = z_data
+        self._last_x_array = x
+        self._last_y_array = y
+
+        # Build terrain mesh with vectorized NumPy — avoids GLSurfacePlotItem color crash.
+        verts = np.empty((x_count * y_count, 3), dtype=np.float32)
+        xx, yy = np.meshgrid(x.astype(np.float32), y.astype(np.float32), indexing="ij")
+        verts[:, 0] = xx.reshape(-1)
+        verts[:, 1] = yy.reshape(-1)
+        verts[:, 2] = z_data.astype(np.float32).reshape(-1)
+
+        # Vectorized face generation (two triangles per grid cell)
+        ix = np.arange(x_count - 1, dtype=np.uint32)
+        iy = np.arange(y_count - 1, dtype=np.uint32)
+        ix, iy = np.meshgrid(ix, iy, indexing="ij")
+        ix = ix.reshape(-1)
+        iy = iy.reshape(-1)
+        a = ix * y_count + iy
+        b = a + 1
+        c = (ix + 1) * y_count + iy
+        d = c + 1
+        tri0 = np.stack([a, b, d], axis=1)
+        tri1 = np.stack([a, d, c], axis=1)
+        faces = np.concatenate([tri0, tri1], axis=0).astype(np.uint32)
+
+        # Per-vertex colors — flatten (x_count, y_count, 4) → (N, 4)
+        vert_colors = colors.reshape(-1, 4).astype(np.float32)
+
+        mesh = gl.MeshData(vertexes=verts, faces=faces)
+        self._surface_item = gl.GLMeshItem(
+            meshdata=mesh,
+            smooth=False,
+            drawFaces=True,
+            drawEdges=False,
+            shader='balloon',
+            glOptions='opaque',
         )
+        # 'balloon' shader reads per-vertex colors set on the MeshData
+        self._surface_item.opts['meshdata'].setVertexColors(vert_colors)
 
         self.view_3d.clear()
-        self.view_3d.addItem(surface)
+        self.view_3d.addItem(self._surface_item)
+
+        # Update view_3d properties so _pick_tile works correctly
+        self.view_3d._tiles_x = getattr(self, "_tiles_x", 16)
+        self.view_3d._tiles_y = getattr(self, "_tiles_y", 16)
+        self.view_3d._map_size_x = map_w
+        self.view_3d._map_size_y = map_h
+        self.view_3d._terrain_mean_z = mean_h
 
         box_faces = np.array(
             [
@@ -1628,6 +2018,9 @@ class MapPreviewWidget(QWidget):
                     classname="emp_resource_point",
                 )
 
+        if self.current_mode == 13:
+            self._update_3d_tile_overlay()
+
         if camera_override is not None:
             self.view_3d.setCameraPosition(**camera_override)
         elif self.view_stack.currentIndex() != 1:
@@ -1637,6 +2030,168 @@ class MapPreviewWidget(QWidget):
                 elevation=45,
                 azimuth=-45,
             )
+
+    def _3d_reset_camera(self):
+        cam_dist = max(self.map_size_x, self.map_size_y) * 1.2
+        self.view_3d.setCameraPosition(distance=cam_dist, elevation=45, azimuth=-45)
+
+    def _3d_view_top(self):
+        cam_dist = max(self.map_size_x, self.map_size_y) * 1.1
+        self.view_3d.setCameraPosition(distance=cam_dist, elevation=89.9, azimuth=0)
+
+    def _3d_view_iso(self):
+        cam_dist = max(self.map_size_x, self.map_size_y) * 1.4
+        self.view_3d.setCameraPosition(distance=cam_dist, elevation=35, azimuth=-45)
+
+    def _3d_view_side(self):
+        cam_dist = max(self.map_size_x, self.map_size_y) * 1.4
+        self.view_3d.setCameraPosition(distance=cam_dist, elevation=0, azimuth=0)
+
+    def _3d_zoom(self, factor: float):
+        cur = self.view_3d.opts.get('distance', 10000)
+        self.view_3d.setCameraPosition(distance=cur * factor)
+
+    def _3d_toggle_wireframe(self, enabled: bool):
+        if self._surface_item is not None:
+            self._surface_item.setData(
+                drawEdges=enabled,
+                edgeColor=(0.6, 0.7, 0.9, 0.2),
+            )
+            self.view_3d.update()
+
+    def _update_3d_tile_overlay(self):
+        if getattr(self, "_last_z_array", None) is None or self._tile_overlay is None:
+            return
+
+        # Remove all existing tile overlay items
+        for item in self._tile_mesh_items:
+            if item in self.view_3d.items:
+                self.view_3d.removeItem(item)
+        self._tile_mesh_items.clear()
+
+        z = self._last_z_array   # shape (ds_w, ds_h) — transposed heightmap
+        ds_w, ds_h = z.shape
+        x_arr = self._last_x_array   # shape (ds_w,)
+        y_arr = self._last_y_array   # shape (ds_h,)
+        tiles_x = self._tiles_x
+        tiles_y = self._tiles_y
+        Z_OFFSET = 8.0   # units above terrain so overlay sits on top
+
+        for ty in range(tiles_y):
+            for tx in range(tiles_x):
+                tile_id = int(self._tile_overlay[ty, tx])
+                if tile_id == 0:
+                    continue
+
+                # Pixel ranges in the (ds_w, ds_h) downsampled grid
+                px0 = tx * ds_w // tiles_x
+                px1 = min((tx + 1) * ds_w // tiles_x + 1, ds_w)
+                py0 = ty * ds_h // tiles_y
+                py1 = min((ty + 1) * ds_h // tiles_y + 1, ds_h)
+
+                x_sub = x_arr[px0:px1]
+                y_sub = y_arr[py0:py1]
+                z_sub = z[px0:px1, py0:py1]
+                nx, ny = z_sub.shape
+                if nx < 2 or ny < 2:
+                    continue
+
+                # Vertices follow the terrain surface + Z_OFFSET
+                xx, yy = np.meshgrid(x_sub, y_sub, indexing="ij")
+                zz = z_sub + Z_OFFSET
+                verts = np.stack([
+                    xx.reshape(-1).astype(np.float32),
+                    yy.reshape(-1).astype(np.float32),
+                    zz.reshape(-1).astype(np.float32),
+                ], axis=1)
+
+                # Vectorised face generation
+                iix = np.arange(nx - 1, dtype=np.uint32)
+                iiy = np.arange(ny - 1, dtype=np.uint32)
+                iix, iiy = np.meshgrid(iix, iiy, indexing="ij")
+                iix = iix.reshape(-1)
+                iiy = iiy.reshape(-1)
+                a = iix * ny + iiy
+                b = a + 1
+                c = (iix + 1) * ny + iiy
+                d = c + 1
+                faces = np.concatenate([
+                    np.stack([a, b, d], axis=1),
+                    np.stack([a, d, c], axis=1),
+                ], axis=0).astype(np.uint32)
+
+                # Identify if this is a blend material to provide a visual hint
+                id_to_material = {v: k for k, v in self._texture_mapping.items()}
+                mat_name = id_to_material.get(tile_id, "").lower()
+                is_blend = "blend" in mat_name
+
+                hue = (tile_id * 137) % 360
+                color = QColor.fromHsv(hue, 200, 220)
+                face_color = (color.redF(), color.greenF(), color.blueF(), 0.65)
+
+                # Cyan border for blend materials (smart alpha), black/gray for standard
+                edge_color = (0.0, 1.0, 1.0, 1.0) if is_blend else (0.0, 0.0, 0.0, 0.6)
+
+                mesh = gl.MeshData(vertexes=verts, faces=faces)
+                item = gl.GLMeshItem(
+                    meshdata=mesh,
+                    color=face_color,
+                    smooth=False,
+                    drawFaces=True,
+                    drawEdges=True,
+                    edgeColor=edge_color,
+                )
+                item.setGLOptions('translucent')
+                self.view_3d.addItem(item)
+                self._tile_mesh_items.append(item)
+
+        # Remove stale grid lines — tile edges from mesh above are sufficient
+        for item in getattr(self, '_tile_grid_lines', []):
+            if item in self.view_3d.items:
+                self.view_3d.removeItem(item)
+        self._tile_grid_lines = []
+
+        self.view_3d.update()
+
+    def _on_theme_changed(self, index):
+        """Update material list when theme changes."""
+        theme_name = self.combo_theme.currentText()
+        if not theme_name or theme_name not in self._all_themes:
+            return
+            
+        # Block signals to avoid triggering updates while rebuilding
+        self.combo_texture.blockSignals(True)
+        self.combo_texture.clear()
+        
+        theme_obj = self._all_themes[theme_name]
+        mats_list = theme_obj.get("materials", []) if isinstance(theme_obj, dict) else theme_obj
+        
+        import os
+        for mat in mats_list:
+            name = mat.get("name", os.path.basename(mat["path"]))
+            path = mat["path"]
+            self.combo_texture.addItem(name, path)
+            
+        self.combo_texture.blockSignals(False)
+
+    def set_themes(self, themes_data: dict):
+        """Initialize the theme and material dropdowns."""
+        self._all_themes = themes_data
+        
+        self.combo_theme.blockSignals(True)
+        self.combo_theme.clear()
+        for theme_name in sorted(self._all_themes.keys()):
+            self.combo_theme.addItem(theme_name)
+        self.combo_theme.blockSignals(False)
+        
+        # Trigger initial populate
+        if self.combo_theme.count() > 0:
+            self._on_theme_changed(0)
+
+    def _on_tile_clicked(self, tx, ty, erase=False):
+        self._begin_tile_paint()
+        self._paint_tile(tx, ty, erase=erase)
+        self._end_tile_paint()
 
     def _on_thickness_slider_changed(self, value):
         self.thickness_label.setText(f"Width: {value}")
@@ -1670,6 +2225,7 @@ class MapPreviewWidget(QWidget):
             self.on_tool_changed(300)
 
     def on_tool_changed(self, tid):
+        previous_mode = getattr(self, "current_mode", 0)
         # Map duplicate virtual IDs to standard internal modes
         mode_mapping = {
             200: 0, # Entities Move -> Move
@@ -1687,15 +2243,39 @@ class MapPreviewWidget(QWidget):
 
         if actual_mode in (12, 13):
             self.combo_texture.setVisible(True)
+            self.combo_theme.setVisible(True)
         else:
             self.combo_texture.setVisible(False)
+            self.combo_theme.setVisible(False)
 
         if actual_mode == 12:
             self.lbl_mode_info.setText("TEXTURE MODE – painting coarse regions")
         elif actual_mode == 13:
-            self.lbl_mode_info.setText("TILE PAINT MODE – painting individual VMF tiles")
+            self.lbl_mode_info.setText("TILE PAINT – left paint, right erase, drag to fill")
         else:
             self.lbl_mode_info.setText("")
+
+        if actual_mode == 13 and self.view_stack.currentIndex() != 1:
+            self.view_stack.setCurrentIndex(1)
+            self.btn_toggle_3d.setText("2D View")
+            self._update_3d_view(camera_override=self._camera_from_2d_view())
+            
+        # Trigger rerender to show/hide tile grid overlays correctly
+        if actual_mode == 13 or previous_mode == 13:
+            if actual_mode == 13:
+                self._update_3d_tile_overlay()
+            else:
+                self._set_tile_hover(None, None)
+                for item in getattr(self, '_tile_mesh_items', []):
+                    if item in self.view_3d.items:
+                        self.view_3d.removeItem(item)
+                self._tile_mesh_items.clear()
+                for item in getattr(self, '_tile_grid_lines', []):
+                    if item in self.view_3d.items:
+                        self.view_3d.removeItem(item)
+                self._tile_grid_lines.clear()
+                self.view_3d.update()
+            self._rerender_heightmap()
 
         if actual_mode == 0:
             for item in self.scene.items():
@@ -1741,6 +2321,7 @@ class MapPreviewWidget(QWidget):
             else None,
             "mask": self._global_selection_mask.copy() if self._global_selection_mask is not None else None,
             "texture": self._texture_overlay.copy() if self._texture_overlay is not None else None,
+            "tile_overlay": self._tile_overlay.copy() if self._tile_overlay is not None else None,
             "texture_mapping": dict(self._texture_mapping),
             "next_texture_id": self._next_texture_id,
         }
@@ -1770,6 +2351,8 @@ class MapPreviewWidget(QWidget):
             self._global_selection_mask[:] = True
         if self._texture_overlay is not None:
             self._texture_overlay[:] = 0
+        if self._tile_overlay is not None:
+            self._tile_overlay[:] = 0
         self._texture_mapping = {}
         self._next_texture_id = 1
         self._rerender_heightmap()
@@ -1829,17 +2412,17 @@ class MapPreviewWidget(QWidget):
                 self._texture_overlay[:] = 0
             self._rerender_heightmap()
             return
-        elif action == "texture_change":
+        elif action == "tile_texture_change":
             current = (
-                self._texture_overlay.copy()
-                if self._texture_overlay is not None
+                self._tile_overlay.copy()
+                if self._tile_overlay is not None
                 else None
             )
-            self.history.append(("texture_change", current))
-            if self._texture_overlay is not None and item is not None:
-                self._texture_overlay[:] = item
-            elif self._texture_overlay is not None:
-                self._texture_overlay[:] = 0
+            self.redo_history.append(("tile_texture_change", current))
+            if self._tile_overlay is not None and item is not None:
+                self._tile_overlay[:] = item
+            elif self._tile_overlay is not None:
+                self._tile_overlay[:] = 0
             self._rerender_heightmap()
             return
         elif action == "add":
@@ -1882,6 +2465,10 @@ class MapPreviewWidget(QWidget):
                 self._height_overlay[:] = old_state["overlay"]
             if old_state.get("mask") is not None:
                 self._global_selection_mask[:] = old_state["mask"]
+            if old_state.get("texture") is not None:
+                self._texture_overlay[:] = old_state["texture"]
+            if old_state.get("tile_overlay") is not None:
+                self._tile_overlay[:] = old_state["tile_overlay"]
             self._rerender_heightmap()
             self.redo_history.append(("clear_all", old_state))
             self.redraw_fixed_entities()
@@ -1930,6 +2517,32 @@ class MapPreviewWidget(QWidget):
                 self._global_selection_mask[:] = True
             self._rerender_heightmap()
             return
+        elif action == "texture_change":
+            current = (
+                self._texture_overlay.copy()
+                if self._texture_overlay is not None
+                else None
+            )
+            self.history.append(("texture_change", current))
+            if self._texture_overlay is not None and item is not None:
+                self._texture_overlay[:] = item
+            elif self._texture_overlay is not None:
+                self._texture_overlay[:] = 0
+            self._rerender_heightmap()
+            return
+        elif action == "tile_texture_change":
+            current = (
+                self._tile_overlay.copy()
+                if self._tile_overlay is not None
+                else None
+            )
+            self.history.append(("tile_texture_change", current))
+            if self._tile_overlay is not None and item is not None:
+                self._tile_overlay[:] = item
+            elif self._tile_overlay is not None:
+                self._tile_overlay[:] = 0
+            self._rerender_heightmap()
+            return
         elif action == "add":
             self.scene.addItem(item)
             self.history.append(("add", item))
@@ -1970,6 +2583,10 @@ class MapPreviewWidget(QWidget):
                 self._height_overlay[:] = 0
             if self._global_selection_mask is not None:
                 self._global_selection_mask[:] = True
+            if self._texture_overlay is not None:
+                self._texture_overlay[:] = 0
+            if self._tile_overlay is not None:
+                self._tile_overlay[:] = 0
             self._rerender_heightmap()
             self.history.append(("clear_all", old_state))
             self.redraw_fixed_entities()
@@ -2054,7 +2671,7 @@ class MapPreviewWidget(QWidget):
             self.resources = new_res_list
             self.redraw_fixed_entities()
             self.resource_added.emit(scene_pos.x(), scene_pos.y())
-        elif self.current_mode in (8, 9, 10, 11, 12):  # Raise / Lower / Flatten / Mask / Texture
+        elif self.current_mode in (8, 9, 10, 11, 12, 13):
             self._sculpting = True
             if self.current_mode == 10 and self._base_heights is not None:
                 # Sample target height for flatten tool at initial click
@@ -2065,19 +2682,15 @@ class MapPreviewWidget(QWidget):
                 gy = max(0, min(h - 1, gy))
                 self._flatten_target_height = float(self._base_heights[gy, gx] + (self._height_overlay[gy, gx] if self._height_overlay is not None else 0))
 
-            if self.current_mode == 11:
+            if self.current_mode == 13:
+                self._begin_tile_paint()
+            elif self.current_mode == 11:
                 snapshot = (
                     self._global_selection_mask.copy()
                     if self._global_selection_mask is not None
                     else None
                 )
                 self.history.append(("mask_change", snapshot))
-            elif self.current_mode == 12:
-                snapshot = (
-                    self._texture_overlay.copy()
-                    if self._texture_overlay is not None
-                    else None
-                )
                 self.history.append(("texture_change", snapshot))
             else:
                 # Save overlay snapshot for undo
@@ -2142,7 +2755,7 @@ class MapPreviewWidget(QWidget):
                 self.current_freehand_item.update()
             return
 
-        if self._sculpting and self.current_mode in (8, 9, 10, 11, 12):
+        if self._sculpting and self.current_mode in (8, 9, 10, 11, 12, 13):
             scene_pos = self.view.mapToScene(event.pos())
             self._apply_brush(scene_pos.x(), scene_pos.y(), self.current_mode)
             return
@@ -2158,6 +2771,12 @@ class MapPreviewWidget(QWidget):
             self.pan_start_pos = event.position()
             event.accept()
             return
+
+        if self.current_mode == 13:
+            scene_pos = self.view.mapToScene(event.pos())
+            tx, ty = self._scene_to_tile(scene_pos.x(), scene_pos.y())
+            self._set_tile_hover(tx, ty)
+            return
         pass
 
     def on_mouse_release(self, event):
@@ -2165,6 +2784,8 @@ class MapPreviewWidget(QWidget):
 
         if self._sculpting:
             self._sculpting = False
+            if self.current_mode == 13:
+                self._end_tile_paint()
             self._flatten_target_height = None
             return
 
@@ -2271,10 +2892,11 @@ class MapPreviewWidget(QWidget):
             self._global_selection_mask.copy() if getattr(self, "_global_selection_mask", None) is not None else None,
             self._texture_overlay.copy() if getattr(self, "_texture_overlay", None) is not None else None,
             dict(getattr(self, "_texture_mapping", {})),
-            getattr(self, "_next_texture_id", 1)
+            getattr(self, "_next_texture_id", 1),
+            self._tile_overlay.copy() if getattr(self, "_tile_overlay", None) is not None else None
         )
 
-    def set_layout_to_editor(self, nodes, connections, resources, imp_base, nf_base, height_overlay, global_mask, texture_overlay=None, texture_mapping=None, next_texture_id=1):
+    def set_layout_to_editor(self, nodes, connections, resources, imp_base, nf_base, height_overlay, global_mask, texture_overlay=None, texture_mapping=None, next_texture_id=1, tile_overlay=None):
         """Restore the editor state from a saved project."""
         # 1. Clear current state (without adding to history)
         items_to_remove = []
@@ -2338,6 +2960,11 @@ class MapPreviewWidget(QWidget):
                     start_vis.edges.append(vis_edge)
                     end_vis.edges.append(vis_edge)
 
+        if tile_overlay is not None:
+            self._tile_overlay = tile_overlay.copy()
+        elif hasattr(self, "_tiles_x") and hasattr(self, "_tiles_y"):
+            self._tile_overlay = np.zeros((self._tiles_y, self._tiles_x), dtype=np.int32)
+
         # 5. Refresh UI
         self._rerender_heightmap()
         self.redraw_fixed_entities()
@@ -2350,6 +2977,10 @@ class MapPreviewWidget(QWidget):
             self.btn_toggle_3d.setText("2D View")
             self._update_3d_view(camera_override=self._camera_from_2d_view())
         else:
+            if self.current_mode == 13:
+                if hasattr(self, "btn_texture") and self.btn_texture is not None:
+                    self.btn_texture.setChecked(True)
+                self.on_tool_changed(12)
             self.view_stack.setCurrentIndex(0)
             self.btn_toggle_3d.setText("3D View")
 

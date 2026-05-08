@@ -80,6 +80,13 @@ class GUIConfigModel:
     invert_lanes: bool = False
     canyon_natural: bool = False
     preview_with_pipeline: bool = False
+    custom_tile_materials: Optional[dict] = None
+    
+    # Theme & Optimization
+    current_theme: str = "Temperate"
+    corridor_detail_width: int = 2048
+    custom_layout_nodes: Optional[List[Any]] = None
+    custom_layout_connections: Optional[List[Any]] = None
 
     @property
     def map_size_x(self) -> int:
@@ -258,4 +265,11 @@ class GUIConfigModel:
             manual_terrain=self.manual_terrain,
             invert_lanes=self.invert_lanes,
             canyon_natural=self.canyon_natural,
+            material=self.terrain_material,
+            skybox=self.skybox,
+            custom_tile_materials=self.custom_tile_materials,
+            current_theme=self.current_theme,
+            corridor_detail_width=self.corridor_detail_width,
+            custom_layout_nodes=self.custom_layout_nodes,
+            custom_layout_connections=self.custom_layout_connections,
         )

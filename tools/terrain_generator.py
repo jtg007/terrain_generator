@@ -210,6 +210,12 @@ class GenerationWorker(QThread):
         self.texture_mapping = texture_mapping
         self.tile_overlay = tile_overlay
         self.project_root = None
+        
+        # Ensure layout data is persisted to the model for export_vmf awareness
+        self.config_model.custom_layout_nodes = custom_nodes
+        self.config_model.custom_layout_connections = custom_connections
+        self.config_model.custom_resources = custom_resources
+        self.config_model.custom_tile_materials = {} # Will be filled below
 
     def run(self):
         try:
@@ -225,13 +231,14 @@ class GenerationWorker(QThread):
             if self.custom_resources is not None:
                 spec.custom_resources = self.custom_resources
 
-            if self.texture_overlay is not None and self.texture_mapping:
-                id_to_material = {v: k for k, v in self.texture_mapping.items()}
-                custom_materials = {}
+            # Prepare custom tile materials for both preview and export
+            custom_materials = {}
+            id_to_material = {v: k for k, v in self.texture_mapping.items()} if self.texture_mapping else {}
+            
+            if self.texture_overlay is not None and id_to_material:
                 h, w = self.texture_overlay.shape
-                # Ensure we calculate the exact grid bounds spec uses
-                tiles_x = spec.tiles_x
-                tiles_y = spec.tiles_y
+                tiles_x = self.config_model.tiles_x
+                tiles_y = self.config_model.tiles_y
                 step_y = max(1, h / tiles_y)
                 step_x = max(1, w / tiles_x)
                 for ty in range(tiles_y):
@@ -241,20 +248,17 @@ class GenerationWorker(QThread):
                         mat_id = int(self.texture_overlay[sample_y, sample_x])
                         if mat_id > 0 and mat_id in id_to_material:
                             custom_materials[(tx, ty)] = id_to_material[mat_id]
-                if custom_materials:
-                    spec.custom_tile_materials = custom_materials
 
-            if self.tile_overlay is not None and self.texture_mapping:
-                id_to_material = {v: k for k, v in self.texture_mapping.items()}
-                if spec.custom_tile_materials is None:
-                    spec.custom_tile_materials = {}
-
+            if self.tile_overlay is not None and id_to_material:
                 ty, tx = self.tile_overlay.shape
                 for y in range(ty):
                     for x in range(tx):
                         mat_id = int(self.tile_overlay[y, x])
                         if mat_id != 0 and mat_id in id_to_material:
-                            spec.custom_tile_materials[(x, y)] = id_to_material[mat_id]
+                            custom_materials[(x, y)] = id_to_material[mat_id]
+
+            self.config_model.custom_tile_materials = custom_materials
+            spec.custom_tile_materials = custom_materials
 
             # Run pipeline
             result = run_pipeline(
@@ -354,7 +358,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self._is_dirty = False
         self.config = Config()
         self.config_model.use_nodetail_texture = self.config.get("nodetail", False)
-        self.terrain_materials, self.skyboxes = self.load_textures()
+        self.terrain_materials, self.skyboxes, self.texture_themes = self.load_textures()
 
         self.setup_ui()
         self.apply_dark_theme()
@@ -417,26 +421,44 @@ class TerrainGeneratorGUI(QMainWindow):
         if textures_path.exists():
             with open(textures_path, "r") as f:
                 data = json.load(f)
-                materials = data.get(
-                    "terrain_materials", ["common/nature/blend_grass_mountainwall_000"]
-                )
-                skyboxes = data.get("skyboxes", SAFE_EMPIRES_SKYBOXES)
-                if not skyboxes:
-                    skyboxes = SAFE_EMPIRES_SKYBOXES
+                
+                themes = data.get("themes", {})
+                skyboxes = data.get("skyboxes", SAFE_EMPIRES_SKYBOXES) or SAFE_EMPIRES_SKYBOXES
                 
                 from src.export_utils import get_texture_safety_status
                 safety = get_texture_safety_status(textures_path)
                 
-                labeled_materials = []
-                for mat in sorted(materials):
-                    is_safe = safety.get(mat, True)
-                    label = "✓ SAFE" if is_safe else "⚠ CAUTION"
-                    labeled_materials.append((f"{mat}  [{label}]", mat))
+                # We need to return TWO things for legacy compatibility:
+                # 1. Flattened list of (labeled_name, path) for the main Terrain Material dropdown
+                # 2. The full themes dictionary for the PreviewWidget (Tile Paint)
                 
-                return labeled_materials, skyboxes
+                flattened_labeled = []
+                all_materials = []
+                for theme_name, theme_obj in themes.items():
+                    # Check if it's the new object format or old list format
+                    if isinstance(theme_obj, dict):
+                        mats_list = theme_obj.get("materials", [])
+                    else:
+                        mats_list = theme_obj
+                        
+                    for mat_entry in mats_list:
+                        mat = mat_entry["path"]
+                        if mat not in all_materials:
+                            all_materials.append(mat)
+                            is_safe = safety.get(mat, True)
+                            label = "✓ SAFE" if is_safe else "⚠ CAUTION"
+                            flattened_labeled.append((f"{mat}  [{label}]", mat))
+                
+                flattened_labeled.sort()
+                
+                return flattened_labeled, skyboxes, themes
+        
+        # Default fallback
+        default_mat = "common/nature/blend_grass_mountainwall_000"
         return (
-            [("common/nature/blend_grass_mountainwall_000  [✓ SAFE]", "common/nature/blend_grass_mountainwall_000")],
+            [(f"{default_mat}  [✓ SAFE]", default_mat)],
             [DEFAULT_SAFE_SKYBOX],
+            {"General": [{"name": "Grass", "path": default_mat}]}
         )
 
     def setup_ui(self):
@@ -1220,6 +1242,45 @@ class TerrainGeneratorGUI(QMainWindow):
         sec_materials.content_layout.addLayout(sky_row)
         self.combo_skybox.currentIndexChanged.connect(self.sync_to_model)
 
+        # --- THEME & OPTIMIZATION ---
+        lbl_sec_theme = QLabel("THEME & OPTIMIZATION")
+        lbl_sec_theme.setObjectName("ConfigSection")
+        self.tab_shape_layout.addWidget(lbl_sec_theme)
+
+        sec_theme = QWidget()
+        sec_theme.content_layout = QVBoxLayout(sec_theme)
+        sec_theme.content_layout.setContentsMargins(0,0,0,0)
+        self.tab_shape_layout.addWidget(sec_theme)
+
+        # Theme Selector
+        theme_row = QHBoxLayout()
+        theme_row.setSpacing(8)
+        lbl_theme = QLabel("Global Theme")
+        lbl_theme.setObjectName("FieldLabel")
+        theme_row.addWidget(lbl_theme)
+        self.combo_theme = QComboBox()
+        self.combo_theme.addItems(sorted(self.texture_themes.keys()))
+        theme_row.addWidget(self.combo_theme, 1)
+        sec_theme.content_layout.addLayout(theme_row)
+        self.combo_theme.currentIndexChanged.connect(self._on_theme_changed_sync)
+
+        # Corridor Detail Width
+        cdw_row = QHBoxLayout()
+        cdw_row.setSpacing(8)
+        lbl_cdw = QLabel("Detail Width")
+        lbl_cdw.setObjectName("FieldLabel")
+        lbl_cdw.setToolTip("How far from lanes to keep high-detail (props/alphas)")
+        cdw_row.addWidget(lbl_cdw)
+        self.slider_corridor_width = QSlider(Qt.Horizontal)
+        self.slider_corridor_width.setRange(512, 8192)
+        self.lbl_corridor_width_val = QLabel("2048")
+        cdw_row.addWidget(
+            make_slider_row(self.slider_corridor_width, self.lbl_corridor_width_val), 1
+        )
+        sec_theme.content_layout.addLayout(cdw_row)
+        self.slider_corridor_width.valueChanged.connect(self.sync_to_model)
+        self.combo_skybox.currentIndexChanged.connect(self.sync_to_model)
+
 
         # ─── SETTINGS ───
         lbl_sec_settings = QLabel("SETTINGS")
@@ -1314,12 +1375,8 @@ class TerrainGeneratorGUI(QMainWindow):
         # ── Data & Tools Setup ──
 
         self.preview_widget = MapPreviewWidget()
+        self.preview_widget.set_themes(self.texture_themes)
         self.preview_widget.setMinimumWidth(200)
-        # Copy materials to preview widget texture combo
-        for display_text, clean_path in self.terrain_materials:
-            self.preview_widget.combo_texture.addItem(display_text, clean_path)
-        if default_idx >= 0:
-            self.preview_widget.combo_texture.setCurrentIndex(default_idx)
 
         # Inner splitter: config scroll | tabs
         self._inner_splitter = QSplitter(Qt.Horizontal)
@@ -1566,6 +1623,8 @@ class TerrainGeneratorGUI(QMainWindow):
                 spec.size_x,
                 spec.size_y,
                 spec.cell_size,
+                spec.tiles_x,
+                spec.tiles_y,
             )
             # Pass the mask from the grid to preserve it through preview updates
             grid_mask = (
@@ -2201,6 +2260,38 @@ class TerrainGeneratorGUI(QMainWindow):
                     f"The selected folder does not appear to be a valid Empires installation:\n{msg}",
                 )
 
+    def _on_theme_changed_sync(self, index):
+        """Handle global theme changes and sync to preview widget."""
+        theme_name = self.combo_theme.currentText()
+        if hasattr(self, "preview_widget"):
+            # Update the theme selector in the 3D preview
+            idx = self.preview_widget.combo_theme.findText(theme_name)
+            if idx >= 0:
+                self.preview_widget.combo_theme.setCurrentIndex(idx)
+        
+        # Suggest skybox and material based on theme
+        textures_path = PROJECT_ROOT / "config" / "textures.json"
+        if textures_path.exists():
+            with open(textures_path, "r") as f:
+                data = json.load(f)
+                theme_data = data.get("themes", {}).get(theme_name, {})
+                defaults = theme_data.get("defaults", {})
+                
+                # Update Skybox
+                new_sky = defaults.get("skybox")
+                if new_sky:
+                    self.combo_skybox.setCurrentText(new_sky)
+                
+                # Update Primary Material (only if user hasn't painted much? Or always?)
+                # We suggest it, but user can still change it
+                new_mat = defaults.get("primary_floor")
+                if new_mat:
+                    idx = self.combo_material.findData(new_mat)
+                    if idx >= 0:
+                        self.combo_material.setCurrentIndex(idx)
+        
+        self.sync_to_model()
+
     def update_empires_status(self):
         """Update the status label for Empires path."""
         path = self.edit_empires_path.text()
@@ -2309,14 +2400,15 @@ class TerrainGeneratorGUI(QMainWindow):
             self.lbl_rough_val.setText(f"{int(self.config_model.roughness * 100)}%")
             self.slider_plateau_noise.setValue(int(self.config_model.plateau_noise * 100))
             self.lbl_plateau_noise_val.setText(f"{int(self.config_model.plateau_noise * 100)}%")
-            # blur_radius 0.0 → slider 0; 0.0 < x < 0.5 → slider 1; 0.5-10.0 → slider 1-100
+            
+            # blur_radius 0.0 -> slider 0; 0.5-10.0 -> slider 1-100
             br = self.config_model.blur_radius
             if br <= 0.0:
                 _ero_slider = 0
             elif br < 0.5:
                 _ero_slider = 1
             else:
-                _ero_slider = max(1, min(100, int(round(1 + (br - 0.5) / 9.5 * 99))))
+                _ero_slider = int(min(100, (br / 10.0) * 100))
             self.slider_erosion.setValue(_ero_slider)
             self.lbl_erosion_val.setText(f"{_ero_slider}%")
 
@@ -2368,6 +2460,10 @@ class TerrainGeneratorGUI(QMainWindow):
             self.chk_preview_pipeline.setChecked(
                 self.config_model.preview_with_pipeline
             )
+        
+        self.combo_theme.setCurrentText(self.config_model.current_theme)
+        self.slider_corridor_width.setValue(self.config_model.corridor_detail_width)
+        self.lbl_corridor_width_val.setText(str(self.config_model.corridor_detail_width))
 
         if self.config_model.custom_image_path:
             self.chk_custom_image.setChecked(True)
@@ -2404,6 +2500,10 @@ class TerrainGeneratorGUI(QMainWindow):
             self.config_model.topology = "canyon"
             self.config_model.canyon_natural = False
         self.config_model.lane_node_radius = self.slider_lane_node_radius.value()
+        
+        self.config_model.current_theme = self.combo_theme.currentText()
+        self.config_model.corridor_detail_width = self.slider_corridor_width.value()
+        self.lbl_corridor_width_val.setText(str(self.config_model.corridor_detail_width))
         self.config_model.lane_width_scale = self.slider_lane_width.value() / 100.0
         if hasattr(self, "preview_widget"):
             self.preview_widget.set_lane_scale(self.config_model.lane_width_scale)
@@ -2479,7 +2579,17 @@ class TerrainGeneratorGUI(QMainWindow):
             # Check layout from editor
             if hasattr(self, "preview_widget"):
                 try:
-                    nodes, _, resources, _, _, _, _, _ = self.preview_widget.get_layout_from_editor()
+                    (
+                        nodes,
+                        _,
+                        resources,
+                        _,
+                        _,
+                        _,
+                        _,
+                        _,
+                        _,
+                    ) = self.preview_widget.get_layout_from_editor()
                     if nodes:
                         temp_spec = self.config_model.make_spec()
 
@@ -2658,7 +2768,7 @@ class TerrainGeneratorGUI(QMainWindow):
             file_path += ".terrain"
 
         try:
-            nodes, conns, res, overlay, mask, texture_overlay, texture_mapping, next_texture_id = (
+            nodes, conns, res, overlay, mask, texture_overlay, texture_mapping, next_texture_id, tile_overlay = (
                 self.preview_widget.get_layout_from_editor()
             )
 
@@ -2670,6 +2780,10 @@ class TerrainGeneratorGUI(QMainWindow):
                 "nf_base": self.preview_widget.nf_base,
                 "height_overlay": overlay,
                 "global_mask": mask,
+                "texture_overlay": texture_overlay,
+                "texture_mapping": texture_mapping,
+                "next_texture_id": next_texture_id,
+                "tile_overlay": tile_overlay,
                 "map_name": self.txt_map_name.text().strip(),
             }
 
@@ -2720,6 +2834,10 @@ class TerrainGeneratorGUI(QMainWindow):
                 data["nf_base"],
                 data["height_overlay"],
                 data["global_mask"],
+                data.get("texture_overlay"),
+                data.get("texture_mapping"),
+                data.get("next_texture_id", 1),
+                data.get("tile_overlay"),
             )
 
             self._is_dirty = False

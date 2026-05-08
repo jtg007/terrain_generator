@@ -1,268 +1,1036 @@
 {
-  "terrain_materials": [
-    "common/concrete/pavingground01",
-    "common/concrete/pavingground01b",
-    "common/concrete/pavingground02a",
-    "common/concrete/pavingground03a",
-    "common/concrete/pavingground03b",
-    "common/emp_snow/assault_parking_decal01",
-    "common/emp_snow/blend_concretesnow01a",
-    "common/emp_snow/blend_concretesnow02b",
-    "common/emp_snow/blend_roadsnow01a",
-    "common/emp_snow/blend_roadsnow02b",
-    "common/emp_snow/blend_snowsidewalk01a",
-    "common/emp_snow/blend_snowsidewalk02b",
-    "common/emp_snow/blend_snowsnow01a",
-    "common/emp_snow/blend_snowsnow02b",
-    "common/emp_snow/blend_snowsnow02c",
-    "common/emp_snow/concretewall03_nobump",
-    "common/emp_snow/concretewall03a_nobump",
-    "common/emp_snow/flag_capmodel1a",
-    "common/emp_snow/glasspanel01_lightmap",
-    "common/emp_snow/icawall05d_decal01",
-    "common/emp_snow/icawall05d_decal01a",
-    "common/emp_snow/snowfloor001b",
-    "common/emp_snow/snowfloor002b",
-    "common/emp_snow/snowfloor003b",
-    "common/nature/blend_grass_mountainwall_000",
-    "common/nature/blend_grass_mud_003",
-    "common/nature/blend_grass_sandfloor009a_000",
-    "common/nature/blend_grassfloor08_rockwall02",
-    "common/nature/grass_001",
-    "common/nature/grassfloor01",
-    "common/nature/grassfloor12",
-    "common/nature/mountain_wall_000",
-    "common/nature/mud_003",
-    "common/nature/sandfloor009a",
-    "common/nature/treebark01",
-    "common/nature/treebark02",
-    "common/nature/treebark05",
-    "common/nature/treebark05b",
-    "common/nature/treebranch01a",
-    "common/nature/treebranch01a_brown",
-    "common/nature/treebranch01a_unlit",
-    "common/nature/treebranch01b_green",
-    "common/nature/treebranch_bush01a",
-    "common/nature/treebranch_bush01a_unlit",
-    "common/nature/treebranch_krenzonicus",
-    "common/nature/treebranch_oak01a",
-    "common/nature/treebranch_oak01a_unlit",
-    "common/nature/treebranch_oak01b",
-    "common/nature/treebranch_oak01c",
-    "common/nature/treebranch_oak01d",
-    "common/nature/treebranch_palm01a",
-    "common/nature/treebranch_palm01ablend",
-    "common/nature/treebranch_palm02a",
-    "common/nature/treebranch_palm02ablend",
-    "common/nature/treebranch_poplar01b",
-    "common/nature/treebranch_poplar01b2",
-    "common/nature/treebranch_tree4",
-    "common/nature/treebranch_tree4_greener",
-    "common/nature/treebranch_tree4_red",
-    "common/nature/treebranch_tree4_yellow",
-    "common/nature/treefoliage02",
-    "common/nature/treefoliage02a",
-    "common/nature/treefoliage02b",
-    "common/nature/treefoliage02c",
-    "common/nature/treefoliage02d",
-    "common/nature/treefoliage02e",
-    "common/nature/treefoliage03",
-    "common/nature/trees_bark",
-    "common/nature/trees_orex",
-    "common/nature/trees_orex_billboard",
-    "common/nature/trees_vetkagreen5",
-    "common/nature/water/emp_cleanwater_warp",
-    "common/nature/water/emp_lakewater_warp",
-    "common/nature/water/emp_murkywater_warp",
-    "common/nature/water/emp_water_01_lake",
-    "common/nature/water/emp_water_01_lake_beneath",
-    "common/nature/water/emp_water_01_lake_cheap",
-    "common/nature/water/emp_water_01_murky",
-    "common/nature/water/emp_water_01_murky_beneath",
-    "common/nature/water/emp_water_01_murky_cheap",
-    "common/nature/water/emp_water_tropical",
-    "common/nature/water/emp_water_tropical_beneath",
-    "common/nature/water/emp_water_tropical_cheap",
-    "common/nature/water_stranded001a",
-    "common/rubble/blend_rubblefloor04_rubblefloor05",
-    "common/stene/dirtfloor001",
-    "common/stene/dirtfloor002",
-    "common/stene/dirtyconcrete",
-    "common/stene/drygrass",
-    "common/stene/grainysand",
-    "common/stene/grass01",
-    "common/stene/grass02",
-    "common/stene/grass03",
-    "common/stene/grassymud",
-    "common/stene/grassymud02",
-    "common/stene/sand01",
-    "common/stene/shittysand",
-    "common/terrain/blend_grass01a_dirt01a",
-    "common/terrain/blend_grass01a_dirt01a_nodetail",
-    "common/terrain/blend_grass01a_rock01a",
-    "common/terrain/blend_grass01b_dirt01a",
-    "common/terrain/blend_grass01b_grass01b_undergrowth",
-    "common/terrain/blend_grass01b_rock02",
-    "common/terrain/blend_grass01c_dirt01a",
-    "common/terrain/blend_grass01c_dirt01a_nodetail",
-    "common/terrain/blend_grass01c_sand01a",
-    "common/terrain/blend_grass01c_sand01b",
-    "common/terrain/blend_red2_red3",
-    "common/terrain/blend_red2_red4",
-    "common/terrain/blend_red3_red4",
-    "common/terrain/blend_sand02a_rock01a",
-    "common/terrain/blend_snow01_rock01a",
-    "common/terrain/redground2",
-    "common/terrain/redground3",
-    "common/terrain/redground4",
-    "common/terrain/terrain_grass_01a",
-    "common/terrain/terrain_rock_02",
-    "dz/blend_snow_wall",
-    "generic/l01/blend_dirt01grass_01",
-    "generic/l01/blend_earth_01grass_01",
-    "generic/l01/blend_rocklayered01grass_01",
-    "generic/l01/blend_rocklayered01grass_01skybox",
-    "generic/l01/blend_sandpebbles01grass_01",
-    "generic/l01/l01_grass_01",
-    "generic/l01/l01_grasscliff_01",
-    "generic/l04/l04_cliff_a03islegrass",
-    "johnshandy/world/blendgrassrock",
-    "johnshandy/world/blendsandpebblesgrass",
-    "johnshandy/world/blendsandpebbleskeefrock",
-    "johnshandy/world/blendsandpebblesreef",
-    "johnshandy/world/blendsandpebblesrock",
-    "johnshandy/world/grass2dirtisle",
-    "johnshandy/world/grass2sandpebbles02",
-    "johnshandy/world/isle_cliffsiderock01",
-    "johnshandy/world/isle_hilltopgrass01",
-    "johnshandy/world/sandpebbles2sandpebbles",
-    "maps/emp_arid/blenddirtdirt_silk",
-    "maps/emp_bush/silk_blenddirt01grass07",
-    "maps/emp_bush/silk_blendgrass02bgrass07",
-    "maps/emp_bush/silk_blendgrass04grass07_flowers",
-    "maps/emp_bush/silk_blendgrass04grass07_nodetail",
-    "maps/emp_bush/silk_blendgrassfloor002abgrass07",
-    "maps/emp_bush/silk_bush_blendgrass07rock8a_nodetail",
-    "maps/emp_bush/silk_bush_blendgrass4cgrass4b_nodetail",
-    "maps/emp_bush/silk_bush_blendgrass4crock8a_nodetail",
-    "maps/emp_bush/silk_bush_blendgrass5bgrass02b_nodetail",
-    "maps/emp_bush/silk_bush_blendgrass5bgrass02b_nodetail_ssbump",
-    "maps/emp_bush/silk_bush_blendgrass5brock8a_nodetail",
-    "maps/emp_bush/silk_bush_blendgrass5brock8a_nodetail_ssbump",
-    "maps/emp_bush/silk_bush_blendgrass5brock8a_nodetail_ssbumps",
-    "maps/emp_canyon/silk_canyon_grass10a_grass10a",
-    "maps/emp_canyon/silk_canyon_grass10a_grass10a_b",
-    "maps/emp_canyon/silk_canyon_grass10a_ground09",
-    "maps/emp_canyon/silk_canyon_grass10a_ground09_lessdetail",
-    "maps/emp_canyon/silk_canyon_grass10a_ground09_nodetail",
-    "maps/emp_chain/silk_chain_blendgrass5bbground2db_detail",
-    "maps/emp_chain/silk_chain_blendgrass5bbground2db_nodetail",
-    "maps/emp_chain/silk_chain_blendgrass5bbground5db_clouds_detail",
-    "maps/emp_chain/silk_chain_blendgrass5bbground5db_detail",
-    "maps/emp_chain/silk_chain_blendgrass5bbground5db_nodetail",
-    "maps/emp_chain/silk_chain_blendgrass5bbground7ab_clouds_detail",
-    "maps/emp_chain/silk_chain_blendgrass5bbground7ab_detail",
-    "maps/emp_chain/silk_chain_blendgrass5bbground7ab_nodetail",
-    "maps/emp_chain/silk_chain_blendgrass5bbground8ab_clouds_detail",
-    "maps/emp_chain/silk_chain_blendgrass5bbground8ab_nodetail",
-    "maps/emp_chain/silk_chain_blendground4cbground7ab_clouds_detail",
-    "maps/emp_chain/silk_chain_blendground4cbground7ab_nodetail",
-    "maps/emp_chain/silk_chain_blendmoss1a4xground5db_clouds_detail",
-    "maps/emp_chain/silk_chain_blendmoss1a4xground5db_detail",
-    "maps/emp_chain/silk_chain_blendrock9bbgrass5bb",
-    "maps/emp_chain/silk_chain_blendrock9bbground2db",
-    "maps/emp_chain/silk_chain_blendrock9bbground5db",
-    "maps/emp_chain/silk_chain_blendrock9bbground7ab",
-    "maps/emp_chain/silk_chain_blendrock9bbmoss2a4x",
-    "maps/emp_chain/silk_chain_blendrock9bbrock10b",
-    "maps/emp_chain/silk_chain_blendrock9bbsnow1a",
-    "maps/emp_coast/blendgrass1dirt1",
-    "maps/emp_coast/blendvalvemuddirt1",
-    "maps/emp_coast/dirt_1",
-    "maps/emp_coast/grass_1",
-    "maps/emp_mvalley/blenddirtdirt",
-    "maps/emp_mvalley/blenddirtdirt2",
-    "maps/emp_mvalley/blenddirtdirt_3dsky",
-    "maps/emp_mvalley/blenddirtsand",
-    "maps/emp_mvalley/blenddirtterra",
-    "maps/emp_mvalley/blendgraveldirt3",
-    "maps/emp_mvalley/ground_overlay",
-    "maps/emp_mvalley/ground_overlay2",
-    "maps/emp_mvalley/redground2",
-    "maps/emp_mvalley/redground3",
-    "maps/emp_mvalley/redground4",
-    "maps/emp_mvalley/redsand",
-    "maps/emp_mvalley/rock_overlay1",
-    "maps/emp_mvalley/rock_overlay2",
-    "maps/emp_mvalley/rock_overlay3",
-    "maps/emp_mvalley/rock_overlay4",
-    "mayama/overlaydirt1",
-    "nature/blend_colorado_cliff_dirt_pebbles",
-    "nature/blenddirtgrass001a",
-    "nature/blenddirtgrass008a",
-    "nature/blenddirtgrass008b",
-    "nature/blendrockdirt008d",
-    "nature/blendrockgrass004a",
-    "nature/blendrocksand008d",
-    "nature/blendsandgrass008a",
-    "nature/cliff/stone_cliff_colorado",
-    "nature/cliffface001b",
-    "nature/dirtfloor009c",
-    "nature/ground/ground_dirt_pebbles",
-    "nature/terrain/blend_grass1_dirt1",
-    "nature/terrain/blend_grass1_dirt2",
-    "nature/terrain/blend_grass1_rock1",
-    "nature/terrain/tarmac_01",
-    "nature/terrain/tarmac_02",
-    "nature/water/water_ocean_beneath",
-    "nature/water/water_ocean_cheap",
-    "nature/water/water_ocean_fog_color",
-    "nature/water/water_ocean_warp",
-    "nature/water/water_oceana",
-    "nature/water_l01_a",
-    "nature/water_l05_a_beneath",
-    "silk/arid_blendcearth1rock6",
-    "silk/arid_blendcearth3rock6",
-    "silk/arid_blendcearth3rock6_x2",
-    "silk/silk_beach01a_sand02a",
-    "silk/silk_beach01a_sand02a_clouds",
-    "silk/silk_beach01b_ground02a",
-    "silk/silk_beach01b_ground02a_clouds",
-    "silk/silk_canyon_grass05a_grass08d_nosprites",
-    "silk/silk_canyon_grass05a_grass09c",
-    "silk/silk_canyon_grass05a_ground02a",
-    "silk/silk_canyon_grass05a_rock05b",
-    "silk/silk_canyon_grass08c_grass08d_nosprites",
-    "silk/silk_canyon_grass08c_grass09c",
-    "silk/silk_canyon_grass08c_rock05b",
-    "silk/silk_canyon_grass08d_rock05b",
-    "silk/silk_canyon_grass09c_rock05b",
-    "silk/silk_canyon_ground03a_ground02a",
-    "silk/silk_canyon_ground03a_ground06b",
-    "silk/silk_canyon_ground06b_rock05b",
-    "silk/silk_canyon_ground08c_grass09c",
-    "silk/silk_canyon_rock04c_rock05b",
-    "silk/silk_pavingground02a",
-    "silk/silk_rock04a_rock05a",
-    "silk/silk_rock04b_rock05a",
-    "silk/silk_sand01a_sand02a",
-    "silk/silk_sand01a_sand02a_clouds",
-    "silk/silk_sand01b_sand02b",
-    "silk/silk_sand01b_sand02b_clouds",
-    "silk/silk_sand03a_ground06b",
-    "silk/silk_sand03a_ground06b_clouds",
-    "silk/silk_sand03b_ground06a",
-    "silk/silk_sand03b_ground06a_clouds",
-    "silk/silk_sand03c_ground06b",
-    "silk/silk_sand03c_ground06b_clouds",
-    "silk/silk_snow02b_concretefloor10b",
-    "silk/silk_snow02b_pavingground03a",
-    "silk/silk_snow02b_roadfloor06",
-    "silk/silk_snow02b_snow03b_seamless",
-    "tutorial/signs/sandbox",
-    "wolandic/blenddirtgrass01",
-    "wolandic/blenddirtgrass01_cheap",
-    "wolandic/blendsandgrass01"
-  ],
-  "count": 263
+  "themes": {
+    "Temperate": {
+      "defaults": {
+        "primary_floor": "common/nature/blend_grass_mountainwall_000",
+        "primary_cliff": "common/nature/mountain_wall_000",
+        "cheap_floor": "common/nature/grass_001",
+        "cheap_cliff": "common/nature/mountain_wall_000",
+        "skybox": "empsky_day1"
+      },
+      "materials": [
+        {
+          "name": "Blend Grass Mountainwall 000",
+          "path": "common/nature/blend_grass_mountainwall_000"
+        },
+        {
+          "name": "Blend Grass Mud 003",
+          "path": "common/nature/blend_grass_mud_003"
+        },
+        {
+          "name": "Blend Grassfloor08 Rockwall02",
+          "path": "common/nature/blend_grassfloor08_rockwall02"
+        },
+        {
+          "name": "Grass 001",
+          "path": "common/nature/grass_001"
+        },
+        {
+          "name": "Grassfloor01",
+          "path": "common/nature/grassfloor01"
+        },
+        {
+          "name": "Grassfloor12",
+          "path": "common/nature/grassfloor12"
+        },
+        {
+          "name": "Mountain Wall 000",
+          "path": "common/nature/mountain_wall_000"
+        },
+        {
+          "name": "Mud 003",
+          "path": "common/nature/mud_003"
+        },
+        {
+          "name": "Treebark01",
+          "path": "common/nature/treebark01"
+        },
+        {
+          "name": "Treebark02",
+          "path": "common/nature/treebark02"
+        },
+        {
+          "name": "Treebark05",
+          "path": "common/nature/treebark05"
+        },
+        {
+          "name": "Treebark05B",
+          "path": "common/nature/treebark05b"
+        },
+        {
+          "name": "Treebranch01A",
+          "path": "common/nature/treebranch01a"
+        },
+        {
+          "name": "Treebranch01A Brown",
+          "path": "common/nature/treebranch01a_brown"
+        },
+        {
+          "name": "Treebranch01A Unlit",
+          "path": "common/nature/treebranch01a_unlit"
+        },
+        {
+          "name": "Treebranch01B Green",
+          "path": "common/nature/treebranch01b_green"
+        },
+        {
+          "name": "Treebranch Bush01A",
+          "path": "common/nature/treebranch_bush01a"
+        },
+        {
+          "name": "Treebranch Bush01A Unlit",
+          "path": "common/nature/treebranch_bush01a_unlit"
+        },
+        {
+          "name": "Treebranch Krenzonicus",
+          "path": "common/nature/treebranch_krenzonicus"
+        },
+        {
+          "name": "Treebranch Oak01A",
+          "path": "common/nature/treebranch_oak01a"
+        },
+        {
+          "name": "Treebranch Oak01A Unlit",
+          "path": "common/nature/treebranch_oak01a_unlit"
+        },
+        {
+          "name": "Treebranch Oak01B",
+          "path": "common/nature/treebranch_oak01b"
+        },
+        {
+          "name": "Treebranch Oak01C",
+          "path": "common/nature/treebranch_oak01c"
+        },
+        {
+          "name": "Treebranch Oak01D",
+          "path": "common/nature/treebranch_oak01d"
+        },
+        {
+          "name": "Treebranch Palm01A",
+          "path": "common/nature/treebranch_palm01a"
+        },
+        {
+          "name": "Treebranch Palm01Ablend",
+          "path": "common/nature/treebranch_palm01ablend"
+        },
+        {
+          "name": "Treebranch Palm02A",
+          "path": "common/nature/treebranch_palm02a"
+        },
+        {
+          "name": "Treebranch Palm02Ablend",
+          "path": "common/nature/treebranch_palm02ablend"
+        },
+        {
+          "name": "Treebranch Poplar01B",
+          "path": "common/nature/treebranch_poplar01b"
+        },
+        {
+          "name": "Treebranch Poplar01B2",
+          "path": "common/nature/treebranch_poplar01b2"
+        },
+        {
+          "name": "Treebranch Tree4",
+          "path": "common/nature/treebranch_tree4"
+        },
+        {
+          "name": "Treebranch Tree4 Greener",
+          "path": "common/nature/treebranch_tree4_greener"
+        },
+        {
+          "name": "Treebranch Tree4 Yellow",
+          "path": "common/nature/treebranch_tree4_yellow"
+        },
+        {
+          "name": "Trees Bark",
+          "path": "common/nature/trees_bark"
+        },
+        {
+          "name": "Trees Orex",
+          "path": "common/nature/trees_orex"
+        },
+        {
+          "name": "Trees Orex Billboard",
+          "path": "common/nature/trees_orex_billboard"
+        },
+        {
+          "name": "Trees Vetkagreen5",
+          "path": "common/nature/trees_vetkagreen5"
+        },
+        {
+          "name": "Emp Cleanwater Warp",
+          "path": "common/nature/water/emp_cleanwater_warp"
+        },
+        {
+          "name": "Emp Lakewater Warp",
+          "path": "common/nature/water/emp_lakewater_warp"
+        },
+        {
+          "name": "Emp Murkywater Warp",
+          "path": "common/nature/water/emp_murkywater_warp"
+        },
+        {
+          "name": "Emp Water 01 Lake",
+          "path": "common/nature/water/emp_water_01_lake"
+        },
+        {
+          "name": "Emp Water 01 Lake Beneath",
+          "path": "common/nature/water/emp_water_01_lake_beneath"
+        },
+        {
+          "name": "Emp Water 01 Murky",
+          "path": "common/nature/water/emp_water_01_murky"
+        },
+        {
+          "name": "Emp Water 01 Murky Beneath",
+          "path": "common/nature/water/emp_water_01_murky_beneath"
+        },
+        {
+          "name": "Water Stranded001A",
+          "path": "common/nature/water_stranded001a"
+        },
+        {
+          "name": "Dirtfloor001",
+          "path": "common/stene/dirtfloor001"
+        },
+        {
+          "name": "Dirtfloor002",
+          "path": "common/stene/dirtfloor002"
+        },
+        {
+          "name": "Drygrass",
+          "path": "common/stene/drygrass"
+        },
+        {
+          "name": "Grass01",
+          "path": "common/stene/grass01"
+        },
+        {
+          "name": "Grass02",
+          "path": "common/stene/grass02"
+        },
+        {
+          "name": "Grass03",
+          "path": "common/stene/grass03"
+        },
+        {
+          "name": "Grassymud",
+          "path": "common/stene/grassymud"
+        },
+        {
+          "name": "Grassymud02",
+          "path": "common/stene/grassymud02"
+        },
+        {
+          "name": "Blend Grass01A Dirt01A",
+          "path": "common/terrain/blend_grass01a_dirt01a"
+        },
+        {
+          "name": "Blend Grass01A Rock01A",
+          "path": "common/terrain/blend_grass01a_rock01a"
+        },
+        {
+          "name": "Blend Grass01B Dirt01A",
+          "path": "common/terrain/blend_grass01b_dirt01a"
+        },
+        {
+          "name": "Blend Grass01B Grass01B Undergrowth",
+          "path": "common/terrain/blend_grass01b_grass01b_undergrowth"
+        },
+        {
+          "name": "Blend Grass01B Rock02",
+          "path": "common/terrain/blend_grass01b_rock02"
+        },
+        {
+          "name": "Blend Grass01C Dirt01A",
+          "path": "common/terrain/blend_grass01c_dirt01a"
+        },
+        {
+          "name": "Terrain Grass 01A",
+          "path": "common/terrain/terrain_grass_01a"
+        },
+        {
+          "name": "Blend Dirt01Grass 01",
+          "path": "generic/l01/blend_dirt01grass_01"
+        },
+        {
+          "name": "Blend Earth 01Grass 01",
+          "path": "generic/l01/blend_earth_01grass_01"
+        },
+        {
+          "name": "L01 Grass 01",
+          "path": "generic/l01/l01_grass_01"
+        },
+        {
+          "name": "L01 Grasscliff 01",
+          "path": "generic/l01/l01_grasscliff_01"
+        },
+        {
+          "name": "L04 Cliff A03Islegrass",
+          "path": "generic/l04/l04_cliff_a03islegrass"
+        },
+        {
+          "name": "Blendgrassrock",
+          "path": "johnshandy/world/blendgrassrock"
+        },
+        {
+          "name": "Grass2Dirtisle",
+          "path": "johnshandy/world/grass2dirtisle"
+        },
+        {
+          "name": "Isle Hilltopgrass01",
+          "path": "johnshandy/world/isle_hilltopgrass01"
+        },
+        {
+          "name": "Silk Blenddirt01Grass07",
+          "path": "maps/emp_bush/silk_blenddirt01grass07"
+        },
+        {
+          "name": "Silk Blendgrass02Bgrass07",
+          "path": "maps/emp_bush/silk_blendgrass02bgrass07"
+        },
+        {
+          "name": "Silk Blendgrass04Grass07 Flowers",
+          "path": "maps/emp_bush/silk_blendgrass04grass07_flowers"
+        },
+        {
+          "name": "Silk Blendgrassfloor002Abgrass07",
+          "path": "maps/emp_bush/silk_blendgrassfloor002abgrass07"
+        },
+        {
+          "name": "Silk Canyon Grass10A Grass10A",
+          "path": "maps/emp_canyon/silk_canyon_grass10a_grass10a"
+        },
+        {
+          "name": "Silk Canyon Grass10A Grass10A B",
+          "path": "maps/emp_canyon/silk_canyon_grass10a_grass10a_b"
+        },
+        {
+          "name": "Silk Canyon Grass10A Ground09",
+          "path": "maps/emp_canyon/silk_canyon_grass10a_ground09"
+        },
+        {
+          "name": "Silk Canyon Grass10A Ground09 Lessdetail",
+          "path": "maps/emp_canyon/silk_canyon_grass10a_ground09_lessdetail"
+        },
+        {
+          "name": "Silk Chain Blendgrass5Bbground2Db Detail",
+          "path": "maps/emp_chain/silk_chain_blendgrass5bbground2db_detail"
+        },
+        {
+          "name": "Silk Chain Blendgrass5Bbground5Db Clouds Detail",
+          "path": "maps/emp_chain/silk_chain_blendgrass5bbground5db_clouds_detail"
+        },
+        {
+          "name": "Silk Chain Blendgrass5Bbground5Db Detail",
+          "path": "maps/emp_chain/silk_chain_blendgrass5bbground5db_detail"
+        },
+        {
+          "name": "Silk Chain Blendgrass5Bbground7Ab Clouds Detail",
+          "path": "maps/emp_chain/silk_chain_blendgrass5bbground7ab_clouds_detail"
+        },
+        {
+          "name": "Silk Chain Blendgrass5Bbground7Ab Detail",
+          "path": "maps/emp_chain/silk_chain_blendgrass5bbground7ab_detail"
+        },
+        {
+          "name": "Silk Chain Blendgrass5Bbground8Ab Clouds Detail",
+          "path": "maps/emp_chain/silk_chain_blendgrass5bbground8ab_clouds_detail"
+        },
+        {
+          "name": "Silk Chain Blendmoss1A4Xground5Db Clouds Detail",
+          "path": "maps/emp_chain/silk_chain_blendmoss1a4xground5db_clouds_detail"
+        },
+        {
+          "name": "Silk Chain Blendmoss1A4Xground5Db Detail",
+          "path": "maps/emp_chain/silk_chain_blendmoss1a4xground5db_detail"
+        },
+        {
+          "name": "Silk Chain Blendrock9Bbgrass5Bb",
+          "path": "maps/emp_chain/silk_chain_blendrock9bbgrass5bb"
+        },
+        {
+          "name": "Silk Chain Blendrock9Bbmoss2A4X",
+          "path": "maps/emp_chain/silk_chain_blendrock9bbmoss2a4x"
+        },
+        {
+          "name": "Blendgrass1Dirt1",
+          "path": "maps/emp_coast/blendgrass1dirt1"
+        },
+        {
+          "name": "Blendvalvemuddirt1",
+          "path": "maps/emp_coast/blendvalvemuddirt1"
+        },
+        {
+          "name": "Dirt 1",
+          "path": "maps/emp_coast/dirt_1"
+        },
+        {
+          "name": "Grass 1",
+          "path": "maps/emp_coast/grass_1"
+        },
+        {
+          "name": "Overlaydirt1",
+          "path": "mayama/overlaydirt1"
+        },
+        {
+          "name": "Blend Colorado Cliff Dirt Pebbles",
+          "path": "nature/blend_colorado_cliff_dirt_pebbles"
+        },
+        {
+          "name": "Blenddirtgrass001A",
+          "path": "nature/blenddirtgrass001a"
+        },
+        {
+          "name": "Blenddirtgrass008A",
+          "path": "nature/blenddirtgrass008a"
+        },
+        {
+          "name": "Blenddirtgrass008B",
+          "path": "nature/blenddirtgrass008b"
+        },
+        {
+          "name": "Blendrockdirt008D",
+          "path": "nature/blendrockdirt008d"
+        },
+        {
+          "name": "Blendrockgrass004A",
+          "path": "nature/blendrockgrass004a"
+        },
+        {
+          "name": "Stone Cliff Colorado",
+          "path": "nature/cliff/stone_cliff_colorado"
+        },
+        {
+          "name": "Cliffface001B",
+          "path": "nature/cliffface001b"
+        },
+        {
+          "name": "Dirtfloor009C",
+          "path": "nature/dirtfloor009c"
+        },
+        {
+          "name": "Ground Dirt Pebbles",
+          "path": "nature/ground/ground_dirt_pebbles"
+        },
+        {
+          "name": "Blend Grass1 Dirt1",
+          "path": "nature/terrain/blend_grass1_dirt1"
+        },
+        {
+          "name": "Blend Grass1 Dirt2",
+          "path": "nature/terrain/blend_grass1_dirt2"
+        },
+        {
+          "name": "Blend Grass1 Rock1",
+          "path": "nature/terrain/blend_grass1_rock1"
+        },
+        {
+          "name": "Water Ocean Beneath",
+          "path": "nature/water/water_ocean_beneath"
+        },
+        {
+          "name": "Water Ocean Fog Color",
+          "path": "nature/water/water_ocean_fog_color"
+        },
+        {
+          "name": "Water Ocean Warp",
+          "path": "nature/water/water_ocean_warp"
+        },
+        {
+          "name": "Water Oceana",
+          "path": "nature/water/water_oceana"
+        },
+        {
+          "name": "Water L01 A",
+          "path": "nature/water_l01_a"
+        },
+        {
+          "name": "Water L05 A Beneath",
+          "path": "nature/water_l05_a_beneath"
+        },
+        {
+          "name": "Silk Canyon Grass05A Grass09C",
+          "path": "silk/silk_canyon_grass05a_grass09c"
+        },
+        {
+          "name": "Silk Canyon Grass05A Ground02A",
+          "path": "silk/silk_canyon_grass05a_ground02a"
+        },
+        {
+          "name": "Silk Canyon Grass05A Rock05B",
+          "path": "silk/silk_canyon_grass05a_rock05b"
+        },
+        {
+          "name": "Silk Canyon Grass08C Grass09C",
+          "path": "silk/silk_canyon_grass08c_grass09c"
+        },
+        {
+          "name": "Silk Canyon Grass08C Rock05B",
+          "path": "silk/silk_canyon_grass08c_rock05b"
+        },
+        {
+          "name": "Silk Canyon Grass08D Rock05B",
+          "path": "silk/silk_canyon_grass08d_rock05b"
+        },
+        {
+          "name": "Silk Canyon Grass09C Rock05B",
+          "path": "silk/silk_canyon_grass09c_rock05b"
+        },
+        {
+          "name": "Silk Canyon Ground08C Grass09C",
+          "path": "silk/silk_canyon_ground08c_grass09c"
+        },
+        {
+          "name": "Blenddirtgrass01",
+          "path": "wolandic/blenddirtgrass01"
+        }
+      ]
+    },
+    "Desert": {
+      "defaults": {
+        "primary_floor": "common/nature/blend_grass_sandfloor009a_000",
+        "primary_cliff": "nature/cliff/stone_cliff_colorado",
+        "cheap_floor": "maps/emp_arid/blenddirtdirt_silk",
+        "cheap_cliff": "nature/cliffface001b",
+        "skybox": "empsky_day3"
+      },
+      "materials": [
+        {
+          "name": "Blend Grass Sandfloor009A 000",
+          "path": "common/nature/blend_grass_sandfloor009a_000"
+        },
+        {
+          "name": "Sandfloor009A",
+          "path": "common/nature/sandfloor009a"
+        },
+        {
+          "name": "Treefoliage02",
+          "path": "common/nature/treefoliage02"
+        },
+        {
+          "name": "Treefoliage02A",
+          "path": "common/nature/treefoliage02a"
+        },
+        {
+          "name": "Treefoliage02B",
+          "path": "common/nature/treefoliage02b"
+        },
+        {
+          "name": "Treefoliage02C",
+          "path": "common/nature/treefoliage02c"
+        },
+        {
+          "name": "Treefoliage02D",
+          "path": "common/nature/treefoliage02d"
+        },
+        {
+          "name": "Treefoliage02E",
+          "path": "common/nature/treefoliage02e"
+        },
+        {
+          "name": "Treefoliage03",
+          "path": "common/nature/treefoliage03"
+        },
+        {
+          "name": "Emp Water Tropical",
+          "path": "common/nature/water/emp_water_tropical"
+        },
+        {
+          "name": "Emp Water Tropical Beneath",
+          "path": "common/nature/water/emp_water_tropical_beneath"
+        },
+        {
+          "name": "Grainysand",
+          "path": "common/stene/grainysand"
+        },
+        {
+          "name": "Sand01",
+          "path": "common/stene/sand01"
+        },
+        {
+          "name": "Shittysand",
+          "path": "common/stene/shittysand"
+        },
+        {
+          "name": "Blend Grass01C Sand01A",
+          "path": "common/terrain/blend_grass01c_sand01a"
+        },
+        {
+          "name": "Blend Grass01C Sand01B",
+          "path": "common/terrain/blend_grass01c_sand01b"
+        },
+        {
+          "name": "Blend Sand02A Rock01A",
+          "path": "common/terrain/blend_sand02a_rock01a"
+        },
+        {
+          "name": "Blend Sandpebbles01Grass 01",
+          "path": "generic/l01/blend_sandpebbles01grass_01"
+        },
+        {
+          "name": "Blendsandpebblesgrass",
+          "path": "johnshandy/world/blendsandpebblesgrass"
+        },
+        {
+          "name": "Blendsandpebbleskeefrock",
+          "path": "johnshandy/world/blendsandpebbleskeefrock"
+        },
+        {
+          "name": "Blendsandpebblesreef",
+          "path": "johnshandy/world/blendsandpebblesreef"
+        },
+        {
+          "name": "Blendsandpebblesrock",
+          "path": "johnshandy/world/blendsandpebblesrock"
+        },
+        {
+          "name": "Grass2Sandpebbles02",
+          "path": "johnshandy/world/grass2sandpebbles02"
+        },
+        {
+          "name": "Sandpebbles2Sandpebbles",
+          "path": "johnshandy/world/sandpebbles2sandpebbles"
+        },
+        {
+          "name": "Blenddirtdirt Silk",
+          "path": "maps/emp_arid/blenddirtdirt_silk"
+        },
+        {
+          "name": "Blenddirtsand",
+          "path": "maps/emp_mvalley/blenddirtsand"
+        },
+        {
+          "name": "Redsand",
+          "path": "maps/emp_mvalley/redsand"
+        },
+        {
+          "name": "Blendrocksand008D",
+          "path": "nature/blendrocksand008d"
+        },
+        {
+          "name": "Blendsandgrass008A",
+          "path": "nature/blendsandgrass008a"
+        },
+        {
+          "name": "Arid Blendcearth1Rock6",
+          "path": "silk/arid_blendcearth1rock6"
+        },
+        {
+          "name": "Arid Blendcearth3Rock6",
+          "path": "silk/arid_blendcearth3rock6"
+        },
+        {
+          "name": "Arid Blendcearth3Rock6 X2",
+          "path": "silk/arid_blendcearth3rock6_x2"
+        },
+        {
+          "name": "Silk Beach01A Sand02A",
+          "path": "silk/silk_beach01a_sand02a"
+        },
+        {
+          "name": "Silk Beach01A Sand02A Clouds",
+          "path": "silk/silk_beach01a_sand02a_clouds"
+        },
+        {
+          "name": "Silk Beach01B Ground02A",
+          "path": "silk/silk_beach01b_ground02a"
+        },
+        {
+          "name": "Silk Beach01B Ground02A Clouds",
+          "path": "silk/silk_beach01b_ground02a_clouds"
+        },
+        {
+          "name": "Silk Sand01A Sand02A",
+          "path": "silk/silk_sand01a_sand02a"
+        },
+        {
+          "name": "Silk Sand01A Sand02A Clouds",
+          "path": "silk/silk_sand01a_sand02a_clouds"
+        },
+        {
+          "name": "Silk Sand01B Sand02B",
+          "path": "silk/silk_sand01b_sand02b"
+        },
+        {
+          "name": "Silk Sand01B Sand02B Clouds",
+          "path": "silk/silk_sand01b_sand02b_clouds"
+        },
+        {
+          "name": "Silk Sand03A Ground06B",
+          "path": "silk/silk_sand03a_ground06b"
+        },
+        {
+          "name": "Silk Sand03A Ground06B Clouds",
+          "path": "silk/silk_sand03a_ground06b_clouds"
+        },
+        {
+          "name": "Silk Sand03B Ground06A",
+          "path": "silk/silk_sand03b_ground06a"
+        },
+        {
+          "name": "Silk Sand03B Ground06A Clouds",
+          "path": "silk/silk_sand03b_ground06a_clouds"
+        },
+        {
+          "name": "Silk Sand03C Ground06B",
+          "path": "silk/silk_sand03c_ground06b"
+        },
+        {
+          "name": "Silk Sand03C Ground06B Clouds",
+          "path": "silk/silk_sand03c_ground06b_clouds"
+        },
+        {
+          "name": "Sandbox",
+          "path": "tutorial/signs/sandbox"
+        },
+        {
+          "name": "Blendsandgrass01",
+          "path": "wolandic/blendsandgrass01"
+        }
+      ]
+    },
+    "Snow": {
+      "defaults": {
+        "primary_floor": "common/terrain/blend_snow01_rock01a",
+        "primary_cliff": "common/nature/mountain_wall_000",
+        "cheap_floor": "common/emp_snow/snowfloor001b",
+        "cheap_cliff": "common/nature/mountain_wall_000",
+        "skybox": "empsky_overcast1"
+      },
+      "materials": [
+        {
+          "name": "Assault Parking Decal01",
+          "path": "common/emp_snow/assault_parking_decal01"
+        },
+        {
+          "name": "Blend Concretesnow01A",
+          "path": "common/emp_snow/blend_concretesnow01a"
+        },
+        {
+          "name": "Blend Concretesnow02B",
+          "path": "common/emp_snow/blend_concretesnow02b"
+        },
+        {
+          "name": "Blend Roadsnow01A",
+          "path": "common/emp_snow/blend_roadsnow01a"
+        },
+        {
+          "name": "Blend Roadsnow02B",
+          "path": "common/emp_snow/blend_roadsnow02b"
+        },
+        {
+          "name": "Blend Snowsidewalk01A",
+          "path": "common/emp_snow/blend_snowsidewalk01a"
+        },
+        {
+          "name": "Blend Snowsidewalk02B",
+          "path": "common/emp_snow/blend_snowsidewalk02b"
+        },
+        {
+          "name": "Blend Snowsnow01A",
+          "path": "common/emp_snow/blend_snowsnow01a"
+        },
+        {
+          "name": "Blend Snowsnow02B",
+          "path": "common/emp_snow/blend_snowsnow02b"
+        },
+        {
+          "name": "Blend Snowsnow02C",
+          "path": "common/emp_snow/blend_snowsnow02c"
+        },
+        {
+          "name": "Concretewall03 Nobump",
+          "path": "common/emp_snow/concretewall03_nobump"
+        },
+        {
+          "name": "Concretewall03A Nobump",
+          "path": "common/emp_snow/concretewall03a_nobump"
+        },
+        {
+          "name": "Flag Capmodel1A",
+          "path": "common/emp_snow/flag_capmodel1a"
+        },
+        {
+          "name": "Glasspanel01 Lightmap",
+          "path": "common/emp_snow/glasspanel01_lightmap"
+        },
+        {
+          "name": "Icawall05D Decal01",
+          "path": "common/emp_snow/icawall05d_decal01"
+        },
+        {
+          "name": "Icawall05D Decal01A",
+          "path": "common/emp_snow/icawall05d_decal01a"
+        },
+        {
+          "name": "Snowfloor001B",
+          "path": "common/emp_snow/snowfloor001b"
+        },
+        {
+          "name": "Snowfloor002B",
+          "path": "common/emp_snow/snowfloor002b"
+        },
+        {
+          "name": "Snowfloor003B",
+          "path": "common/emp_snow/snowfloor003b"
+        },
+        {
+          "name": "Blend Snow01 Rock01A",
+          "path": "common/terrain/blend_snow01_rock01a"
+        },
+        {
+          "name": "Blend Snow Wall",
+          "path": "dz/blend_snow_wall"
+        },
+        {
+          "name": "Silk Chain Blendrock9Bbsnow1A",
+          "path": "maps/emp_chain/silk_chain_blendrock9bbsnow1a"
+        },
+        {
+          "name": "Silk Snow02B Concretefloor10B",
+          "path": "silk/silk_snow02b_concretefloor10b"
+        },
+        {
+          "name": "Silk Snow02B Pavingground03A",
+          "path": "silk/silk_snow02b_pavingground03a"
+        },
+        {
+          "name": "Silk Snow02B Roadfloor06",
+          "path": "silk/silk_snow02b_roadfloor06"
+        },
+        {
+          "name": "Silk Snow02B Snow03B Seamless",
+          "path": "silk/silk_snow02b_snow03b_seamless"
+        }
+      ]
+    },
+    "Industrial": {
+      "defaults": {
+        "primary_floor": "common/stene/dirtyconcrete",
+        "primary_cliff": "common/nature/mountain_wall_000",
+        "cheap_floor": "common/stene/dirtyconcrete",
+        "cheap_cliff": "nature/cliffface001b",
+        "skybox": "empsky_overcast2"
+      },
+      "materials": [
+        {
+          "name": "Pavingground01",
+          "path": "common/concrete/pavingground01"
+        },
+        {
+          "name": "Pavingground01B",
+          "path": "common/concrete/pavingground01b"
+        },
+        {
+          "name": "Pavingground02A",
+          "path": "common/concrete/pavingground02a"
+        },
+        {
+          "name": "Pavingground03A",
+          "path": "common/concrete/pavingground03a"
+        },
+        {
+          "name": "Pavingground03B",
+          "path": "common/concrete/pavingground03b"
+        },
+        {
+          "name": "Dirtyconcrete",
+          "path": "common/stene/dirtyconcrete"
+        },
+        {
+          "name": "Tarmac 01",
+          "path": "nature/terrain/tarmac_01"
+        },
+        {
+          "name": "Tarmac 02",
+          "path": "nature/terrain/tarmac_02"
+        },
+        {
+          "name": "Silk Pavingground02A",
+          "path": "silk/silk_pavingground02a"
+        }
+      ]
+    },
+    "Wasteland": {
+      "defaults": {
+        "primary_floor": "common/terrain/redground2",
+        "primary_cliff": "nature/cliff/stone_cliff_colorado",
+        "cheap_floor": "common/terrain/redground2",
+        "cheap_cliff": "nature/cliffface001b",
+        "skybox": "empsky_sunset2"
+      },
+      "materials": [
+        {
+          "name": "Treebranch Tree4 Red",
+          "path": "common/nature/treebranch_tree4_red"
+        },
+        {
+          "name": "Blend Rubblefloor04 Rubblefloor05",
+          "path": "common/rubble/blend_rubblefloor04_rubblefloor05"
+        },
+        {
+          "name": "Blend Red2 Red3",
+          "path": "common/terrain/blend_red2_red3"
+        },
+        {
+          "name": "Blend Red2 Red4",
+          "path": "common/terrain/blend_red2_red4"
+        },
+        {
+          "name": "Blend Red3 Red4",
+          "path": "common/terrain/blend_red3_red4"
+        },
+        {
+          "name": "Redground2",
+          "path": "common/terrain/redground2"
+        },
+        {
+          "name": "Redground3",
+          "path": "common/terrain/redground3"
+        },
+        {
+          "name": "Redground4",
+          "path": "common/terrain/redground4"
+        },
+        {
+          "name": "Blend Rocklayered01Grass 01",
+          "path": "generic/l01/blend_rocklayered01grass_01"
+        },
+        {
+          "name": "Blend Rocklayered01Grass 01Skybox",
+          "path": "generic/l01/blend_rocklayered01grass_01skybox"
+        },
+        {
+          "name": "Blenddirtdirt",
+          "path": "maps/emp_mvalley/blenddirtdirt"
+        },
+        {
+          "name": "Blenddirtdirt2",
+          "path": "maps/emp_mvalley/blenddirtdirt2"
+        },
+        {
+          "name": "Blenddirtdirt 3Dsky",
+          "path": "maps/emp_mvalley/blenddirtdirt_3dsky"
+        },
+        {
+          "name": "Blenddirtterra",
+          "path": "maps/emp_mvalley/blenddirtterra"
+        },
+        {
+          "name": "Blendgraveldirt3",
+          "path": "maps/emp_mvalley/blendgraveldirt3"
+        },
+        {
+          "name": "Ground Overlay",
+          "path": "maps/emp_mvalley/ground_overlay"
+        },
+        {
+          "name": "Ground Overlay2",
+          "path": "maps/emp_mvalley/ground_overlay2"
+        },
+        {
+          "name": "Redground2",
+          "path": "maps/emp_mvalley/redground2"
+        },
+        {
+          "name": "Redground3",
+          "path": "maps/emp_mvalley/redground3"
+        },
+        {
+          "name": "Redground4",
+          "path": "maps/emp_mvalley/redground4"
+        },
+        {
+          "name": "Rock Overlay1",
+          "path": "maps/emp_mvalley/rock_overlay1"
+        },
+        {
+          "name": "Rock Overlay2",
+          "path": "maps/emp_mvalley/rock_overlay2"
+        },
+        {
+          "name": "Rock Overlay3",
+          "path": "maps/emp_mvalley/rock_overlay3"
+        },
+        {
+          "name": "Rock Overlay4",
+          "path": "maps/emp_mvalley/rock_overlay4"
+        }
+      ]
+    },
+    "Generic": {
+      "defaults": {
+        "primary_floor": "common/nature/blend_grass_mud_003",
+        "primary_cliff": "common/nature/mountain_wall_000",
+        "cheap_floor": "common/terrain/blend_grass01a_dirt01a_nodetail",
+        "cheap_cliff": "nature/cliffface001b",
+        "skybox": "empsky_overcast2"
+      },
+      "materials": [
+        {
+          "name": "Terrain Rock 02",
+          "path": "common/terrain/terrain_rock_02"
+        },
+        {
+          "name": "Isle Cliffsiderock01",
+          "path": "johnshandy/world/isle_cliffsiderock01"
+        },
+        {
+          "name": "Silk Chain Blendground4Cbground7Ab Clouds Detail",
+          "path": "maps/emp_chain/silk_chain_blendground4cbground7ab_clouds_detail"
+        },
+        {
+          "name": "Silk Chain Blendrock9Bbground2Db",
+          "path": "maps/emp_chain/silk_chain_blendrock9bbground2db"
+        },
+        {
+          "name": "Silk Chain Blendrock9Bbground5Db",
+          "path": "maps/emp_chain/silk_chain_blendrock9bbground5db"
+        },
+        {
+          "name": "Silk Chain Blendrock9Bbground7Ab",
+          "path": "maps/emp_chain/silk_chain_blendrock9bbground7ab"
+        },
+        {
+          "name": "Silk Chain Blendrock9Bbrock10B",
+          "path": "maps/emp_chain/silk_chain_blendrock9bbrock10b"
+        },
+        {
+          "name": "Silk Canyon Ground03A Ground02A",
+          "path": "silk/silk_canyon_ground03a_ground02a"
+        },
+        {
+          "name": "Silk Canyon Ground03A Ground06B",
+          "path": "silk/silk_canyon_ground03a_ground06b"
+        },
+        {
+          "name": "Silk Canyon Ground06B Rock05B",
+          "path": "silk/silk_canyon_ground06b_rock05b"
+        },
+        {
+          "name": "Silk Canyon Rock04C Rock05B",
+          "path": "silk/silk_canyon_rock04c_rock05b"
+        },
+        {
+          "name": "Silk Rock04A Rock05A",
+          "path": "silk/silk_rock04a_rock05a"
+        },
+        {
+          "name": "Silk Rock04B Rock05A",
+          "path": "silk/silk_rock04b_rock05a"
+        }
+      ]
+    }
+  },
+  "skyboxes": [
+    "empsky_day1",
+    "empsky_day2",
+    "empsky_day3",
+    "empsky_overcast1",
+    "empsky_overcast2",
+    "empsky_overcast3yellow",
+    "empsky_sunset1",
+    "empsky_sunset2"
+  ]
 }

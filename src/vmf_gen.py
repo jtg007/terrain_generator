@@ -12,8 +12,10 @@ import random
 import numpy as np
 from PIL import Image
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, List, Tuple, Dict, Any
+
+from src.terrain_pipeline import slope_to_alpha
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "tools" / "vmflib"))
 from vmflib import vmf
@@ -359,6 +361,25 @@ def spawn_lighting(
 
     valve_map.world.children.append(light_ent)
     valve_map.world.children.append(sun_ent)
+
+
+def point_to_segment_dist(p, a, b):
+    """Calculate the shortest distance from point p to line segment ab."""
+    px, py = p
+    ax, ay = a
+    bx, by = b
+    
+    dx = bx - ax
+    dy = by - ay
+    if dx == 0 and dy == 0:
+        return math.sqrt((px - ax)**2 + (py - ay)**2)
+        
+    t = ((px - ax) * dx + (py - ay) * dy) / (dx*dx + dy*dy)
+    t = max(0, min(1, t))
+    
+    closest_x = ax + t * dx
+    closest_y = ay + t * dy
+    return math.sqrt((px - closest_x)**2 + (py - closest_y)**2)
 
 
 def flatten_terrain_at_location(
@@ -1240,8 +1261,13 @@ class PipelineSpec:
     custom_nf_base_x: Optional[float] = None
     custom_nf_base_y: Optional[float] = None
     custom_resources: Optional[List[Tuple[float, float]]] = None
+    custom_layout_nodes: Optional[List[Any]] = None
+    custom_layout_connections: Optional[List[Any]] = None
     manual_terrain: bool = False
     custom_tile_materials: Optional[Dict[Tuple[int, int], str]] = None
+    
+    current_theme: str = "Temperate"
+    corridor_detail_width: int = 2048
 
     def default_imp_base(self) -> Tuple[float, float]:
         """
@@ -1285,6 +1311,51 @@ class DisplacementVMF:
         self.heightmap: Optional[np.ndarray] = None
         self.heightmap_width: int = 0
         self.heightmap_height: int = 0
+        
+        # Load thematic defaults
+        self.themes = {}
+        textures_path = Path(__file__).parent.parent / "config" / "textures.json"
+        if textures_path.exists():
+            try:
+                with open(textures_path, "r") as f:
+                    self.themes = json.load(f).get("themes", {})
+            except Exception as e:
+                print(f"Warning: Failed to load themes for VMF gen: {e}")
+
+    def is_tile_near_playable(self, tx: int, ty: int) -> bool:
+        """Check if a tile (tx, ty) is within the corridor_detail_width of a lane or base."""
+        tile_size = self.spec.terrain_tile_size
+        map_w = self.spec.terrain_tiles_x * tile_size
+        map_h = self.spec.terrain_tiles_y * tile_size
+        origin_x = int(-map_w / 2)
+        origin_y = int(-map_h / 2)
+        
+        twx = origin_x + (tx + 0.5) * tile_size
+        twy = origin_y + (ty + 0.5) * tile_size
+        
+        threshold = getattr(self.spec, "corridor_detail_width", 2048)
+        
+        # Check bases
+        bases = []
+        if self.spec.custom_imp_base_x is not None:
+            bases.append((self.spec.custom_imp_base_x, self.spec.custom_imp_base_y))
+        if self.spec.custom_nf_base_x is not None:
+            bases.append((self.spec.custom_nf_base_x, self.spec.custom_nf_base_y))
+            
+        for bx, by in bases:
+            if math.sqrt((twx - bx)**2 + (twy - by)**2) < threshold:
+                return True
+                
+        # Check lanes
+        if self.spec.custom_layout_connections and self.spec.custom_layout_nodes:
+            nodes = {n.id: n for n in self.spec.custom_layout_nodes}
+            for conn in self.spec.custom_layout_connections:
+                n1 = nodes.get(conn.from_id)
+                n2 = nodes.get(conn.to_id)
+                if not n1 or not n2: continue
+                if point_to_segment_dist((twx, twy), (n1.x, n1.y), (n2.x, n2.y)) < threshold:
+                    return True
+        return False
 
     def load_heightmap(self, path: str, auto_resize: bool = True) -> np.ndarray:
         """Load heightmap from file, optionally auto-resizing to required dimensions."""
@@ -1372,6 +1443,9 @@ class DisplacementVMF:
         else:
             valve_map.world.properties.pop("detailmaterial", None)
             valve_map.world.properties.pop("detailvbsp", None)
+
+        valve_map.world.properties["generator_version"] = "2.0-themed-optimized"
+        valve_map.world.properties["current_theme"] = getattr(self.spec, "current_theme", "Temperate")
         height_array = (self.heightmap * 255).astype(np.uint8)
         img_height, img_width = height_array.shape
 
@@ -1519,11 +1593,117 @@ class DisplacementVMF:
                 for i in range((2**power) + 1):
                     disp_info.allowed_verts.properties[f"row{i}"] = "-1"
 
-                # Determine material for this tile
+                # Selective Procedural Texturing based on Theme and Lane Proximity
                 tile_material = self.spec.terrain_material
+                is_playable = self.is_tile_near_playable(col_idx, row_idx)
+                
+                theme_name = getattr(self.spec, "current_theme", "Temperate")
+                theme = self.themes.get(theme_name, self.themes.get("Generic", {}))
+                defaults = theme.get("defaults", {})
+                
+                # Debug first tile
+                if col_idx == 0 and row_idx == 0:
+                    print(f"DEBUG: Using theme '{theme_name}', is_playable example: {is_playable}")
+                
+                # Determine "Standard" material for this tile if not painted
+                if not (hasattr(self.spec, "custom_tile_materials") and self.spec.custom_tile_materials and (col_idx, row_idx) in self.spec.custom_tile_materials):
+                    # Average tile height to determine if it's a cliff
+                    avg_h = np.mean(height_distances)
+                    # Slope check for cliff vs floor
+                    # We can use the center vertex slope or average
+                    mid = (grid_size - 1) // 2
+                    
+                    # Calculate center slope for procedural choice
+                    px = col_idx * (grid_size - 1) + mid
+                    py = row_idx * (grid_size - 1) + mid
+                    px_m, px_p = max(0, px - 1), min(img_width - 1, px + 1)
+                    py_m, py_p = max(0, py - 1), min(img_height - 1, py + 1)
+                    
+                    h_xm = working_heightmap[py, px_m] * height_scale
+                    h_xp = working_heightmap[py, px_p] * height_scale
+                    h_ym = working_heightmap[py_m, px] * height_scale
+                    h_yp = working_heightmap[py_p, px] * height_scale
+                    
+                    slope = math.sqrt(((h_xp - h_xm)/2.0/tile_size)**2 + ((h_yp - h_ym)/2.0/tile_size)**2)
+                    # Scenery cliffs: use a lower threshold (0.2) so any wall looks like rock
+                    is_cliff = slope > 0.2 
+                    
+                    # Safety: If map center is near, treat as playable (fallback)
+                    twx = offset_x + tile_size / 2.0
+                    twy = offset_y + tile_size / 2.0
+                    dist_to_center = math.sqrt(twx**2 + twy**2)
+                    
+                    # Action zone threshold
+                    detail_radius = getattr(self.spec, "corridor_detail_width", 2048)
+                    safety_radius = 4096
+                    
+                    # Calculate "Playable Score" (1.0 = deep in action, 0.0 = deep scenery)
+                    if is_playable:
+                        playable_score = 1.0
+                    else:
+                        # Fade out safety zone
+                        playable_score = max(0, min(1, (safety_radius - dist_to_center) / 2048.0))
+                    
+                    if playable_score > 0.5:
+                        # ACTION ZONE: Use high-quality blend for everything.
+                        # Alphas will handle the rock/ground transition perfectly.
+                        tile_material = defaults.get("primary_floor", tile_material)
+                    else:
+                        # SCENERY ZONE: Use cheap variants
+                        # If it's a cliff, use rock. If flat, use the "cheap" floor.
+                        if is_cliff:
+                            tile_material = defaults.get("cheap_cliff", tile_material)
+                        else:
+                            tile_material = defaults.get("cheap_floor", tile_material)
+
+                # Manual Paint Override
                 if hasattr(self.spec, "custom_tile_materials") and self.spec.custom_tile_materials:
                     if (col_idx, row_idx) in self.spec.custom_tile_materials:
                         tile_material = self.spec.custom_tile_materials[(col_idx, row_idx)]
+
+                # Selective Alpha Blending: Generate slope-based alphas ONLY for playable/painted blend materials
+                is_blend = "blend" in tile_material.lower()
+                # Skip alpha generation for distant "cheap" scenery to save VMF size
+                if is_blend and (is_playable or (col_idx, row_idx) in getattr(self.spec, "custom_tile_materials", {})):
+                    # Reference the original float heightmap for high-precision slope math
+                    # working_heightmap is [img_height, img_width]
+                    for iy in range(sample_size):
+                        row_alphas = []
+                        for ix in range(sample_size):
+                            # Global coordinates in the heightmap
+                            px = col_idx * (grid_size - 1) + ix
+                            py = row_idx * (grid_size - 1) + iy
+                            
+                            # Central difference for slope (match terrain_pipeline.py logic)
+                            # Spacing is effectively 1 vertex unit (dz_dr/cell_size in pipeline)
+                            # but we need to normalize to match the expected thresholds.
+                            
+                            # Boundary-safe indices
+                            px_m = max(0, px - 1)
+                            px_p = min(img_width - 1, px + 1)
+                            py_m = max(0, py - 1)
+                            py_p = min(img_height - 1, py + 1)
+                            
+                            # Heights in world units
+                            h_xm = working_heightmap[py, px_m] * height_scale
+                            h_xp = working_heightmap[py, px_p] * height_scale
+                            h_ym = working_heightmap[py_m, px] * height_scale
+                            h_yp = working_heightmap[py_p, px] * height_scale
+                            
+                            # dz_dx and dz_dy over 2 vertex steps
+                            dz_dx = (h_xp - h_xm) / 2.0
+                            dz_dy = (h_yp - h_ym) / 2.0
+                            
+                            # Pipeline slope normalization: dz / tile_size
+                            slope_x = dz_dx / tile_size
+                            slope_y = dz_dy / tile_size
+                            slope = math.sqrt(slope_x**2 + slope_y**2)
+                            
+                            # Apply standard thresholds from terrain_pipeline.py
+                            alpha = slope_to_alpha(slope)
+                            row_alphas.append(alpha)
+                        
+                        disp_info.alphas.properties[f"row{iy}"] = " ".join(map(str, row_alphas))
 
                 # Block centered at Z=-8 -> top face at Z=0, bottom at Z=-16
                 floor_block = Block(

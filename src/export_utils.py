@@ -84,14 +84,12 @@ def choose_compile_safe_material(
         is_unsafe = texture_safety.get(requested_material, False) is False
         
         if is_unsafe:
-            safe_fallback = COMPILE_SAFE_NODETAIL_MATERIAL
-            if requested_material != safe_fallback:
-                warning = (
-                    f"Texture '{requested_material}' spawns detail props and is not recommended for large maps ({map_width}x{map_height}). "
-                    f"Automatically switched to '{safe_fallback}' to prevent performance issues. "
-                    f"To use this texture, reduce map size or enable 'Use nodetail texture' option."
-                )
-                return safe_fallback, warning
+            warning = (
+                f"Texture '{requested_material}' spawns detail props. On large maps, "
+                "the system automatically optimizes scenery walls using 'cheap' variants to ensure "
+                "performance while keeping your playable lanes high-detail."
+            )
+            return requested_material, warning
 
     return requested_material, None
 
@@ -209,6 +207,10 @@ def export_vmf(
         custom_nf_base_y=config_model.custom_nf_base_y,
         custom_resources=config_model.custom_resources,
         manual_terrain=config_model.manual_terrain,
+        custom_layout_nodes=getattr(spec, "custom_layout_nodes", None),
+        custom_layout_connections=getattr(spec, "custom_layout_connections", None),
+        current_theme=getattr(config_model, "current_theme", "Temperate"),
+        corridor_detail_width=getattr(config_model, "corridor_detail_width", 2048),
         custom_tile_materials=spec.custom_tile_materials,
     )
 

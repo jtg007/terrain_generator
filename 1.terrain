@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "map_name": "gui_terrain",
+  "config": {
+    "seed": 847849906,
+    "tiles_x": 16,
+    "tiles_y": 16,
+    "cell_size": 1856,
+    "displacement_power": 2,
+    "roughness": 0.66,
+    "erosion_strength": 0.5,
+    "height_scale": 2048,
+    "skybox_ceiling": 4096,
+    "topology": "canyon",
+    "lane_width_scale": 0.36,
+    "mountain_height_scale": 1.49,
+    "lane_elevation": 0.0,
+    "feature_scale": 4.23,
+    "warp_strength": 0.072,
+    "plateau_noise": 0.5,
+    "maze_size": 90,
+    "lane_numbers": 5,
+    "wall_slope": 0.08,
+    "lane_depth": 1.0,
+    "blur_radius": 0.0,
+    "preset_name": "mixed",
+    "custom_image_path": null,
+    "terrain_material": "common/nature/blend_grass_mountainwall_000",
+    "skybox": "empsky_overcast3yellow",
+    "use_nodetail_texture": false,
+    "base_clear_radius": 0,
+    "base_flatness": 0.8,
+    "resource_clear_radius": 256,
+    "lane_node_radius": 905,
+    "generate_lanes": true,
+    "disable_commander": false,
+    "disable_buildings": false,
+    "disable_resource_nodes": false,
+    "disable_capture_points": false,
+    "minimal_map": false,
+    "terrain_only": false,
+    "custom_imp_base_x": 7660.03864604024,
+    "custom_imp_base_y": 7359.644973646505,
+    "custom_nf_base_x": -4505.9050859060235,
+    "custom_nf_base_y": -14018.371378374295,
+    "custom_resources": [
+      [
+        -9562.531904533895,
+        3504.592844593574
+      ],
+      [
+        3855.052129052931,
+        -5807.610999612208
+      ]
+    ],
+    "manual_terrain": false,
+    "invert_lanes": false,
+    "canyon_natural": false,
+    "preview_with_pipeline": false
+  },
+  "layout": {
+    "nodes": [],
+    "connections": [],
+    "resources": [
+      [
+        -9562.531904533895,
+        3504.592844593574
+      ],
+      [
+        3855.052129052931,
+        -5807.610999612208
+      ]
+    ],
+    "imp_base": [
+      7660.03864604024,
+      7359.644973646505
+    ],
+    "nf_base": [
+      -4505.9050859060235,
+      -14018.371378374295
+    ]
+  },
+  "sculpt": {
+    "height_overlay": "eJztwQEBAAAAgiD/r25IQAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJ0bCCYAAQ==",
+    "height_overlay_shape": [
+      129,
+      129
+    ],
+    "height_overlay_dtype": "float64",
+    "global_mask": "eJztwTENAAAAw6DUv+nJ2AMUAAAAAAAAAAAAAAAAAAAAQF8DnlFBAg==",
+    "global_mask_shape": [
+      129,
+      129
+    ],
+    "global_mask_dtype": "bool"
+  }
+}

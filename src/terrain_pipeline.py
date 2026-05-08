@@ -1973,8 +1973,8 @@ def apply_pipeline_for_preview(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
 
 def slope_to_alpha(
     slope: float,
-    flat_threshold: float = 0.005,
-    steep_threshold: float = 0.03,
+    flat_threshold: float = 0.2,
+    steep_threshold: float = 0.7,
 ) -> int:
     """
     Convert slope value to alpha value for blend materials.
