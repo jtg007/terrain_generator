@@ -1278,7 +1278,40 @@ class TerrainGeneratorGUI(QMainWindow):
             make_slider_row(self.slider_corridor_width, self.lbl_corridor_width_val), 1
         )
         sec_theme.content_layout.addLayout(cdw_row)
+
+        # Transition Width
+        tw_row = QHBoxLayout()
+        tw_row.setSpacing(8)
+        lbl_tw = QLabel("Transition Width")
+        lbl_tw.setObjectName("FieldLabel")
+        lbl_tw.setToolTip("Width of the blended belt between Action and Scenery zones")
+        tw_row.addWidget(lbl_tw)
+        self.slider_transition_width = QSlider(Qt.Horizontal)
+        self.slider_transition_width.setRange(0, 8192)
+        self.lbl_transition_width_val = QLabel("1536")
+        tw_row.addWidget(
+            make_slider_row(self.slider_transition_width, self.lbl_transition_width_val), 1
+        )
+        sec_theme.content_layout.addLayout(tw_row)
+
+        # Hero Prop Density
+        hpd_row = QHBoxLayout()
+        hpd_row.setSpacing(8)
+        lbl_hpd = QLabel("Scenery Props")
+        lbl_hpd.setObjectName("FieldLabel")
+        lbl_hpd.setToolTip("Density of large hero prop clusters in the background")
+        hpd_row.addWidget(lbl_hpd)
+        self.slider_hero_prop = QSlider(Qt.Horizontal)
+        self.slider_hero_prop.setRange(0, 100)
+        self.lbl_hero_prop_val = QLabel("50%")
+        hpd_row.addWidget(
+            make_slider_row(self.slider_hero_prop, self.lbl_hero_prop_val, "%"), 1
+        )
+        sec_theme.content_layout.addLayout(hpd_row)
+
         self.slider_corridor_width.valueChanged.connect(self.sync_to_model)
+        self.slider_transition_width.valueChanged.connect(self.sync_to_model)
+        self.slider_hero_prop.valueChanged.connect(self.sync_to_model)
         self.combo_skybox.currentIndexChanged.connect(self.sync_to_model)
 
 
@@ -2464,6 +2497,10 @@ class TerrainGeneratorGUI(QMainWindow):
         self.combo_theme.setCurrentText(self.config_model.current_theme)
         self.slider_corridor_width.setValue(self.config_model.corridor_detail_width)
         self.lbl_corridor_width_val.setText(str(self.config_model.corridor_detail_width))
+        self.slider_transition_width.setValue(self.config_model.transition_width)
+        self.lbl_transition_width_val.setText(str(self.config_model.transition_width))
+        self.slider_hero_prop.setValue(int(self.config_model.hero_prop_density * 100))
+        self.lbl_hero_prop_val.setText(f"{int(self.config_model.hero_prop_density * 100)}%")
 
         if self.config_model.custom_image_path:
             self.chk_custom_image.setChecked(True)
@@ -2504,6 +2541,10 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.current_theme = self.combo_theme.currentText()
         self.config_model.corridor_detail_width = self.slider_corridor_width.value()
         self.lbl_corridor_width_val.setText(str(self.config_model.corridor_detail_width))
+        self.config_model.transition_width = self.slider_transition_width.value()
+        self.lbl_transition_width_val.setText(str(self.config_model.transition_width))
+        self.config_model.hero_prop_density = self.slider_hero_prop.value() / 100.0
+        self.lbl_hero_prop_val.setText(f"{self.slider_hero_prop.value()}%")
         self.config_model.lane_width_scale = self.slider_lane_width.value() / 100.0
         if hasattr(self, "preview_widget"):
             self.preview_widget.set_lane_scale(self.config_model.lane_width_scale)

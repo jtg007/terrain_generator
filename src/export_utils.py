@@ -182,6 +182,7 @@ def export_vmf(
     vmf_spec = PipelineSpec(
         map_name=output_filename,
         heightmap_path=str(hm_path),
+        seed=config_model.seed,
         terrain_max_height=grid.max_height(),
         skybox_ceiling=config_model.skybox_ceiling,
         terrain_actual_max=grid.max_height(),
@@ -211,6 +212,9 @@ def export_vmf(
         custom_layout_connections=getattr(spec, "custom_layout_connections", None),
         current_theme=getattr(config_model, "current_theme", "Temperate"),
         corridor_detail_width=getattr(config_model, "corridor_detail_width", 2048),
+        transition_width=getattr(config_model, "transition_width", 1536),
+        scenery_variation_noise=getattr(config_model, "scenery_variation_noise", 0.4),
+        hero_prop_density=getattr(config_model, "hero_prop_density", 0.5),
         custom_tile_materials=spec.custom_tile_materials,
     )
 

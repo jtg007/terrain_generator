@@ -1232,6 +1232,7 @@ class PipelineSpec:
 
     map_name: str
     heightmap_path: Optional[str] = None
+    seed: int = 12345
 
     terrain_max_height: int = 512
     skybox_ceiling: int = 4096
@@ -1268,6 +1269,9 @@ class PipelineSpec:
     
     current_theme: str = "Temperate"
     corridor_detail_width: int = 2048
+    transition_width: int = 1536
+    scenery_variation_noise: float = 0.4
+    hero_prop_density: float = 0.5
 
     def default_imp_base(self) -> Tuple[float, float]:
         """
@@ -1322,8 +1326,11 @@ class DisplacementVMF:
             except Exception as e:
                 print(f"Warning: Failed to load themes for VMF gen: {e}")
 
-    def is_tile_near_playable(self, tx: int, ty: int) -> bool:
-        """Check if a tile (tx, ty) is within the corridor_detail_width of a lane or base."""
+    def calculate_tile_zone_score(self, tx: int, ty: int) -> float:
+        """
+        Calculate a continuous zone score (0.0 to 1.0) for a tile.
+        1.0 = deep action zone, 0.0 = deep scenery.
+        """
         tile_size = self.spec.terrain_tile_size
         map_w = self.spec.terrain_tiles_x * tile_size
         map_h = self.spec.terrain_tiles_y * tile_size
@@ -1334,28 +1341,54 @@ class DisplacementVMF:
         twy = origin_y + (ty + 0.5) * tile_size
         
         threshold = getattr(self.spec, "corridor_detail_width", 2048)
+        transition = getattr(self.spec, "transition_width", 1536)
+
+        min_dist = float('inf')
         
         # Check bases
         bases = []
         if self.spec.custom_imp_base_x is not None:
             bases.append((self.spec.custom_imp_base_x, self.spec.custom_imp_base_y))
+        else:
+            bases.append(self.spec.default_imp_base())
+
         if self.spec.custom_nf_base_x is not None:
             bases.append((self.spec.custom_nf_base_x, self.spec.custom_nf_base_y))
+        else:
+            bases.append(self.spec.default_nf_base())
             
         for bx, by in bases:
-            if math.sqrt((twx - bx)**2 + (twy - by)**2) < threshold:
-                return True
+            min_dist = min(min_dist, math.sqrt((twx - bx)**2 + (twy - by)**2))
                 
         # Check lanes
         if self.spec.custom_layout_connections and self.spec.custom_layout_nodes:
-            nodes = {n.id: n for n in self.spec.custom_layout_nodes}
+            # Pre-map nodes for faster lookups in serialized dict-like data
+            nodes_map = None
+
             for conn in self.spec.custom_layout_connections:
-                n1 = nodes.get(conn.from_id)
-                n2 = nodes.get(conn.to_id)
-                if not n1 or not n2: continue
-                if point_to_segment_dist((twx, twy), (n1.x, n1.y), (n2.x, n2.y)) < threshold:
-                    return True
-        return False
+                try:
+                    if hasattr(conn, 'start_node'):
+                        p1 = (conn.start_node.x, conn.start_node.y)
+                        p2 = (conn.end_node.x, conn.end_node.y)
+                    else:
+                        # Fallback for dict-like connections from serialization
+                        if nodes_map is None:
+                            nodes_map = {n.id if hasattr(n, 'id') else n.get('id'): n for n in self.spec.custom_layout_nodes}
+                        n1 = nodes_map.get(conn.from_id if hasattr(conn, 'from_id') else conn.get('from_id'))
+                        n2 = nodes_map.get(conn.to_id if hasattr(conn, 'to_id') else conn.get('to_id'))
+                        p1 = (n1.x, n1.y) if hasattr(n1, 'x') else (n1.get('x'), n1.get('y'))
+                        p2 = (n2.x, n2.y) if hasattr(n2, 'x') else (n2.get('x'), n2.get('y'))
+
+                    min_dist = min(min_dist, point_to_segment_dist((twx, twy), p1, p2))
+                except Exception:
+                    continue
+
+        # Score calculation: 1.0 inside threshold, fades to 0.0 over transition_width
+        if min_dist <= threshold:
+            return 1.0
+
+        score = 1.0 - (min_dist - threshold) / max(1.0, transition)
+        return max(0.0, min(1.0, score))
 
     def load_heightmap(self, path: str, auto_resize: bool = True) -> np.ndarray:
         """Load heightmap from file, optionally auto-resizing to required dimensions."""
@@ -1446,6 +1479,12 @@ class DisplacementVMF:
 
         valve_map.world.properties["generator_version"] = "2.0-themed-optimized"
         valve_map.world.properties["current_theme"] = getattr(self.spec, "current_theme", "Temperate")
+
+        # Scenery Hero Prop Budget
+        self.prop_count = 0
+        max_hero_props = 256
+        hero_prop_density = getattr(self.spec, "hero_prop_density", 0.5)
+
         height_array = (self.heightmap * 255).astype(np.uint8)
         img_height, img_width = height_array.shape
 
@@ -1593,9 +1632,9 @@ class DisplacementVMF:
                 for i in range((2**power) + 1):
                     disp_info.allowed_verts.properties[f"row{i}"] = "-1"
 
-                # Selective Procedural Texturing based on Theme and Lane Proximity
+                # Selective Procedural Texturing based on Theme and Zone Scoring
                 tile_material = self.spec.terrain_material
-                is_playable = self.is_tile_near_playable(col_idx, row_idx)
+                zone_score = self.calculate_tile_zone_score(col_idx, row_idx)
                 
                 theme_name = getattr(self.spec, "current_theme", "Temperate")
                 theme = self.themes.get(theme_name, self.themes.get("Generic", {}))
@@ -1603,14 +1642,11 @@ class DisplacementVMF:
                 
                 # Debug first tile
                 if col_idx == 0 and row_idx == 0:
-                    print(f"DEBUG: Using theme '{theme_name}', is_playable example: {is_playable}")
+                    print(f"DEBUG: Using theme '{theme_name}', zone_score example: {zone_score:.2f}")
                 
                 # Determine "Standard" material for this tile if not painted
                 if not (hasattr(self.spec, "custom_tile_materials") and self.spec.custom_tile_materials and (col_idx, row_idx) in self.spec.custom_tile_materials):
                     # Average tile height to determine if it's a cliff
-                    avg_h = np.mean(height_distances)
-                    # Slope check for cliff vs floor
-                    # We can use the center vertex slope or average
                     mid = (grid_size - 1) // 2
                     
                     # Calculate center slope for procedural choice
@@ -1624,37 +1660,31 @@ class DisplacementVMF:
                     h_ym = working_heightmap[py_m, px] * height_scale
                     h_yp = working_heightmap[py_p, px] * height_scale
                     
-                    slope = math.sqrt(((h_xp - h_xm)/2.0/tile_size)**2 + ((h_yp - h_ym)/2.0/tile_size)**2)
-                    # Scenery cliffs: use a lower threshold (0.2) so any wall looks like rock
-                    is_cliff = slope > 0.2 
+                    # Scale factor for slope to match typical terrain_pipeline expectations
+                    # In terrain_pipeline: slope = dz / cell_size.
+                    # Here px_p - px_m is 2 pixel units. vertex_spacing = tile_size / (grid_size - 1)
+                    vertex_spacing = tile_size / (grid_size - 1)
+                    dz_dx = (h_xp - h_xm) / (2.0 * vertex_spacing)
+                    dz_dy = (h_yp - h_ym) / (2.0 * vertex_spacing)
+                    slope = math.sqrt(dz_dx**2 + dz_dy**2)
+                    # Scenery cliffs: use a threshold that matches Source terrain steepness
+                    is_cliff = slope > 0.2
                     
-                    # Safety: If map center is near, treat as playable (fallback)
-                    twx = offset_x + tile_size / 2.0
-                    twy = offset_y + tile_size / 2.0
-                    dist_to_center = math.sqrt(twx**2 + twy**2)
-                    
-                    # Action zone threshold
-                    detail_radius = getattr(self.spec, "corridor_detail_width", 2048)
-                    safety_radius = 4096
-                    
-                    # Calculate "Playable Score" (1.0 = deep in action, 0.0 = deep scenery)
-                    if is_playable:
-                        playable_score = 1.0
-                    else:
-                        # Fade out safety zone
-                        playable_score = max(0, min(1, (safety_radius - dist_to_center) / 2048.0))
-                    
-                    if playable_score > 0.5:
-                        # ACTION ZONE: Use high-quality blend for everything.
-                        # Alphas will handle the rock/ground transition perfectly.
+                    if zone_score > 0.7:
+                        # ACTION ZONE: Use high-quality primary blend
                         tile_material = defaults.get("primary_floor", tile_material)
+                    elif zone_score > 0.3:
+                        # TRANSITION BELT: Use transition blend
+                        tile_material = defaults.get("transition_floor", defaults.get("primary_floor", tile_material))
                     else:
-                        # SCENERY ZONE: Use cheap variants
-                        # If it's a cliff, use rock. If flat, use the "cheap" floor.
+                        # SCENERY ZONE: Use cheap variants with macro-variation
+                        variation_seed = (col_idx * 13 + row_idx * 37 + self.spec.seed) % 1000
                         if is_cliff:
-                            tile_material = defaults.get("cheap_cliff", tile_material)
+                            choices = defaults.get("scenery_cliffs", [defaults.get("cheap_cliff", tile_material)])
+                            tile_material = choices[variation_seed % len(choices)]
                         else:
-                            tile_material = defaults.get("cheap_floor", tile_material)
+                            choices = defaults.get("scenery_floors", [defaults.get("cheap_floor", tile_material)])
+                            tile_material = choices[variation_seed % len(choices)]
 
                 # Manual Paint Override
                 if hasattr(self.spec, "custom_tile_materials") and self.spec.custom_tile_materials:
@@ -1664,7 +1694,8 @@ class DisplacementVMF:
                 # Selective Alpha Blending: Generate slope-based alphas ONLY for playable/painted blend materials
                 is_blend = "blend" in tile_material.lower()
                 # Skip alpha generation for distant "cheap" scenery to save VMF size
-                if is_blend and (is_playable or (col_idx, row_idx) in getattr(self.spec, "custom_tile_materials", {})):
+                custom_mats = getattr(self.spec, "custom_tile_materials", None) or {}
+                if is_blend and (zone_score > 0.3 or (col_idx, row_idx) in custom_mats):
                     # Reference the original float heightmap for high-precision slope math
                     # working_heightmap is [img_height, img_width]
                     for iy in range(sample_size):
@@ -1717,9 +1748,56 @@ class DisplacementVMF:
                 apply_nodraw_to_terrain_except_top(
                     floor_block, tile_material
                 )
-                floor_block.top().lightmapscale = 32
-                floor_block.top().children.append(disp_info)
+
+                # Addressing steep-slope rendering artifacts
+                top_face = floor_block.top()
+                top_face.lightmapscale = 32
+
+                # For distant scenery cliffs, use a larger texture scale to hide repetition and striping
+                if zone_score < 0.3 and is_cliff:
+                    top_face.uaxis = "[1 0 0 0] 1.0"
+                    top_face.vaxis = "[0 -1 0 0] 1.0"
+                else:
+                    # Set defaults to ensure we can grep for them
+                    top_face.uaxis = "[1 0 0 0] 0.25"
+                    top_face.vaxis = "[0 -1 0 0] 0.25"
+
+                top_face.children.append(disp_info)
                 valve_map.world.children.append(floor_block)
+
+                # Deterministic Hero Prop Spawning in Scenery Zone
+                if zone_score < 0.3 and self.prop_count < max_hero_props:
+                    theme_props = defaults.get("scenery_props", [])
+                    if theme_props:
+                        # Use deterministic hash of tile coordinates for cluster placement
+                        tile_hash = (col_idx * 127 + row_idx * 511 + self.spec.seed) % 10000
+                        # Density check - lower probability for cluster centers
+                        if (tile_hash / 10000.0) < (0.02 * hero_prop_density):
+                            num_in_cluster = 1 + (tile_hash % 3) # 1 to 3 props
+                            cluster_base_x = offset_x + (tile_hash % 100) / 100.0 * tile_size
+                            cluster_base_y = offset_y + ((tile_hash // 100) % 100) / 100.0 * tile_size
+
+                            for i in range(num_in_cluster):
+                                if self.prop_count >= max_hero_props: break
+                                # Deterministic offset within cluster
+                                sub_hash = (tile_hash + i * 31) % 10000
+                                px = cluster_base_x + (sub_hash % 128 - 64)
+                                py = cluster_base_y + ((sub_hash // 100) % 128 - 64)
+
+                                # Sample height
+                                pz = get_terrain_height_at(px, py, height_array, origin_x, origin_y, map_width, map_height, height_scale, tiles_x, tiles_y, power)
+
+                                prop_model = theme_props[sub_hash % len(theme_props)]
+
+                                prop = vmf_lib.Entity("prop_static")
+                                prop.origin = f"{px:.1f} {py:.1f} {pz:.1f}"
+                                prop.properties["model"] = prop_model
+                                prop.properties["angles"] = f"0 {sub_hash % 360} 0"
+                                prop.properties["fademindist"] = "2048"
+                                prop.properties["fademaxdist"] = "4096"
+                                prop.properties["solid"] = "0" # Non-solid background props for performance
+                                valve_map.world.children.append(prop)
+                                self.prop_count += 1
 
         max_terrain_height = (
             int(self.spec.terrain_actual_max)
@@ -2019,6 +2097,37 @@ class DisplacementVMF:
 
         valve_map.write_vmf(output_path)
         print(f"VMF saved: {output_path}")
+
+        # Generation Diagnostics
+        print("\n--- Map Generation Diagnostics ---")
+        print(f"Scenery Hero Props: {self.prop_count} / {max_hero_props}")
+
+        # Estimate detail prop density
+        total_tiles = tiles_x * tiles_y
+        action_tiles = 0
+        transition_tiles = 0
+        scenery_tiles = 0
+
+        for r in range(tiles_y):
+            for c in range(tiles_x):
+                score = self.calculate_tile_zone_score(c, r)
+                if score > 0.7: action_tiles += 1
+                elif score > 0.3: transition_tiles += 1
+                else: scenery_tiles += 1
+
+        print(f"Action Zone Tiles: {action_tiles} ({action_tiles/total_tiles*100:.1f}%)")
+        print(f"Transition Belt Tiles: {transition_tiles} ({transition_tiles/total_tiles*100:.1f}%)")
+        print(f"Scenery Zone Tiles: {scenery_tiles} ({scenery_tiles/total_tiles*100:.1f}%)")
+
+        # Detail Prop Warnings
+        # Typical Empires/Source limit is ~4096-8192 props if using many small ones.
+        # Detail props are harder to count exactly without VBSP, but we can estimate.
+        if action_tiles > 1024:
+            print("WARNING: Large Action Zone area. You may approach detail prop limits if primary material spawns dense grass.")
+            print("Consider reducing corridor_detail_width or using a material with fewer detail props.")
+
+        print("----------------------------------\n")
+
         return output_path
 
 
