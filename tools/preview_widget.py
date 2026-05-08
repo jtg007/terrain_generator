@@ -492,6 +492,7 @@ class MapPreviewWidget(QWidget):
         self.btn_flatten = add_tool(layout_t, "▬\nFlatten", 10)
         self.btn_mask = add_tool(layout_t, "🎭\nMask", 11)
         self.btn_texture = add_tool(layout_t, "🎨\nTexture", 12)
+        self.btn_tile_paint = add_tool(layout_t, "🧱\nTile Paint", 13)
 
         layout_t.addWidget(create_divider())
 
@@ -543,6 +544,10 @@ class MapPreviewWidget(QWidget):
         # Added to layout, but visibility handled by mode change
         layout_t.addWidget(self.combo_texture)
         self.combo_texture.setVisible(False)
+
+        self.lbl_mode_info = QLabel("")
+        self.lbl_mode_info.setStyleSheet("color: #aaa; font-size: 10px; font-weight: bold; margin-left: 10px;")
+        layout_t.addWidget(self.lbl_mode_info)
 
         layout_t.addWidget(create_divider())
 
@@ -713,6 +718,7 @@ class MapPreviewWidget(QWidget):
         self._height_overlay = None  # numpy float64 additive delta
         self._global_selection_mask = None # numpy bool
         self._texture_overlay = None  # numpy int32 mapping to materials
+        self._tile_overlay = None     # numpy int32 mapping to materials (per displacement tile)
         self._texture_mapping = {}    # mapping from string material to integer id (and 0=default)
         self._next_texture_id = 1
         self._sculpting = False
@@ -770,6 +776,12 @@ class MapPreviewWidget(QWidget):
         self.scene.setSceneRect(
             self.origin_x, self.origin_y, self.map_size_x, self.map_size_y
         )
+        # Update tile overlay shape if map dimensions changed
+        tiles_x = self.map_size_x // self.grid_size
+        tiles_y = self.map_size_y // self.grid_size
+        if self._tile_overlay is None or self._tile_overlay.shape != (tiles_y, tiles_x):
+            self._tile_overlay = np.zeros((tiles_y, tiles_x), dtype=np.int32)
+
         self.draw_grid()
         self.update_pixmap()
 
@@ -1192,6 +1204,40 @@ class MapPreviewWidget(QWidget):
                         px_max = min(w, px_max)
 
                         self._texture_overlay[py_min:py_max, px_min:px_max] = mat_id
+
+        elif mode == 13 and self._tile_overlay is not None:
+            # Tile Paint Mode: paint individual VMF tiles
+            material_str = self.combo_texture.currentData()
+            if material_str is None:
+                return
+
+            if material_str not in self._texture_mapping:
+                self._texture_mapping[material_str] = self._next_texture_id
+                self._next_texture_id += 1
+
+            mat_id = self._texture_mapping[material_str]
+            if self._active_mouse_button == Qt.RightButton:
+                mat_id = 0
+
+            # Map screen pixel to tile grid cell
+            tiles_x = self.map_size_x // self.grid_size
+            tiles_y = self.map_size_y // self.grid_size
+
+            # gx/gy are already normalized 0..w and 0..h
+            tx = int(gx * tiles_x // w)
+            ty = int(gy * tiles_y // h)
+
+            if 0 <= tx < tiles_x and 0 <= ty < tiles_y:
+                self._tile_overlay[ty, tx] = mat_id
+
+                # Update status bar with material name
+                mat_name = material_str if mat_id != 0 else "Default"
+                hue = (mat_id * 137) % 360
+                color = QColor.fromHsv(hue, 200, 200)
+                swatch = f"<span style='color:{color.name()}; font-size: 16px;'>■</span>"
+                status_msg = f"Tile ({tx}, {ty}): {swatch} {mat_name}"
+                if hasattr(self.parent(), "statusBar") and self.parent().statusBar():
+                    self.parent().statusBar().showMessage(status_msg)
 
         elif mode in (8, 9):
             raise_terrain = (mode == 8)
@@ -1639,10 +1685,17 @@ class MapPreviewWidget(QWidget):
         if actual_mode != 10:
             self._flatten_target_height = None
 
-        if actual_mode == 12:
+        if actual_mode in (12, 13):
             self.combo_texture.setVisible(True)
         else:
             self.combo_texture.setVisible(False)
+
+        if actual_mode == 12:
+            self.lbl_mode_info.setText("TEXTURE MODE – painting coarse regions")
+        elif actual_mode == 13:
+            self.lbl_mode_info.setText("TILE PAINT MODE – painting individual VMF tiles")
+        else:
+            self.lbl_mode_info.setText("")
 
         if actual_mode == 0:
             for item in self.scene.items():

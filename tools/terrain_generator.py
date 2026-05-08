@@ -93,6 +93,7 @@ class PreviewWorker(QThread):
         initial_heights=None,
         texture_overlay=None,
         texture_mapping=None,
+        tile_overlay=None,
     ):
         super().__init__()
         self.config_model = config_model
@@ -103,6 +104,7 @@ class PreviewWorker(QThread):
         self.initial_heights = initial_heights
         self.texture_overlay = texture_overlay
         self.texture_mapping = texture_mapping
+        self.tile_overlay = tile_overlay
 
     def run(self):
         try:
@@ -146,6 +148,18 @@ class PreviewWorker(QThread):
                 if custom_materials:
                     spec.custom_tile_materials = custom_materials
 
+            if self.tile_overlay is not None and self.texture_mapping:
+                id_to_material = {v: k for k, v in self.texture_mapping.items()}
+                if spec.custom_tile_materials is None:
+                    spec.custom_tile_materials = {}
+
+                ty, tx = self.tile_overlay.shape
+                for y in range(ty):
+                    for x in range(tx):
+                        mat_id = int(self.tile_overlay[y, x])
+                        if mat_id != 0 and mat_id in id_to_material:
+                            spec.custom_tile_materials[(x, y)] = id_to_material[mat_id]
+
             # Skip layout validation during preview to prevent crashes while dragging
             result = run_pipeline(
                 spec,
@@ -181,6 +195,7 @@ class GenerationWorker(QThread):
         initial_heights=None,
         texture_overlay=None,
         texture_mapping=None,
+        tile_overlay=None,
     ):
         super().__init__()
         self.config_model = config_model
@@ -193,6 +208,7 @@ class GenerationWorker(QThread):
         self.initial_heights = initial_heights
         self.texture_overlay = texture_overlay
         self.texture_mapping = texture_mapping
+        self.tile_overlay = tile_overlay
         self.project_root = None
 
     def run(self):
@@ -227,6 +243,18 @@ class GenerationWorker(QThread):
                             custom_materials[(tx, ty)] = id_to_material[mat_id]
                 if custom_materials:
                     spec.custom_tile_materials = custom_materials
+
+            if self.tile_overlay is not None and self.texture_mapping:
+                id_to_material = {v: k for k, v in self.texture_mapping.items()}
+                if spec.custom_tile_materials is None:
+                    spec.custom_tile_materials = {}
+
+                ty, tx = self.tile_overlay.shape
+                for y in range(ty):
+                    for x in range(tx):
+                        mat_id = int(self.tile_overlay[y, x])
+                        if mat_id != 0 and mat_id in id_to_material:
+                            spec.custom_tile_materials[(x, y)] = id_to_material[mat_id]
 
             # Run pipeline
             result = run_pipeline(
@@ -1462,7 +1490,7 @@ class TerrainGeneratorGUI(QMainWindow):
             return
 
         try:
-            nodes, connections, resources, _, global_mask, texture_overlay, texture_mapping, next_texture_id = (
+            nodes, connections, resources, _, global_mask, texture_overlay, texture_mapping, next_texture_id, tile_overlay = (
                 self.preview_widget.get_layout_from_editor()
             )
 
@@ -1479,6 +1507,7 @@ class TerrainGeneratorGUI(QMainWindow):
                 initial_heights=initial_heights,
                 texture_overlay=texture_overlay,
                 texture_mapping=texture_mapping,
+                tile_overlay=tile_overlay,
             )
             self.preview_worker.finished.connect(self.on_preview_finished)
             self.preview_worker.start()
@@ -2594,7 +2623,7 @@ class TerrainGeneratorGUI(QMainWindow):
 
         # Run generation in background
         map_name = self.txt_map_name.text().strip() or "gui_terrain"
-        layout_nodes, layout_conns, layout_res, height_overlay, global_mask, texture_overlay, texture_mapping, next_texture_id = (
+        layout_nodes, layout_conns, layout_res, height_overlay, global_mask, texture_overlay, texture_mapping, next_texture_id, tile_overlay = (
             self.preview_widget.get_layout_from_editor()
         )
 
@@ -2613,6 +2642,7 @@ class TerrainGeneratorGUI(QMainWindow):
             initial_heights=initial_heights,
             texture_overlay=texture_overlay,
             texture_mapping=texture_mapping,
+            tile_overlay=tile_overlay,
         )
         self.worker.finished.connect(self.on_generation_finished)
         self.worker.start()

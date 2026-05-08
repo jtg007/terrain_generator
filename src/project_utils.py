@@ -78,6 +78,12 @@ def save_project(path: str, config: GUIConfigModel, layout_data: Dict[str, Any])
         sculpt_data["texture_mapping"] = layout_data.get("texture_mapping", {})
         sculpt_data["next_texture_id"] = layout_data.get("next_texture_id", 1)
 
+    tile_overlay = layout_data.get("tile_overlay")
+    if tile_overlay is not None:
+        sculpt_data["tile_overlay"] = array_to_b64(tile_overlay)
+        sculpt_data["tile_overlay_shape"] = tile_overlay.shape
+        sculpt_data["tile_overlay_dtype"] = str(tile_overlay.dtype)
+
     # 4. Final project structure
     project = {
         "version": CURRENT_PROJECT_VERSION,
@@ -165,6 +171,14 @@ def load_project(path: str) -> Dict[str, Any]:
             tuple(sculpt_data["texture_overlay_shape"])
         )
 
+    tile_overlay = None
+    if "tile_overlay" in sculpt_data:
+        tile_overlay = b64_to_array(
+            sculpt_data["tile_overlay"],
+            np.dtype(sculpt_data["tile_overlay_dtype"]),
+            tuple(sculpt_data["tile_overlay_shape"])
+        )
+
     return {
         "config": config,
         "map_name": project.get("map_name", "gui_terrain"),
@@ -176,6 +190,7 @@ def load_project(path: str) -> Dict[str, Any]:
         "height_overlay": height_overlay,
         "global_mask": global_mask,
         "texture_overlay": texture_overlay,
+        "tile_overlay": tile_overlay,
         "texture_mapping": sculpt_data.get("texture_mapping", {}),
         "next_texture_id": sculpt_data.get("next_texture_id", 1)
     }

@@ -7,9 +7,10 @@ Geometry errors ("Inside-Out", "17 solids not loaded") are now
 a thing of the past, as the library handles the exact formatting.
 """
 
-from typing import List
+from typing import List, Dict, Any, Optional
 from pathlib import Path
 import sys
+import numpy as np
 
 from ValveVMF import VMF, Solid, Side, DispInfo
 
@@ -19,6 +20,14 @@ from src.terrain_pipeline import (
     get_cell_normals,
     get_cell_alphas,
 )
+
+
+def verify_tile_pipeline(tx: int, ty: int, tile_overlay: np.ndarray, reverse_mapping: Dict[int, str]):
+    """Debug function to verify tile-to-material mapping."""
+    tile_id = int(tile_overlay[ty, tx])
+    material = reverse_mapping.get(tile_id, "<unmapped>")
+    print(f"Tile ({tx},{ty}) → ID {tile_id} → material '{material}'"
+          f" → VMF key: custom_tile_materials[{ty}][{tx}]")
 
 
 class ValveVMFWriter:
@@ -35,12 +44,27 @@ class ValveVMFWriter:
         grid: HeightGrid,
         spec: TerrainSpec,
         path: str,
+        tile_overlay: Optional[np.ndarray] = None,
+        texture_mapping: Optional[Dict[str, int]] = None,
     ):
         """Generiert die Solids und speichert die Datei."""
         self.vmf.world.skyname = "sky_day01_01"
 
+        tiles_x = spec.tiles_x
+        tiles_y = spec.tiles_y
+        _reverse_texture_mapping = {}
+        if tile_overlay is not None:
+            assert tile_overlay.shape == (tiles_y, tiles_x), \
+                f"tile_overlay shape mismatch: {tile_overlay.shape}, expected {(tiles_y, tiles_x)}"
+            if texture_mapping:
+                _reverse_texture_mapping = {v: k for k, v in texture_mapping.items()}
+
+            # Debug verification calls
+            verify_tile_pipeline(0, 0, tile_overlay, _reverse_texture_mapping)
+            verify_tile_pipeline(tiles_x // 2, tiles_y // 2, tile_overlay, _reverse_texture_mapping)
+
         for cell in cells:
-            self._create_displacement_brush(cell, grid, spec)
+            self._create_displacement_brush(cell, grid, spec, tile_overlay, _reverse_texture_mapping)
 
         self._create_underlay_brush(underlay)
 
@@ -54,6 +78,8 @@ class ValveVMFWriter:
         cell: TerrainCell,
         grid: HeightGrid,
         spec: TerrainSpec,
+        tile_overlay: Optional[np.ndarray] = None,
+        reverse_mapping: Optional[Dict[int, str]] = None,
     ):
         """Erzeugt einen perfekten Basis-Brush und legt die Höhenkarte als DispInfo auf die Top-Fläche."""
         power = spec.displacement_power
@@ -83,7 +109,15 @@ class ValveVMFWriter:
 
         top_side = Side()
         top_side.set_plane((X1, Y1, Z2), (X2, Y1, Z2), (X2, Y2, Z2))
-        top_side.material = spec.material
+
+        # Tile material assignment
+        material = spec.material
+        if tile_overlay is not None and reverse_mapping:
+            tile_id = int(tile_overlay[tile_row, tile_col])
+            if tile_id != 0 and tile_id in reverse_mapping:
+                material = reverse_mapping[tile_id]
+
+        top_side.material = material
         top_side.uaxis = "[1 0 0 0] 0.25"
         top_side.vaxis = "[0 -1 0 0] 0.25"
 
@@ -209,9 +243,11 @@ def export_vmf(
     grid: HeightGrid,
     spec: TerrainSpec,
     path: str,
+    tile_overlay: Optional[np.ndarray] = None,
+    texture_mapping: Optional[Dict[str, int]] = None,
 ):
     writer = ValveVMFWriter()
-    writer.write_vmf(cells, underlay, grid, spec, path)
+    writer.write_vmf(cells, underlay, grid, spec, path, tile_overlay, texture_mapping)
 
 
 if __name__ == "__main__":
