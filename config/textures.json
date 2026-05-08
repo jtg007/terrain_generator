@@ -6,7 +6,22 @@
         "primary_cliff": "common/nature/mountain_wall_000",
         "cheap_floor": "common/nature/grass_001",
         "cheap_cliff": "common/nature/mountain_wall_000",
-        "skybox": "empsky_day1"
+        "transition_floor": "common/nature/blend_grass_mud_003",
+        "scenery_floors": [
+          "common/nature/grass_001",
+          "common/nature/grassfloor01",
+          "common/nature/grassfloor12"
+        ],
+        "scenery_cliffs": [
+          "common/nature/mountain_wall_000",
+          "nature/cliff/stone_cliff_colorado"
+        ],
+        "skybox": "empsky_day1",
+        "scenery_props": [
+          "models/props_foliage/tree_pine01.mdl",
+          "models/props_wasteland/rockcliff01b.mdl",
+          "models/props_foliage/tree_deciduous_01a.mdl"
+        ]
       },
       "materials": [
         {
@@ -493,7 +508,22 @@
         "primary_cliff": "nature/cliff/stone_cliff_colorado",
         "cheap_floor": "maps/emp_arid/blenddirtdirt_silk",
         "cheap_cliff": "nature/cliffface001b",
-        "skybox": "empsky_day3"
+        "transition_floor": "common/terrain/blend_grass01c_sand01a",
+        "scenery_floors": [
+          "common/nature/sandfloor009a",
+          "common/stene/sand01",
+          "maps/emp_mvalley/redsand"
+        ],
+        "scenery_cliffs": [
+          "nature/cliff/stone_cliff_colorado",
+          "nature/cliffface001b"
+        ],
+        "skybox": "empsky_day3",
+        "scenery_props": [
+          "models/props_wasteland/rockcliff01b.mdl",
+          "models/props_wasteland/rockcliff01c.mdl",
+          "models/props_foliage/tree_palm_01.mdl"
+        ]
       },
       "materials": [
         {
@@ -696,7 +726,22 @@
         "primary_cliff": "common/nature/mountain_wall_000",
         "cheap_floor": "common/emp_snow/snowfloor001b",
         "cheap_cliff": "common/nature/mountain_wall_000",
-        "skybox": "empsky_overcast1"
+        "transition_floor": "common/emp_snow/blend_snowsnow01a",
+        "scenery_floors": [
+          "common/emp_snow/snowfloor001b",
+          "common/emp_snow/snowfloor002b",
+          "common/emp_snow/snowfloor003b"
+        ],
+        "scenery_cliffs": [
+          "common/nature/mountain_wall_000",
+          "dz/blend_snow_wall"
+        ],
+        "skybox": "empsky_overcast1",
+        "scenery_props": [
+          "models/props_foliage/tree_pine01.mdl",
+          "models/props_wasteland/rockcliff01b.mdl",
+          "models/props_wasteland/rockcliff01c.mdl"
+        ]
       },
       "materials": [
         {
@@ -811,7 +856,22 @@
         "primary_cliff": "common/nature/mountain_wall_000",
         "cheap_floor": "common/stene/dirtyconcrete",
         "cheap_cliff": "nature/cliffface001b",
-        "skybox": "empsky_overcast2"
+        "transition_floor": "nature/terrain/tarmac_01",
+        "scenery_floors": [
+          "common/stene/dirtyconcrete",
+          "common/concrete/pavingground01",
+          "common/concrete/pavingground02a"
+        ],
+        "scenery_cliffs": [
+          "common/nature/mountain_wall_000",
+          "nature/cliffface001b"
+        ],
+        "skybox": "empsky_overcast2",
+        "scenery_props": [
+          "models/props_wasteland/rockcliff01b.mdl",
+          "models/props_wasteland/rockcliff01c.mdl",
+          "models/props_c17/concrete_barrier001a.mdl"
+        ]
       },
       "materials": [
         {
@@ -858,7 +918,22 @@
         "primary_cliff": "nature/cliff/stone_cliff_colorado",
         "cheap_floor": "common/terrain/redground2",
         "cheap_cliff": "nature/cliffface001b",
-        "skybox": "empsky_sunset2"
+        "transition_floor": "common/terrain/blend_red2_red3",
+        "scenery_floors": [
+          "common/terrain/redground2",
+          "common/terrain/redground3",
+          "common/terrain/redground4"
+        ],
+        "scenery_cliffs": [
+          "nature/cliff/stone_cliff_colorado",
+          "nature/cliffface001b"
+        ],
+        "skybox": "empsky_sunset2",
+        "scenery_props": [
+          "models/props_wasteland/rockcliff01b.mdl",
+          "models/props_wasteland/rockcliff01c.mdl",
+          "models/props_foliage/tree_deciduous_01a.mdl"
+        ]
       },
       "materials": [
         {
@@ -965,7 +1040,20 @@
         "primary_cliff": "common/nature/mountain_wall_000",
         "cheap_floor": "common/terrain/blend_grass01a_dirt01a_nodetail",
         "cheap_cliff": "nature/cliffface001b",
-        "skybox": "empsky_overcast2"
+        "transition_floor": "common/nature/blend_grass_mud_003",
+        "scenery_floors": [
+          "common/nature/grass_001",
+          "common/nature/grassfloor01"
+        ],
+        "scenery_cliffs": [
+          "common/nature/mountain_wall_000",
+          "nature/cliffface001b"
+        ],
+        "skybox": "empsky_overcast2",
+        "scenery_props": [
+          "models/props_wasteland/rockcliff01b.mdl",
+          "models/props_foliage/tree_deciduous_01a.mdl"
+        ]
       },
       "materials": [
         {

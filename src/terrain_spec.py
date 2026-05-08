@@ -95,6 +95,9 @@ class TerrainSpec:
     # Theme & Optimization
     current_theme: str = "Temperate"
     corridor_detail_width: int = 2048
+    transition_width: int = 1536
+    scenery_variation_noise: float = 0.4
+    hero_prop_density: float = 0.5
 
     base_clear_radius: int = 0
     base_flatness: float = 0.8
@@ -212,6 +215,11 @@ class TerrainSpec:
             "underlay_material": self.underlay_material,
             "underlay_height": self.underlay_height,
             "custom_image_path": self.custom_image_path,
+            "current_theme": self.current_theme,
+            "corridor_detail_width": self.corridor_detail_width,
+            "transition_width": self.transition_width,
+            "scenery_variation_noise": self.scenery_variation_noise,
+            "hero_prop_density": self.hero_prop_density,
             # Note: custom_tile_materials intentionally omitted from to_dict as it's meant to be transient/project-level.
         }
 

@@ -85,8 +85,11 @@ class GUIConfigModel:
     # Theme & Optimization
     current_theme: str = "Temperate"
     corridor_detail_width: int = 2048
-    custom_layout_nodes: Optional[List[Any]] = None
-    custom_layout_connections: Optional[List[Any]] = None
+    transition_width: int = 1536
+    scenery_variation_noise: float = 0.4
+    hero_prop_density: float = 0.5
+    custom_layout_nodes: Optional[list] = None
+    custom_layout_connections: Optional[list] = None
 
     @property
     def map_size_x(self) -> int:
@@ -270,6 +273,9 @@ class GUIConfigModel:
             custom_tile_materials=self.custom_tile_materials,
             current_theme=self.current_theme,
             corridor_detail_width=self.corridor_detail_width,
+            transition_width=self.transition_width,
+            scenery_variation_noise=self.scenery_variation_noise,
+            hero_prop_density=self.hero_prop_density,
             custom_layout_nodes=self.custom_layout_nodes,
             custom_layout_connections=self.custom_layout_connections,
         )
