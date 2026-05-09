@@ -1800,14 +1800,15 @@ class DisplacementVMF:
                             dz_dy = (h_yp - h_ym) / (2.0 * tile_size)
                             v_slope = math.sqrt(dz_dx**2 + dz_dy**2)
 
-                            # Slope-based alpha (0=flat=primary, 255=steep=rock)
                             slope_alpha = slope_to_alpha(v_slope)
 
-                            # Height bias: high tiles trend toward rock
-                            # ratio is already computed per tile above
-                            height_bias = int(ratio * 160)
+                            # Height bias only amplifies existing slope — never creates rock
+                            # on flat terrain. If slope_alpha < 20 (flat vertex), bias = 0.
+                            if slope_alpha > 20:
+                                height_bias = int(ratio * 80)
+                            else:
+                                height_bias = 0
 
-                            # Combine: slope drives the blend, height shifts baseline
                             final_alpha = min(255, slope_alpha + height_bias)
                             tile_alphas[iy, ix] = final_alpha
                 
