@@ -1,22 +1,10 @@
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(".").absolute()))
-
 from src.vmf_gen import DisplacementVMF, PipelineSpec
 import numpy as np
 
-for theme in ["Temperate", "Desert", "Snow"]:
-    spec = PipelineSpec(map_name=f"test_map_{theme}")
-    spec.current_theme = theme
-    vmf = DisplacementVMF(spec)
+spec = PipelineSpec(map_name="test_map")
+gen = DisplacementVMF(spec)
+gen.heightmap = np.random.rand(1024, 1024)
+gen.playability_mask = np.random.rand(1024, 1024) * 255.0
+gen.generate_vmf("test.vmf")
 
-    # Need to load a dummy heightmap to make it run
-    vmf.heightmap = np.zeros((65, 65), dtype=np.float32)
-    vmf.heightmap_width = 65
-    vmf.heightmap_height = 65
-
-    output_path = f"output/test_{theme}.vmf"
-    Path("output").mkdir(exist_ok=True)
-    vmf.generate_vmf(output_path)
-
-    print(f"Generated {output_path}")
+print("done")
