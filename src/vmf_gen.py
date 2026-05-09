@@ -24,71 +24,33 @@ from vmflib.brush import DispInfo
 from vmflib.tools import Block
 from vmflib import vmf as vmf_lib
 
-THEME_MATERIALS: dict[str, dict[str, tuple[str, bool]]] = {
-    # Format: band → (material_path, uses_blend_alpha)
-    # uses_blend_alpha = True only for materials with blend shader support
-
-    "Temperate": {
-        "cliff":      ("common/nature/mountain_wall_000",              True),
-        "peak":       ("common/nature/blend_grass_mountainwall_000",   True),
-        "high":       ("common/nature/blend_grassfloor08_rockwall02",  True),
-        "transition": ("common/nature/blend_grass_mud_003",            True),
-        "mid":        ("common/nature/blend_grass_mud_003",            True),
-        "low":        ("common/nature/blend_grass_mud_003",            True),
-        "valley":     ("common/nature/mud_003",                        False),
-    },
-    "Desert": {
-        "cliff":      ("nature/cliff/stone_cliff_colorado",            True),
-        "peak":       ("nature/blendrocksand008d",                     True),
-        "high":       ("common/nature/blend_grass_sandfloor009a_000",  True),
-        "transition": ("common/terrain/blend_grass01c_sand01a",        True),
-        "mid":        ("common/nature/blend_grass_sandfloor009a_000",  True),
-        "low":        ("maps/emp_arid/blenddirtdirt_silk",             True),
-        "valley":     ("common/nature/sandfloor009a",                  False),
-    },
-    "Snow": {
-        "cliff":      ("common/nature/mountain_wall_000",              False),
-        "peak":       ("common/terrain/blend_snow01_rock01a",          True),
-        "high":       ("common/terrain/blend_snow01_rock01a",          True),
-        "transition": ("common/emp_snow/blend_snowsnow01a",            True),
-        "mid":        ("common/emp_snow/blend_snowsnow01a",            True),
-        "low":        ("common/emp_snow/snowfloor001b",                False),
-        "valley":     ("common/emp_snow/snowfloor002b",                False),
-    },
-    "Industrial": {
-        "cliff":      ("common/nature/mountain_wall_000",              False),
-        "peak":       ("nature/cliffface001b",                         False),
-        "high":       ("common/stene/dirtyconcrete",                   False),
-        "transition": ("nature/terrain/tarmac_01",                     False),
-        "mid":        ("common/stene/dirtyconcrete",                   False),
-        "low":        ("common/concrete/pavingground01",               False),
-        "valley":     ("common/concrete/pavingground02a",              False),
-    },
-    "Wasteland": {
-        "cliff":      ("nature/cliff/stone_cliff_colorado",            True),
-        "peak":       ("common/terrain/blend_red2_red4",               True),
-        "high":       ("common/terrain/blend_red2_red3",               True),
-        "transition": ("common/terrain/blend_red2_red3",               True),
-        "mid":        ("common/terrain/redground2",                    False),
-        "low":        ("common/terrain/redground3",                    False),
-        "valley":     ("common/terrain/redground4",                    False),
-    },
-    "Generic": {
-        "cliff":      ("common/nature/mountain_wall_000",              False),
-        "peak":       ("nature/cliffface001b",                         False),
-        "high":       ("common/nature/blend_grass_mud_003",            True),
-        "transition": ("common/nature/blend_grass_mud_003",            True),
-        "mid":        ("common/nature/blend_grass_mud_003",            True),
-        "low":        ("common/nature/grass_001",                      False),
-        "valley":     ("common/nature/grassfloor01",                   False),
-    },
+THEME_BLEND_MATERIAL: dict[str, tuple[str, str]] = {
+    # theme → (blend_material_for_all_tiles, cliff_material)
+    "Temperate": (
+        "common/nature/blend_grass_mountainwall_000",
+        "common/nature/mountain_wall_000",
+    ),
+    "Desert": (
+        "common/nature/blend_grass_sandfloor009a_000",
+        "nature/cliff/stone_cliff_colorado",
+    ),
+    "Snow": (
+        "common/terrain/blend_snow01_rock01a",
+        "common/nature/mountain_wall_000",
+    ),
+    "Industrial": (
+        "common/stene/dirtyconcrete",       # no blend available
+        "common/nature/mountain_wall_000",
+    ),
+    "Wasteland": (
+        "common/terrain/blend_red2_red3",
+        "nature/cliff/stone_cliff_colorado",
+    ),
+    "Generic": (
+        "common/nature/blend_grass_mud_003",
+        "common/nature/mountain_wall_000",
+    ),
 }
-
-DEFAULT_MATERIALS = THEME_MATERIALS["Generic"]
-
-def _select_material(band: str, theme_name: str) -> tuple[str, bool]:
-    table = THEME_MATERIALS.get(theme_name, DEFAULT_MATERIALS)
-    return table.get(band, DEFAULT_MATERIALS["mid"])
 
 
 SAFE_EMPIRES_SKYBOXES = [
@@ -1790,7 +1752,20 @@ class DisplacementVMF:
                     print(f"[Terrain] tile(0,0): z={tile_z:.0f} ratio={ratio:.2f} "
                           f"slope={slope:.3f} band={band}")
 
-                tile_material, uses_blend = _select_material(band, theme_name)
+                blend_mat, cliff_mat = THEME_BLEND_MATERIAL.get(
+                    theme_name,
+                    THEME_BLEND_MATERIAL["Generic"]
+                )
+
+                if is_cliff:
+                    tile_material = cliff_mat
+                    uses_blend = False
+                else:
+                    tile_material = blend_mat
+                    uses_blend = True
+
+                # Industrial has no blend shader — skip alpha generation
+                industrial_no_blend = (theme_name == "Industrial")
 
                 # Manual Paint Override
                 if hasattr(self.spec, "custom_tile_materials") and self.spec.custom_tile_materials:
@@ -1802,46 +1777,39 @@ class DisplacementVMF:
                 # Selective Alpha Blending: Generate slope-based alphas ONLY for playable/painted blend materials
                 tile_alphas = np.zeros((sample_size, sample_size), dtype=int)
                 
-                if uses_blend:
-                    # Reference the original float heightmap for high-precision slope math
-                    # working_heightmap is [img_height, img_width]
+                if uses_blend and not industrial_no_blend:
                     for iy in range(sample_size):
                         for ix in range(sample_size):
-                            # Global coordinates in the heightmap
                             px = col_idx * (grid_size - 1) + ix
                             py = row_idx * (grid_size - 1) + iy
-                            
-                            # Central difference for slope (match terrain_pipeline.py logic)
-                            # Spacing is effectively 1 vertex unit (dz_dr/cell_size in pipeline)
-                            # but we need to normalize to match the expected thresholds.
-                            
-                            # Boundary-safe indices
+                            px = max(0, min(px, img_width - 1))
+                            py = max(0, min(py, img_height - 1))
+
+                            # Vertex slope via central difference
                             px_m = max(0, px - 1)
                             px_p = min(img_width - 1, px + 1)
                             py_m = max(0, py - 1)
                             py_p = min(img_height - 1, py + 1)
-                            
-                            # Heights in world units
+
                             h_xm = working_heightmap[py, px_m] * height_scale
                             h_xp = working_heightmap[py, px_p] * height_scale
                             h_ym = working_heightmap[py_m, px] * height_scale
                             h_yp = working_heightmap[py_p, px] * height_scale
-                            
-                            # dz_dx and dz_dy over 2 vertex steps
-                            dz_dx = (h_xp - h_xm) / 2.0
-                            dz_dy = (h_yp - h_ym) / 2.0
-                            
-                            # Pipeline slope normalization: dz / tile_size
-                            slope_x = dz_dx / tile_size
-                            slope_y = dz_dy / tile_size
-                            slope = math.sqrt(slope_x**2 + slope_y**2)
-                            
-                            # Apply standard thresholds from terrain_pipeline.py
-                            if band == "cliff":
-                                alpha = slope_to_alpha(slope, flat_threshold=0.3, steep_threshold=0.6)
-                            else:
-                                alpha = slope_to_alpha(slope)
-                            tile_alphas[iy, ix] = alpha
+
+                            dz_dx = (h_xp - h_xm) / (2.0 * tile_size)
+                            dz_dy = (h_yp - h_ym) / (2.0 * tile_size)
+                            v_slope = math.sqrt(dz_dx**2 + dz_dy**2)
+
+                            # Slope-based alpha (0=flat=primary, 255=steep=rock)
+                            slope_alpha = slope_to_alpha(v_slope)
+
+                            # Height bias: high tiles trend toward rock
+                            # ratio is already computed per tile above
+                            height_bias = int(ratio * 160)
+
+                            # Combine: slope drives the blend, height shifts baseline
+                            final_alpha = min(255, slope_alpha + height_bias)
+                            tile_alphas[iy, ix] = final_alpha
                 
                 edge_alphas[(col_idx, row_idx)] = tile_alphas
 
