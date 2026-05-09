@@ -131,6 +131,11 @@ def main():
         help="Disable enhanced entity spawning",
     )
     parser.add_argument(
+        "--theme",
+        default="Temperate",
+        help="Theme name",
+    )
+    parser.add_argument(
         "--skybox",
         default=DEFAULT_SAFE_SKYBOX,
         help="Skybox name (defaults to a known-safe Empires skybox)",
@@ -260,6 +265,7 @@ def main():
         terrain_tiles_y=tiles_y,
         output_dir=str(output_dir),
         use_enhanced_spawning=not args.no_enhanced,
+        current_theme=args.theme,
     )
     print(
         f"DEBUG: Creating PipelineSpec with terrain_actual_max={vmf_spec.terrain_actual_max}"
