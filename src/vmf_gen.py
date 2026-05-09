@@ -25,30 +25,29 @@ from vmflib.tools import Block
 from vmflib import vmf as vmf_lib
 
 THEME_BLEND_MATERIAL: dict[str, tuple[str, str]] = {
-    # theme → (blend_material_for_all_tiles, cliff_material)
     "Temperate": (
         "common/nature/blend_grass_mountainwall_000",
-        "common/nature/mountain_wall_000",
+        "common/nature/blend_grass_mountainwall_000",
     ),
     "Desert": (
         "common/nature/blend_grass_sandfloor009a_000",
-        "nature/cliff/stone_cliff_colorado",
+        "common/nature/blend_grass_sandfloor009a_000",
     ),
     "Snow": (
         "common/terrain/blend_snow01_rock01a",
-        "common/nature/mountain_wall_000",
+        "common/terrain/blend_snow01_rock01a",
     ),
     "Industrial": (
-        "common/stene/dirtyconcrete",       # no blend available
-        "common/nature/mountain_wall_000",
+        "common/stene/dirtyconcrete",
+        "common/stene/dirtyconcrete",
     ),
     "Wasteland": (
         "common/terrain/blend_red2_red3",
-        "nature/cliff/stone_cliff_colorado",
+        "common/terrain/blend_red2_red3",
     ),
     "Generic": (
         "common/nature/blend_grass_mud_003",
-        "common/nature/mountain_wall_000",
+        "common/nature/blend_grass_mud_003",
     ),
 }
 
@@ -1712,7 +1711,13 @@ class DisplacementVMF:
                 slope = math.sqrt(dz_dx**2 + dz_dy**2)
                 # Scenery cliffs: use a threshold that matches Source terrain steepness
                 is_cliff = slope > 2.5
-                
+
+                # Edge tiles: never classify as cliff regardless of slope
+                is_edge = (col_idx == 0 or col_idx == tiles_x - 1 or
+                           row_idx == 0 or row_idx == tiles_y - 1)
+                if is_edge:
+                    is_cliff = False
+
                 # Compute mean tile height in world units
                 corners = []
                 for dy in (0, grid_size - 1):
@@ -1759,7 +1764,7 @@ class DisplacementVMF:
 
                 if is_cliff:
                     tile_material = cliff_mat
-                    uses_blend = False
+                    uses_blend = True
                 else:
                     tile_material = blend_mat
                     uses_blend = True
@@ -1776,8 +1781,11 @@ class DisplacementVMF:
 
                 # Selective Alpha Blending: Generate slope-based alphas ONLY for playable/painted blend materials
                 tile_alphas = np.zeros((sample_size, sample_size), dtype=int)
+
+                if is_cliff:
+                    tile_alphas.fill(255)
                 
-                if uses_blend and not industrial_no_blend:
+                if uses_blend and not industrial_no_blend and not is_cliff:
                     for iy in range(sample_size):
                         for ix in range(sample_size):
                             px = col_idx * (grid_size - 1) + ix
