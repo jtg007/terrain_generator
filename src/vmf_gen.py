@@ -24,6 +24,73 @@ from vmflib.brush import DispInfo
 from vmflib.tools import Block
 from vmflib import vmf as vmf_lib
 
+THEME_MATERIALS: dict[str, dict[str, tuple[str, bool]]] = {
+    # Format: band → (material_path, uses_blend_alpha)
+    # uses_blend_alpha = True only for materials with blend shader support
+
+    "Temperate": {
+        "cliff":      ("common/nature/mountain_wall_000",              False),
+        "peak":       ("common/nature/blend_grass_mountainwall_000",   True),
+        "high":       ("common/nature/blend_grassfloor08_rockwall02",  True),
+        "transition": ("common/nature/blend_grass_mud_003",            True),
+        "mid":        ("common/nature/blend_grass_mud_003",            True),
+        "low":        ("common/nature/blend_grass_mud_003",            True),
+        "valley":     ("common/nature/mud_003",                        False),
+    },
+    "Desert": {
+        "cliff":      ("nature/cliff/stone_cliff_colorado",            False),
+        "peak":       ("nature/blendrocksand008d",                     True),
+        "high":       ("common/nature/blend_grass_sandfloor009a_000",  True),
+        "transition": ("common/terrain/blend_grass01c_sand01a",        True),
+        "mid":        ("common/nature/blend_grass_sandfloor009a_000",  True),
+        "low":        ("maps/emp_arid/blenddirtdirt_silk",             True),
+        "valley":     ("common/nature/sandfloor009a",                  False),
+    },
+    "Snow": {
+        "cliff":      ("common/nature/mountain_wall_000",              False),
+        "peak":       ("common/terrain/blend_snow01_rock01a",          True),
+        "high":       ("common/terrain/blend_snow01_rock01a",          True),
+        "transition": ("common/emp_snow/blend_snowsnow01a",            True),
+        "mid":        ("common/emp_snow/blend_snowsnow01a",            True),
+        "low":        ("common/emp_snow/snowfloor001b",                False),
+        "valley":     ("common/emp_snow/snowfloor002b",                False),
+    },
+    "Industrial": {
+        "cliff":      ("common/nature/mountain_wall_000",              False),
+        "peak":       ("nature/cliffface001b",                         False),
+        "high":       ("common/stene/dirtyconcrete",                   False),
+        "transition": ("nature/terrain/tarmac_01",                     False),
+        "mid":        ("common/stene/dirtyconcrete",                   False),
+        "low":        ("common/concrete/pavingground01",               False),
+        "valley":     ("common/concrete/pavingground02a",              False),
+    },
+    "Wasteland": {
+        "cliff":      ("nature/cliff/stone_cliff_colorado",            False),
+        "peak":       ("common/terrain/blend_red2_red4",               True),
+        "high":       ("common/terrain/blend_red2_red3",               True),
+        "transition": ("common/terrain/blend_red2_red3",               True),
+        "mid":        ("common/terrain/redground2",                    False),
+        "low":        ("common/terrain/redground3",                    False),
+        "valley":     ("common/terrain/redground4",                    False),
+    },
+    "Generic": {
+        "cliff":      ("common/nature/mountain_wall_000",              False),
+        "peak":       ("nature/cliffface001b",                         False),
+        "high":       ("common/nature/blend_grass_mud_003",            True),
+        "transition": ("common/nature/blend_grass_mud_003",            True),
+        "mid":        ("common/nature/blend_grass_mud_003",            True),
+        "low":        ("common/nature/grass_001",                      False),
+        "valley":     ("common/nature/grassfloor01",                   False),
+    },
+}
+
+DEFAULT_MATERIALS = THEME_MATERIALS["Generic"]
+
+def _select_material(band: str, theme_name: str) -> tuple[str, bool]:
+    table = THEME_MATERIALS.get(theme_name, DEFAULT_MATERIALS)
+    return table.get(band, DEFAULT_MATERIALS["mid"])
+
+
 SAFE_EMPIRES_SKYBOXES = [
     "empsky_day1",
     "empsky_day2",
@@ -1645,57 +1712,53 @@ class DisplacementVMF:
                     print(f"DEBUG: Using theme '{theme_name}', zone_score example: {zone_score:.2f}")
                 
                 # Determine "Standard" material for this tile if not painted
-                if not (hasattr(self.spec, "custom_tile_materials") and self.spec.custom_tile_materials and (col_idx, row_idx) in self.spec.custom_tile_materials):
-                    # Average tile height to determine if it's a cliff
-                    mid = (grid_size - 1) // 2
-                    
-                    # Calculate center slope for procedural choice
-                    px = col_idx * (grid_size - 1) + mid
-                    py = row_idx * (grid_size - 1) + mid
-                    px_m, px_p = max(0, px - 1), min(img_width - 1, px + 1)
-                    py_m, py_p = max(0, py - 1), min(img_height - 1, py + 1)
-                    
-                    h_xm = working_heightmap[py, px_m] * height_scale
-                    h_xp = working_heightmap[py, px_p] * height_scale
-                    h_ym = working_heightmap[py_m, px] * height_scale
-                    h_yp = working_heightmap[py_p, px] * height_scale
-                    
-                    # Scale factor for slope to match typical terrain_pipeline expectations
-                    # In terrain_pipeline: slope = dz / cell_size.
-                    # Here px_p - px_m is 2 pixel units. vertex_spacing = tile_size / (grid_size - 1)
-                    vertex_spacing = tile_size / (grid_size - 1)
-                    dz_dx = (h_xp - h_xm) / (2.0 * vertex_spacing)
-                    dz_dy = (h_yp - h_ym) / (2.0 * vertex_spacing)
-                    slope = math.sqrt(dz_dx**2 + dz_dy**2)
-                    # Scenery cliffs: use a threshold that matches Source terrain steepness
-                    is_cliff = slope > 0.2
-                    
-                    if zone_score > 0.7:
-                        # ACTION ZONE: Use high-quality primary blend
-                        tile_material = defaults.get("primary_floor", tile_material)
-                    elif zone_score > 0.3:
-                        # TRANSITION BELT: Use transition blend
-                        tile_material = defaults.get("transition_floor", defaults.get("primary_floor", tile_material))
-                    else:
-                        # SCENERY ZONE: Use cheap variants with macro-variation
-                        variation_seed = (col_idx * 13 + row_idx * 37 + self.spec.seed) % 1000
-                        if is_cliff:
-                            choices = defaults.get("scenery_cliffs", [defaults.get("cheap_cliff", tile_material)])
-                            tile_material = choices[variation_seed % len(choices)]
-                        else:
-                            choices = defaults.get("scenery_floors", [defaults.get("cheap_floor", tile_material)])
-                            tile_material = choices[variation_seed % len(choices)]
+                band = "mid"
+                is_cliff = False
+
+                # Average tile height to determine if it's a cliff
+                mid = (grid_size - 1) // 2
+
+                # Calculate center slope for procedural choice
+                px = col_idx * (grid_size - 1) + mid
+                py = row_idx * (grid_size - 1) + mid
+                px_m, px_p = max(0, px - 1), min(img_width - 1, px + 1)
+                py_m, py_p = max(0, py - 1), min(img_height - 1, py + 1)
+
+                h_xm = working_heightmap[py, px_m] * height_scale
+                h_xp = working_heightmap[py, px_p] * height_scale
+                h_ym = working_heightmap[py_m, px] * height_scale
+                h_yp = working_heightmap[py_p, px] * height_scale
+
+                # Scale factor for slope to match typical terrain_pipeline expectations
+                # In terrain_pipeline: slope = dz / cell_size.
+                # Here px_p - px_m is 2 pixel units. vertex_spacing = tile_size / (grid_size - 1)
+                vertex_spacing = tile_size / (grid_size - 1)
+                dz_dx = (h_xp - h_xm) / (2.0 * vertex_spacing)
+                dz_dy = (h_yp - h_ym) / (2.0 * vertex_spacing)
+                slope = math.sqrt(dz_dx**2 + dz_dy**2)
+                # Scenery cliffs: use a threshold that matches Source terrain steepness
+                is_cliff = slope > 0.2
+
+                if is_cliff:
+                    band = "cliff"
+                elif zone_score > 0.7:
+                    band = "low" # ACTION ZONE
+                elif zone_score > 0.3:
+                    band = "transition" # TRANSITION BELT
+                else:
+                    band = "valley" # SCENERY ZONE
+
+                tile_material, uses_blend = _select_material(band, theme_name)
 
                 # Manual Paint Override
                 if hasattr(self.spec, "custom_tile_materials") and self.spec.custom_tile_materials:
                     if (col_idx, row_idx) in self.spec.custom_tile_materials:
                         tile_material = self.spec.custom_tile_materials[(col_idx, row_idx)]
+                        # Determine uses_blend for custom material? We'll assume yes if "blend" is in the name
+                        uses_blend = "blend" in tile_material.lower()
 
                 # Selective Alpha Blending: Generate slope-based alphas ONLY for playable/painted blend materials
-                is_blend = "blend" in tile_material.lower()
-                # Skip alpha generation for distant "cheap" scenery to save VMF size
-                custom_mats = getattr(self.spec, "custom_tile_materials", None) or {}
-                if is_blend and (zone_score > 0.3 or (col_idx, row_idx) in custom_mats):
+                if uses_blend:
                     # Reference the original float heightmap for high-precision slope math
                     # working_heightmap is [img_height, img_width]
                     for iy in range(sample_size):
@@ -1753,14 +1816,15 @@ class DisplacementVMF:
                 top_face = floor_block.top()
                 top_face.lightmapscale = 32
 
-                # For distant scenery cliffs, use a larger texture scale to hide repetition and striping
-                if zone_score < 0.3 and is_cliff:
-                    top_face.uaxis = "[1 0 0 0] 1.0"
-                    top_face.vaxis = "[0 -1 0 0] 1.0"
+                if band == "cliff":
+                    uaxis_scale = 0.125
+                    vaxis_scale = 0.125
                 else:
-                    # Set defaults to ensure we can grep for them
-                    top_face.uaxis = "[1 0 0 0] 0.25"
-                    top_face.vaxis = "[0 -1 0 0] 0.25"
+                    uaxis_scale = 0.25
+                    vaxis_scale = 0.25
+
+                top_face.uaxis = f"[1 0 0 0] {uaxis_scale}"
+                top_face.vaxis = f"[0 -1 0 0] {vaxis_scale}"
 
                 top_face.children.append(disp_info)
                 valve_map.world.children.append(floor_block)
