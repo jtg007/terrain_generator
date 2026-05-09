@@ -29,7 +29,7 @@ THEME_MATERIALS: dict[str, dict[str, tuple[str, bool]]] = {
     # uses_blend_alpha = True only for materials with blend shader support
 
     "Temperate": {
-        "cliff":      ("common/nature/mountain_wall_000",              False),
+        "cliff":      ("common/nature/mountain_wall_000",              True),
         "peak":       ("common/nature/blend_grass_mountainwall_000",   True),
         "high":       ("common/nature/blend_grassfloor08_rockwall02",  True),
         "transition": ("common/nature/blend_grass_mud_003",            True),
@@ -38,7 +38,7 @@ THEME_MATERIALS: dict[str, dict[str, tuple[str, bool]]] = {
         "valley":     ("common/nature/mud_003",                        False),
     },
     "Desert": {
-        "cliff":      ("nature/cliff/stone_cliff_colorado",            False),
+        "cliff":      ("nature/cliff/stone_cliff_colorado",            True),
         "peak":       ("nature/blendrocksand008d",                     True),
         "high":       ("common/nature/blend_grass_sandfloor009a_000",  True),
         "transition": ("common/terrain/blend_grass01c_sand01a",        True),
@@ -65,7 +65,7 @@ THEME_MATERIALS: dict[str, dict[str, tuple[str, bool]]] = {
         "valley":     ("common/concrete/pavingground02a",              False),
     },
     "Wasteland": {
-        "cliff":      ("nature/cliff/stone_cliff_colorado",            False),
+        "cliff":      ("nature/cliff/stone_cliff_colorado",            True),
         "peak":       ("common/terrain/blend_red2_red4",               True),
         "high":       ("common/terrain/blend_red2_red3",               True),
         "transition": ("common/terrain/blend_red2_red3",               True),
@@ -1661,6 +1661,14 @@ class DisplacementVMF:
 
         grid_size = (2**power) + 1
 
+        edge_alphas: dict[tuple, np.ndarray] = {}
+
+        # First Pass: Generate blocks, displacement infos, and base alphas
+        disp_infos = {}
+        floor_blocks = {}
+        zone_scores = {}
+        is_cliff_dict = {}
+
         for row_idx in range(tiles_y):
             for col_idx in range(tiles_x):
                 offset_x = int(origin_x + (col_idx * tile_size))
@@ -1714,21 +1722,21 @@ class DisplacementVMF:
                 # Determine "Standard" material for this tile if not painted
                 band = "mid"
                 is_cliff = False
-
+                
                 # Average tile height to determine if it's a cliff
                 mid = (grid_size - 1) // 2
-
+                
                 # Calculate center slope for procedural choice
                 px = col_idx * (grid_size - 1) + mid
                 py = row_idx * (grid_size - 1) + mid
                 px_m, px_p = max(0, px - 1), min(img_width - 1, px + 1)
                 py_m, py_p = max(0, py - 1), min(img_height - 1, py + 1)
-
+                
                 h_xm = working_heightmap[py, px_m] * height_scale
                 h_xp = working_heightmap[py, px_p] * height_scale
                 h_ym = working_heightmap[py_m, px] * height_scale
                 h_yp = working_heightmap[py_p, px] * height_scale
-
+                
                 # Scale factor for slope to match typical terrain_pipeline expectations
                 # In terrain_pipeline: slope = dz / cell_size.
                 # Here px_p - px_m is 2 pixel units. vertex_spacing = tile_size / (grid_size - 1)
@@ -1738,7 +1746,7 @@ class DisplacementVMF:
                 slope = math.sqrt(dz_dx**2 + dz_dy**2)
                 # Scenery cliffs: use a threshold that matches Source terrain steepness
                 is_cliff = slope > 0.2
-
+                
                 if is_cliff:
                     band = "cliff"
                 elif zone_score > 0.7:
@@ -1758,11 +1766,12 @@ class DisplacementVMF:
                         uses_blend = "blend" in tile_material.lower()
 
                 # Selective Alpha Blending: Generate slope-based alphas ONLY for playable/painted blend materials
+                tile_alphas = np.zeros((sample_size, sample_size), dtype=int)
+                
                 if uses_blend:
                     # Reference the original float heightmap for high-precision slope math
                     # working_heightmap is [img_height, img_width]
                     for iy in range(sample_size):
-                        row_alphas = []
                         for ix in range(sample_size):
                             # Global coordinates in the heightmap
                             px = col_idx * (grid_size - 1) + ix
@@ -1794,10 +1803,13 @@ class DisplacementVMF:
                             slope = math.sqrt(slope_x**2 + slope_y**2)
                             
                             # Apply standard thresholds from terrain_pipeline.py
-                            alpha = slope_to_alpha(slope)
-                            row_alphas.append(alpha)
-                        
-                        disp_info.alphas.properties[f"row{iy}"] = " ".join(map(str, row_alphas))
+                            if band == "cliff":
+                                alpha = slope_to_alpha(slope, flat_threshold=0.3, steep_threshold=0.6)
+                            else:
+                                alpha = slope_to_alpha(slope)
+                            tile_alphas[iy, ix] = alpha
+                
+                edge_alphas[(col_idx, row_idx)] = tile_alphas
 
                 # Block centered at Z=-8 -> top face at Z=0, bottom at Z=-16
                 floor_block = Block(
@@ -1816,21 +1828,64 @@ class DisplacementVMF:
                 top_face = floor_block.top()
                 top_face.lightmapscale = 32
 
-                if band == "cliff":
-                    uaxis_scale = 0.125
-                    vaxis_scale = 0.125
-                else:
-                    uaxis_scale = 0.25
-                    vaxis_scale = 0.25
+                uaxis_scale = 0.25
+                vaxis_scale = 0.25
 
                 top_face.uaxis = f"[1 0 0 0] {uaxis_scale}"
                 top_face.vaxis = f"[0 -1 0 0] {vaxis_scale}"
 
+                disp_infos[(col_idx, row_idx)] = disp_info
+                floor_blocks[(col_idx, row_idx)] = floor_block
+                zone_scores[(col_idx, row_idx)] = zone_score
+                is_cliff_dict[(col_idx, row_idx)] = is_cliff
+
+        # Second Pass: Average border alphas and attach disp_info
+        for row_idx in range(tiles_y):
+            for col_idx in range(tiles_x):
+                disp_info = disp_infos[(col_idx, row_idx)]
+                floor_block = floor_blocks[(col_idx, row_idx)]
+                zone_score = zone_scores[(col_idx, row_idx)]
+                is_cliff = is_cliff_dict[(col_idx, row_idx)]
+                tile_alphas = edge_alphas[(col_idx, row_idx)].copy()
+
+                # Blend edge rows with neighbor average to prevent hard seams
+                
+                # Top edge: average with tile above (row_idx - 1)
+                if (col_idx, row_idx - 1) in edge_alphas:
+                    neighbor_alphas = edge_alphas[(col_idx, row_idx - 1)]
+                    tile_alphas[0, :] = (tile_alphas[0, :] + neighbor_alphas[-1, :]) // 2
+
+                # Bottom edge: average with tile below (row_idx + 1)
+                if (col_idx, row_idx + 1) in edge_alphas:
+                    neighbor_alphas = edge_alphas[(col_idx, row_idx + 1)]
+                    tile_alphas[-1, :] = (tile_alphas[-1, :] + neighbor_alphas[0, :]) // 2
+
+                # Left edge: average with tile left (col_idx - 1)
+                if (col_idx - 1, row_idx) in edge_alphas:
+                    neighbor_alphas = edge_alphas[(col_idx - 1, row_idx)]
+                    tile_alphas[:, 0] = (tile_alphas[:, 0] + neighbor_alphas[:, -1]) // 2
+
+                # Right edge: average with tile right (col_idx + 1)
+                if (col_idx + 1, row_idx) in edge_alphas:
+                    neighbor_alphas = edge_alphas[(col_idx + 1, row_idx)]
+                    tile_alphas[:, -1] = (tile_alphas[:, -1] + neighbor_alphas[:, 0]) // 2
+                
+                sample_size = grid_size
+                for iy in range(sample_size):
+                    disp_info.alphas.properties[f"row{iy}"] = " ".join(map(str, tile_alphas[iy]))
+
+                top_face = floor_block.top()
                 top_face.children.append(disp_info)
                 valve_map.world.children.append(floor_block)
 
+                offset_x = int(origin_x + (col_idx * tile_size))
+                offset_y = int(origin_y + (row_idx * tile_size))
+
                 # Deterministic Hero Prop Spawning in Scenery Zone
                 if zone_score < 0.3 and self.prop_count < max_hero_props:
+                    theme_name = getattr(self.spec, "current_theme", "Temperate")
+                    theme = self.themes.get(theme_name, self.themes.get("Generic", {}))
+                    defaults = theme.get("defaults", {})
                     theme_props = defaults.get("scenery_props", [])
                     if theme_props:
                         # Use deterministic hash of tile coordinates for cluster placement
