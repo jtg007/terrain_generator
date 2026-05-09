@@ -1669,6 +1669,10 @@ class DisplacementVMF:
         zone_scores = {}
         is_cliff_dict = {}
 
+        map_z_min = float(working_heightmap.min()) * height_scale
+        map_z_max = float(working_heightmap.max()) * height_scale
+        band_list = []
+
         for row_idx in range(tiles_y):
             for col_idx in range(tiles_x):
                 offset_x = int(origin_x + (col_idx * tile_size))
@@ -1745,16 +1749,46 @@ class DisplacementVMF:
                 dz_dy = (h_yp - h_ym) / (2.0 * vertex_spacing)
                 slope = math.sqrt(dz_dx**2 + dz_dy**2)
                 # Scenery cliffs: use a threshold that matches Source terrain steepness
-                is_cliff = slope > 0.2
+                is_cliff = slope > 2.5
                 
+                # Compute mean tile height in world units
+                corners = []
+                for dy in (0, grid_size - 1):
+                    for dx in (0, grid_size - 1):
+                        cpx = min(col_idx * (grid_size - 1) + dx, img_width - 1)
+                        cpy = min(row_idx * (grid_size - 1) + dy, img_height - 1)
+                        corners.append(working_heightmap[cpy, cpx] * height_scale)
+                tile_z = sum(corners) / 4.0
+
+                z_range = map_z_max - map_z_min
+                ratio = (tile_z - map_z_min) / z_range if z_range > 200 else 0.5
+
+                # Deterministic per-tile noise to prevent hard rings
+                noise = ((col_idx * 2654435761 ^ row_idx * 2246822519) & 0xFFFFFF)
+                noise = (noise / 0xFFFFFF - 0.5) * 0.12
+                ratio = max(0.0, min(1.0, ratio + noise))
+
                 if is_cliff:
                     band = "cliff"
-                elif zone_score > 0.7:
-                    band = "low" # ACTION ZONE
-                elif zone_score > 0.3:
-                    band = "transition" # TRANSITION BELT
+                elif ratio > 0.78:
+                    band = "peak"
+                elif ratio > 0.55:
+                    band = "high"
+                elif ratio > 0.35:
+                    band = "mid"
+                elif ratio > 0.15:
+                    band = "low"
+                elif ratio > 0.05:
+                    band = "transition"
                 else:
-                    band = "valley" # SCENERY ZONE
+                    band = "valley"
+
+                band_list.append(band)
+
+                if col_idx == 0 and row_idx == 0:
+                    print(f"[Terrain] map_z range: {map_z_min:.0f} to {map_z_max:.0f}")
+                    print(f"[Terrain] tile(0,0): z={tile_z:.0f} ratio={ratio:.2f} "
+                          f"slope={slope:.3f} band={band}")
 
                 tile_material, uses_blend = _select_material(band, theme_name)
 
@@ -1838,6 +1872,9 @@ class DisplacementVMF:
                 floor_blocks[(col_idx, row_idx)] = floor_block
                 zone_scores[(col_idx, row_idx)] = zone_score
                 is_cliff_dict[(col_idx, row_idx)] = is_cliff
+
+        from collections import Counter
+        print(f"[Terrain] Band distribution: {dict(Counter(band_list))}")
 
         # Second Pass: Average border alphas and attach disp_info
         for row_idx in range(tiles_y):
