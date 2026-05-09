@@ -1802,10 +1802,13 @@ class DisplacementVMF:
 
                             slope_alpha = slope_to_alpha(v_slope)
 
-                            # Height bias only amplifies existing slope — never creates rock
-                            # on flat terrain. If slope_alpha < 20 (flat vertex), bias = 0.
-                            if slope_alpha > 20:
-                                height_bias = int(ratio * 80)
+                            # Height bias only on genuinely HIGH tiles (ratio > 0.65)
+                            # and only when the tile itself is high — not edge bleed.
+                            # Use tile ratio (per-tile, not per-vertex) so flat low tiles
+                            # with steep neighbors never get bias.
+                            if ratio > 0.65:
+                                # Plateau: flat+high → rock. Scale 0 at 0.65 to 200 at 1.0
+                                height_bias = int((ratio - 0.65) / 0.35 * 200)
                             else:
                                 height_bias = 0
 
