@@ -6,7 +6,7 @@ Core data structures for compile-safe displacement terrain generation.
 """
 
 from dataclasses import dataclass
-from typing import List, Tuple, Dict, Any, Optional
+from typing import List, Tuple, Dict, Any, Optional, Set
 import numpy as np
 
 
@@ -59,6 +59,7 @@ class TerrainSpec:
     erosion_droplet_lifetime: int = 30
     terrain_max_height: int = 2048
     skybox_ceiling: int = 4096
+    vpk_index: Optional[Set[str]] = None
     roughness: float = 0.5
     topology: str = "random"
     lane_width_scale: float = 0.5
