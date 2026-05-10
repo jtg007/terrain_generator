@@ -430,7 +430,8 @@ class TerrainGeneratorGUI(QMainWindow):
         self.setup_ui()
         self.apply_dark_theme()
 
-        self.edit_empires_path.setText(empires_path)
+        with self._block_signals(self.edit_empires_path):
+            self.edit_empires_path.setText(empires_path)
         self.update_empires_status()
 
         # Initial sync and validation
