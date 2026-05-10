@@ -48,6 +48,67 @@ from tools.preview_widget import MapPreviewWidget
 
 
 from src.config_model import GUIConfigModel, MAX_MAP_DISPINFO, MAX_MAP_WORLD_SIZE
+
+def _read_vpk_string(f) -> str:
+    """Read null-terminated string from binary file."""
+    chars = []
+    while True:
+        c = f.read(1)
+        if c == b'\x00' or c == b'':
+            break
+        chars.append(c)
+    return b''.join(chars).decode('utf-8', errors='replace')
+
+
+def parse_vpk_dir(vpk_dir_path: str) -> set[str]:
+    """
+    Parse a Source Engine _dir.vpk file and return a set of all
+    file paths contained in the VPK archive.
+
+    VPK dir format (binary):
+    - 4 bytes: signature (0x55AA1234)
+    - 2 bytes: version
+    - 2 bytes: tree size
+    - Then: tree of extension -> path -> filename entries
+    """
+    import struct
+
+    paths = set()
+    try:
+        with open(vpk_dir_path, 'rb') as f:
+            # Header
+            sig = struct.unpack('<I', f.read(4))[0]
+            if sig != 0x55AA1234:
+                return paths
+            version = struct.unpack('<H', f.read(2))[0]
+            f.read(2)  # tree_size
+            if version == 2:
+                f.read(16)  # extra header fields
+
+            # Tree: extension -> directory -> filename
+            while True:
+                ext = _read_vpk_string(f)
+                if ext == '':
+                    break
+                while True:
+                    directory = _read_vpk_string(f)
+                    if directory == '':
+                        break
+                    while True:
+                        filename = _read_vpk_string(f)
+                        if filename == '':
+                            break
+                        # Skip entry data (18 bytes)
+                        f.read(18)
+                        # Build full path
+                        if directory == ' ':
+                            full = f"{filename}.{ext}"
+                        else:
+                            full = f"{directory}/{filename}.{ext}"
+                        paths.add(full.lower())
+    except Exception as e:
+        print(f"[VPK] Failed to parse {vpk_dir_path}: {e}")
+    return paths
 from src.terrain_pipeline import (
     run_pipeline,
     calculate_slopes,
@@ -354,17 +415,21 @@ class TerrainGeneratorGUI(QMainWindow):
         self.resize(1200, 780)
         self.setMinimumSize(820, 560)
 
+        self._vpk_index = set()
         self.config_model = GUIConfigModel()
         self._is_dirty = False
         self.config = Config()
         self.config_model.use_nodetail_texture = self.config.get("nodetail", False)
+
+        # Load Empires path from config to build VPK index early
+        empires_path = self.config.get("empires_path", "")
+        self._vpk_index = self._build_vpk_index(empires_path)
+
         self.terrain_materials, self.skyboxes, self.texture_themes = self.load_textures()
 
         self.setup_ui()
         self.apply_dark_theme()
 
-        # Load Empires path from config
-        empires_path = self.config.get("empires_path", "")
         self.edit_empires_path.setText(empires_path)
         self.update_empires_status()
 
@@ -375,6 +440,60 @@ class TerrainGeneratorGUI(QMainWindow):
         # F12 screenshot
         sc = QShortcut(QKeySequence("F12"), self)
         sc.activated.connect(self.take_screenshot)
+
+    def _build_vpk_index(self, empires_path: str) -> set[str]:
+        """
+        Parse all _dir.vpk files in empires_path and return
+        combined set of available file paths.
+        """
+        available = set()
+        if not empires_path or not os.path.exists(empires_path):
+            return available
+
+        dir_vpks = [
+            "materials_dir.vpk",
+            "materials_legacy_dir.vpk",
+            "models_dir.vpk",
+            "models_legacy_dir.vpk",
+            "misc_dir.vpk",
+        ]
+        for vpk_name in dir_vpks:
+            vpk_path = os.path.join(empires_path, vpk_name)
+            if os.path.exists(vpk_path):
+                found = parse_vpk_dir(vpk_path)
+                available.update(found)
+                print(f"[VPK] {vpk_name}: {len(found)} entries")
+            else:
+                print(f"[VPK] Not found: {vpk_path}")
+
+        # Also check loose files in materials/ and models/ folders
+        for root, dirs, files in os.walk(empires_path):
+            for fname in files:
+                rel = os.path.relpath(
+                    os.path.join(root, fname), empires_path
+                ).replace(os.sep, '/').lower()
+                available.add(rel)
+
+        print(f"[VPK] Total available files: {len(available)}")
+        return available
+
+    def is_texture_available(self, material_path: str) -> bool:
+        """
+        Check if a material is available in the VPK index.
+        material_path: e.g. "common/nature/blend_grass_mountainwall_000"
+        """
+        if not self._vpk_index:
+            return True  # no path configured -> assume all available
+        vmt = f"materials/{material_path.lower()}.vmt"
+        return vmt in self._vpk_index
+
+    def is_model_available(self, model_path: str) -> bool:
+        """
+        model_path: e.g. "models/props_foliage/tree_pine01.mdl"
+        """
+        if not self._vpk_index:
+            return True
+        return model_path.lower() in self._vpk_index
 
     def take_screenshot(self):
         import datetime
@@ -446,8 +565,12 @@ class TerrainGeneratorGUI(QMainWindow):
                         if mat not in all_materials:
                             all_materials.append(mat)
                             is_safe = safety.get(mat, True)
-                            label = "✓ SAFE" if is_safe else "⚠ CAUTION"
-                            flattened_labeled.append((f"{mat}  [{label}]", mat))
+
+                            is_available = self.is_texture_available(mat)
+                            avail_mark = "✓" if is_available else "✗"
+
+                            label = "SAFE" if is_safe else "CAUTION"
+                            flattened_labeled.append((f"{avail_mark} {mat}  [{label}]", mat))
                 
                 flattened_labeled.sort()
                 
@@ -1221,6 +1344,12 @@ class TerrainGeneratorGUI(QMainWindow):
         self.combo_material = QComboBox()
         for display_text, clean_path in self.terrain_materials:
             self.combo_material.addItem(display_text, clean_path)
+
+            # Optionally gray out if not available
+            if "✗" in display_text:
+                idx = self.combo_material.count() - 1
+                self.combo_material.setItemData(idx, Qt.gray, Qt.ForegroundRole)
+
         default_idx = self.combo_material.findData("common/nature/blend_grass_mountainwall_000")
         if default_idx >= 0:
             self.combo_material.setCurrentIndex(default_idx)
@@ -1580,6 +1709,7 @@ class TerrainGeneratorGUI(QMainWindow):
             return
 
         try:
+            self.config_model.vpk_index = self._vpk_index
             nodes, connections, resources, _, global_mask, texture_overlay, texture_mapping, next_texture_id, tile_overlay = (
                 self.preview_widget.get_layout_from_editor()
             )
@@ -2349,6 +2479,39 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config.set("empires_path", text)
         self.update_empires_status()
 
+        # Rebuild VPK index and update combo boxes
+        self._vpk_index = self._build_vpk_index(text)
+        self._refresh_material_combobox()
+
+    def _refresh_material_combobox(self):
+        current_data = self.combo_material.currentData()
+        self.combo_material.clear()
+
+        # Keep track of available mats to restore selection if possible
+        for display_text, clean_path in self.terrain_materials:
+            # We re-evaluate availability when we refresh
+            is_available = self.is_texture_available(clean_path)
+            if is_available:
+                new_display = display_text.replace("✗ ", "✓ ").replace("⚠ ", "✓ ")
+                if "✓" not in new_display:
+                    new_display = f"✓ {new_display}"
+            else:
+                new_display = display_text.replace("✓ ", "✗ ").replace("⚠ ", "✗ ")
+                if "✗" not in new_display:
+                    new_display = f"✗ {new_display}"
+
+            self.combo_material.addItem(new_display, clean_path)
+
+            # Optionally gray out if not available
+            idx = self.combo_material.count() - 1
+            if not is_available:
+                self.combo_material.setItemData(idx, Qt.gray, Qt.ForegroundRole)
+
+        # Restore previous selection if it's still there
+        idx = self.combo_material.findData(current_data)
+        if idx >= 0:
+            self.combo_material.setCurrentIndex(idx)
+
     def sync_to_ui(self):
         """Updates UI components to match the config model."""
         with self._block_signals(
@@ -2771,6 +2934,9 @@ class TerrainGeneratorGUI(QMainWindow):
 
         self.btn_generate.setEnabled(False)
         self.btn_generate.setText("Generating...")
+
+        # Copy the VPK index so it's available to the worker
+        self.config_model.vpk_index = self._vpk_index
 
         # Run generation in background
         map_name = self.txt_map_name.text().strip() or "gui_terrain"

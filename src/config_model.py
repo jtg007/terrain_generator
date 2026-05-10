@@ -78,6 +78,9 @@ class GUIConfigModel:
 
     manual_terrain: bool = False
     invert_lanes: bool = False
+
+    # Store the VPK index to pass to TerrainSpec
+    vpk_index: Optional[set[str]] = None
     canyon_natural: bool = False
     preview_with_pipeline: bool = False
     custom_tile_materials: Optional[dict] = None
@@ -235,6 +238,7 @@ class GUIConfigModel:
             erosion_iterations=iterations,
             terrain_max_height=self.height_scale,
             skybox_ceiling=self.skybox_ceiling,
+            vpk_index=self.vpk_index,
             roughness=self.roughness,
             topology=self.topology,
             lane_width_scale=self.lane_width_scale,
