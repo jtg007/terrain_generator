@@ -1629,6 +1629,7 @@ class DisplacementVMF:
         floor_blocks = {}
         zone_scores = {}
         is_cliff_dict = {}
+        tile_alpha_store = {}
 
         map_z_min = float(working_heightmap.min()) * height_scale
         map_z_max = float(working_heightmap.max()) * height_scale
@@ -1782,10 +1783,7 @@ class DisplacementVMF:
                 # Selective Alpha Blending: Generate slope-based alphas ONLY for playable/painted blend materials
                 tile_alphas = np.zeros((sample_size, sample_size), dtype=int)
 
-                if is_cliff:
-                    tile_alphas.fill(255)
-                
-                if uses_blend and not industrial_no_blend and not is_cliff:
+                if uses_blend and not industrial_no_blend:
                     for iy in range(sample_size):
                         for ix in range(sample_size):
                             px = col_idx * (grid_size - 1) + ix
@@ -1852,6 +1850,7 @@ class DisplacementVMF:
                 floor_blocks[(col_idx, row_idx)] = floor_block
                 zone_scores[(col_idx, row_idx)] = zone_score
                 is_cliff_dict[(col_idx, row_idx)] = is_cliff
+                tile_alpha_store[(col_idx, row_idx)] = tile_alphas.copy()
 
         from collections import Counter
         print(f"[Terrain] Band distribution: {dict(Counter(band_list))}")
@@ -2261,6 +2260,20 @@ class DisplacementVMF:
         if action_tiles > 1024:
             print("WARNING: Large Action Zone area. You may approach detail prop limits if primary material spawns dense grass.")
             print("Consider reducing corridor_detail_width or using a material with fewer detail props.")
+
+        # Check alpha continuity at shared tile edges
+        seam_violations = 0
+        for row_idx in range(tiles_y - 1):
+            for col_idx in range(tiles_x - 1):
+                # Bottom edge of tile vs top edge of tile below
+                if (col_idx, row_idx) in tile_alpha_store and (col_idx, row_idx + 1) in tile_alpha_store:
+                    bottom = tile_alpha_store[(col_idx, row_idx)][-1, :]
+                    top    = tile_alpha_store[(col_idx, row_idx + 1)][0, :]
+                    diff   = np.abs(bottom.astype(int) - top.astype(int))
+                    if diff.max() > 80:
+                        seam_violations += 1
+
+        print(f"[Alpha] Seam violations (>80 alpha jump): {seam_violations}")
 
         print("----------------------------------\n")
 

@@ -86,8 +86,8 @@ def choose_compile_safe_material(
         if is_unsafe:
             warning = (
                 f"Texture '{requested_material}' spawns detail props. On large maps, "
-                "the system automatically optimizes scenery walls using 'cheap' variants to ensure "
-                "performance while keeping your playable lanes high-detail."
+                "this may impact performance. Single blend material mode is active: "
+                "all tiles use unified material for seamless alpha blending."
             )
             return requested_material, warning
 
