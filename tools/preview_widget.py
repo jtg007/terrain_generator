@@ -1591,7 +1591,7 @@ class MapPreviewWidget(QWidget):
         half_range = max((max_h - min_h) * 0.5, 1.0)
 
         # Soft tone mapping: linear near the center, compresses extreme edits smoothly.
-        normalized = (np.arctan((combined - mid_h) / half_range) / np.pi) + 0.5
+        normalized = (combined - min_h) / max(max_h - min_h, 1.0)
         normalized_heights = (np.clip(normalized, 0, 1) * 255).astype(np.uint8)
 
         h, w = normalized_heights.shape
@@ -1670,7 +1670,7 @@ class MapPreviewWidget(QWidget):
             h,
             bytes_per_line,
             QImage.Format_RGBA8888,
-        )
+        ).copy()
         self.map_image = qimg
         self.update_pixmap()
         if update_3d:

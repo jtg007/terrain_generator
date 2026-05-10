@@ -1777,7 +1777,7 @@ class TerrainGeneratorGUI(QMainWindow):
                 h,
                 bytes_per_line,
                 QImage.Format_Grayscale8,
-            )
+            ).copy()
 
             self.preview_widget.set_map_image(
                 qimg,
