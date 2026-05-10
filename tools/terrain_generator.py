@@ -2876,37 +2876,52 @@ class TerrainGeneratorGUI(QMainWindow):
         return max(128, min(2048, max_for_x, max_for_y))
 
     def auto_compute_tile_size_from_target(self):
-        """Auto-calculate tile size from target map size and tile counts."""
-        tiles_x = self.spin_tiles_x.value()
-        tiles_y = self.spin_tiles_y.value()
-        target_size = self.spin_target_map_size.value()
-        if tiles_x <= 0 or tiles_y <= 0:
-            QMessageBox.warning(
-                self, "Invalid Tiles", "Tiles X and Tiles Y must be positive."
-            )
-            return
+        """Auto-calculate tile size and counts to reach target map size efficiently."""
+        # Target size is bounded by MAX_MAP_WORLD_SIZE through the UI, but enforce it here too just in case.
+        target_size = min(self.spin_target_map_size.value(), MAX_MAP_WORLD_SIZE)
 
-        ideal_size = min(target_size / tiles_x, target_size / tiles_y)
-        computed_tile_size = self._quantize_tile_size(ideal_size)
-        max_allowed = self._max_tile_size_for_tiles(tiles_x, tiles_y)
-        computed_tile_size = min(computed_tile_size, max_allowed)
+        # We want to find the best tile_size (max 2048) and tiles_x/tiles_y
+        # that gets as close to target_size as possible while keeping
+        # displacement counts low (larger tile sizes are better).
 
-        if computed_tile_size < 128:
-            computed_tile_size = 128
+        best_diff = float('inf')
+        best_tile_size = 2048
+        best_tiles = 1
 
-        self.spin_tile_size.setValue(computed_tile_size)
+        for tile_size in range(2048, 127, -64):
+            # Calculate optimal tile count for this size.
+            tiles = round(target_size / tile_size)
 
-        actual_map_x = tiles_x * computed_tile_size
-        actual_map_y = tiles_y * computed_tile_size
+            # Bound the number of tiles to safe limits
+            max_tiles_disp = int(MAX_MAP_DISPINFO**0.5)
+            max_tiles_world = MAX_MAP_WORLD_SIZE // tile_size
+            tiles = min(tiles, max_tiles_disp, max_tiles_world)
+            tiles = max(1, tiles)
+
+            actual_size = tiles * tile_size
+            diff = abs(actual_size - target_size)
+
+            # Prefer larger tile sizes when difference is the same or slightly worse
+            # but strictly favor smaller differences.
+            if diff < best_diff:
+                best_diff = diff
+                best_tile_size = tile_size
+                best_tiles = tiles
+
+        self.spin_tiles_x.setValue(best_tiles)
+        self.spin_tiles_y.setValue(best_tiles)
+        self.spin_tile_size.setValue(best_tile_size)
+
+        actual_map_x = best_tiles * best_tile_size
+        actual_map_y = best_tiles * best_tile_size
         QMessageBox.information(
             self,
             "Tile Size Calculated",
             (
                 f"Target size: {target_size} units\n"
-                f"Tiles: {tiles_x} x {tiles_y}\n"
-                f"Computed tile size: {computed_tile_size}\n"
-                f"Actual map size: {actual_map_x} x {actual_map_y}\n"
-                f"Max allowed tile size for current tiles: {max_allowed}"
+                f"Tiles: {best_tiles} x {best_tiles}\n"
+                f"Computed tile size: {best_tile_size}\n"
+                f"Actual map size: {actual_map_x} x {actual_map_y}"
             ),
         )
 
