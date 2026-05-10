@@ -1500,7 +1500,7 @@ class DisplacementVMF:
         valve_map.world.properties["maxpropscreenwidth"] = "-1"
         if self.spec.include_detail_props:
             valve_map.world.properties["detailmaterial"] = "detail/detailsprites"
-            valve_map.world.properties["detailvbsp"] = "detail.vbsp"
+            valve_map.world.properties["detailvbsp"] = "empires_custom_detail.vbsp"
         else:
             valve_map.world.properties.pop("detailmaterial", None)
             valve_map.world.properties.pop("detailvbsp", None)
@@ -1783,6 +1783,40 @@ class DisplacementVMF:
                 # Selective Alpha Blending: Generate slope-based alphas ONLY for playable/painted blend materials
                 tile_alphas = np.zeros((sample_size, sample_size), dtype=int)
 
+                # Calculate if this tile is deep scenery, under bases, or beneath water
+                tile_cx = offset_x + tile_size / 2
+                tile_cy = offset_y + tile_size / 2
+                is_scenery = zone_score < 0.3
+                is_under_base = False
+                base_radius = self.spec.base_clear_radius
+
+                if imp_base_x is not None and imp_base_y is not None:
+                    if math.sqrt((tile_cx - imp_base_x)**2 + (tile_cy - imp_base_y)**2) <= base_radius:
+                        is_under_base = True
+                if nf_base_x is not None and nf_base_y is not None:
+                    if math.sqrt((tile_cx - nf_base_x)**2 + (tile_cy - nf_base_y)**2) <= base_radius:
+                        is_under_base = True
+
+                # Check if tile is completely underwater
+                is_underwater = False
+                if "water_level" in rules:
+                    water_level = float(rules["water_level"])
+                    # Check if the highest point of the tile is below water level
+                    max_tile_z = -16000
+                    for c_r in range(grid_size):
+                        for c_c in range(grid_size):
+                            w_y = min(img_height - 1, row_idx * (grid_size - 1) + c_r)
+                            w_x = min(img_width - 1, col_idx * (grid_size - 1) + c_c)
+                            hz = working_heightmap[w_y, w_x] * height_scale
+                            if hz > max_tile_z:
+                                max_tile_z = hz
+                    if max_tile_z < water_level:
+                        is_underwater = True
+
+                # Conditional Material Stripping
+                if is_scenery or is_under_base or is_underwater:
+                    tile_material = f"{tile_material}_nodetail"
+
                 if uses_blend and not industrial_no_blend:
                     for iy in range(sample_size):
                         for ix in range(sample_size):
@@ -1790,6 +1824,9 @@ class DisplacementVMF:
                             py = row_idx * (grid_size - 1) + iy
                             px = max(0, min(px, img_width - 1))
                             py = max(0, min(py, img_height - 1))
+
+                            vx_world_x = origin_x + (px / (img_width - 1)) * map_width
+                            vx_world_y = origin_y + (py / (img_height - 1)) * map_height
 
                             # Vertex slope via central difference
                             px_m = max(0, px - 1)
@@ -1819,6 +1856,23 @@ class DisplacementVMF:
                                 height_bias = 0
 
                             final_alpha = min(255, slope_alpha + height_bias)
+
+                            # Vertex Alpha Culling Optimization:
+                            # 255 = Rock/No-detail. 0 = Grass.
+                            if v_slope > 0.5:
+                                final_alpha = 255
+
+                            vx_under_base = False
+                            if imp_base_x is not None and imp_base_y is not None:
+                                if math.sqrt((vx_world_x - imp_base_x)**2 + (vx_world_y - imp_base_y)**2) <= base_radius:
+                                    vx_under_base = True
+                            if nf_base_x is not None and nf_base_y is not None:
+                                if math.sqrt((vx_world_x - nf_base_x)**2 + (vx_world_y - nf_base_y)**2) <= base_radius:
+                                    vx_under_base = True
+
+                            if vx_under_base:
+                                final_alpha = 255
+
                             tile_alphas[iy, ix] = final_alpha
                 
                 edge_alphas[(col_idx, row_idx)] = tile_alphas
@@ -2218,6 +2272,50 @@ class DisplacementVMF:
                 origin_x=origin_x,
                 origin_y=origin_y,
             )
+
+        # Spawn func_detail_blocker for bases
+        if self.spec.include_detail_props:
+            base_radius = self.spec.base_clear_radius
+
+            def spawn_func_detail_blocker(bx: float, by: float):
+                bz = get_terrain_height_at(
+                    bx, by, height_array, origin_x, origin_y,
+                    map_width, map_height, height_scale, tiles_x, tiles_y, power
+                )
+                bz = quantize_coord(bz, 1.0)
+
+                # Bounding box coordinates
+                w = base_radius * 2
+                h = base_radius * 2
+                thickness = 128
+
+                blocker = vmf_lib.Entity("func_detail_blocker")
+                # Add brush using block
+                blocker_brush = Block(
+                    Vertex(bx, by, bz + 32), # centered at z + 32
+                    (w, h, thickness),
+                    "tools/toolsnodraw"
+                )
+
+                # func_detail_blocker doesn't actually need material per face, but it's a brush entity
+                # so we must append the brush (which vmflib represents via the "solid" format).
+                # vmflib doesn't easily let us add brushes to entities without using the class system.
+                # The correct way to create brush entities in vmflib is slightly different. Let's build a raw Entity and add solid manually if needed.
+                # Actually, vmflib allows `Entity` to have children. We can append the Block's solid structure.
+
+                # Wait, vmflib might not have func_detail_blocker as a native type. It's a standard brush entity.
+
+                # Add it as a top-level entity, since func_detail_blocker is an entity with brushes
+                ent = vmf_lib.Entity("func_detail_blocker")
+                ent.children.append(blocker_brush.brush)
+                valve_map.children.append(ent)
+
+            if imp_base_x is not None and imp_base_y is not None:
+                spawn_func_detail_blocker(imp_base_x, imp_base_y)
+
+            if nf_base_x is not None and nf_base_y is not None:
+                spawn_func_detail_blocker(nf_base_x, nf_base_y)
+
 
         spawn_required_entities_enhanced(
             valve_map,
