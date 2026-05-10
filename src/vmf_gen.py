@@ -1763,6 +1763,27 @@ class DisplacementVMF:
                     THEME_BLEND_MATERIAL["Generic"]
                 )
 
+                # Verify blend/cliff materials exist if vpk index is available
+                if getattr(self.spec, "vpk_index", None) is not None:
+                    vpk_idx = self.spec.vpk_index
+
+                    # Try fallback to first safe available if missing
+                    def verify_mat(mat):
+                        if not vpk_idx:
+                            return mat
+                        vmt = f"materials/{mat.lower()}.vmt"
+                        if vmt in vpk_idx:
+                            return mat
+                        # Missing! Fallback to any safe material in the theme if possible
+                        # The UI might have stripped it, but we can just use the first available from THEME_BLEND_MATERIAL
+                        for _, (b_mat, c_mat) in THEME_BLEND_MATERIAL.items():
+                            if f"materials/{b_mat.lower()}.vmt" in vpk_idx:
+                                return b_mat
+                        return mat # Fallback failed
+
+                    blend_mat = verify_mat(blend_mat)
+                    cliff_mat = verify_mat(cliff_mat)
+
                 if is_cliff:
                     tile_material = cliff_mat
                     uses_blend = True
@@ -1977,6 +1998,12 @@ class DisplacementVMF:
                                 pz = get_terrain_height_at(px, py, height_array, origin_x, origin_y, map_width, map_height, height_scale, tiles_x, tiles_y, power)
 
                                 prop_model = theme_props[sub_hash % len(theme_props)]
+
+                                # Skip unavailable models
+                                if getattr(self.spec, "vpk_index", None) is not None:
+                                    if self.spec.vpk_index and prop_model.lower() not in self.spec.vpk_index:
+                                        print(f"[Props] Skipping unavailable: {prop_model}")
+                                        continue
 
                                 prop = vmf_lib.Entity("prop_static")
                                 prop.origin = f"{px:.1f} {py:.1f} {pz:.1f}"
