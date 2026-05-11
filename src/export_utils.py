@@ -5,6 +5,43 @@ from PIL import Image
 
 COMPILE_SAFE_NODETAIL_MATERIAL = "common/terrain/blend_grass01a_dirt01a_nodetail"
 
+# All _nodetail material paths that actually exist in Empires Mod VPKs.
+# Keyed by full vpk-index path (lowercase) for direct set membership tests.
+KNOWN_NODETAIL_MATERIALS: set[str] = {
+    "materials/common/terrain/blend_grass01a_dirt01a_nodetail.vmt",
+    "materials/common/terrain/blend_grass01c_dirt01a_nodetail.vmt",
+    "materials/maps/emp_bush/silk_blendgrass04grass07_nodetail.vmt",
+    "materials/maps/emp_bush/silk_bush_blendgrass07rock8a_nodetail.vmt",
+    "materials/maps/emp_bush/silk_bush_blendgrass4cgrass4b_nodetail.vmt",
+    "materials/maps/emp_bush/silk_bush_blendgrass4crock8a_nodetail.vmt",
+    "materials/maps/emp_bush/silk_bush_blendgrass5bgrass02b_nodetail.vmt",
+    "materials/maps/emp_bush/silk_bush_blendgrass5brock8a_nodetail.vmt",
+    "materials/maps/emp_canyon/silk_canyon_grass10a_ground09_nodetail.vmt",
+    "materials/maps/emp_chain/silk_chain_blendgrass5bbground2db_nodetail.vmt",
+    "materials/maps/emp_chain/silk_chain_blendgrass5bbground5db_nodetail.vmt",
+    "materials/maps/emp_chain/silk_chain_blendgrass5bbground7ab_nodetail.vmt",
+    "materials/maps/emp_chain/silk_chain_blendgrass5bbground8ab_nodetail.vmt",
+    "materials/maps/emp_chain/silk_chain_blendground4cbground7ab_nodetail.vmt",
+}
+
+
+def has_nodetail_variant(material: str, vpk_index: set[str] | None = None) -> bool:
+    """Check if a _nodetail variant exists in the VPK index or known set."""
+    candidate = f"materials/{material}_nodetail.vmt"
+    if vpk_index is not None:
+        return candidate.lower() in vpk_index
+    return candidate.lower() in KNOWN_NODETAIL_MATERIALS
+
+
+def get_nodetail_variant(material: str, vpk_index: set[str] | None = None) -> str:
+    """Return the nodetail variant path or a safe fallback."""
+    if material.endswith("_nodetail"):
+        return material
+    if has_nodetail_variant(material, vpk_index):
+        return f"{material}_nodetail"
+    return COMPILE_SAFE_NODETAIL_MATERIAL
+
+
 SAFE_TEXTURE_PATTERNS = [
     "snow",
     "concrete",
@@ -55,28 +92,25 @@ def choose_compile_safe_material(
     map_height: int,
     use_nodetail_texture: bool = False,
     textures_path: str | Path | None = None,
+    vpk_index: set[str] | None = None,
 ) -> Tuple[str, Optional[str]]:
     """Return (material_name, optional_warning)."""
     map_area = map_width * map_height
     large_map_threshold = 8192 * 8192
 
     if use_nodetail_texture:
-        defaults = [
-            "common/nature/blend_grass_mountainwall_000",
-            "nature/terrain/blend_dirt_grass_dmz_sscale",
-            "common/stene/grass02",
-        ]
-        if requested_material in defaults:
-            return COMPILE_SAFE_NODETAIL_MATERIAL, None
-
         if requested_material.endswith("_nodetail"):
             return requested_material, None
 
+        if has_nodetail_variant(requested_material, vpk_index):
+            return f"{requested_material}_nodetail", None
+
         warning = (
-            f"Custom material '{requested_material}' is used without a nodetail version. "
-            "Large maps may hit the detail prop limit."
+            f"Material '{requested_material}' has no _nodetail variant. "
+            f"Falling back to '{COMPILE_SAFE_NODETAIL_MATERIAL}'. "
+            "Large maps may still hit the detail prop limit."
         )
-        return requested_material, warning
+        return COMPILE_SAFE_NODETAIL_MATERIAL, warning
 
     if map_area > large_map_threshold:
         texture_safety = get_texture_safety_status(textures_path)
@@ -164,6 +198,7 @@ def export_vmf(
         map_width,
         map_height,
         config_model.use_nodetail_texture,
+        vpk_index=getattr(config_model, "vpk_index", None),
     )
 
     vertex_cols = tiles_x * (grid_size - 1) + 1

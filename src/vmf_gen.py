@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Optional, List, Tuple, Dict, Any
 
 from src.terrain_pipeline import slope_to_alpha
+from src.export_utils import get_nodetail_variant
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "tools" / "vmflib"))
 from vmflib import vmf
@@ -1836,7 +1837,8 @@ class DisplacementVMF:
 
                 # Conditional Material Stripping
                 if is_scenery or is_under_base or is_underwater:
-                    tile_material = f"{tile_material}_nodetail"
+                    vpk_idx = getattr(self.spec, "vpk_index", None)
+                    tile_material = get_nodetail_variant(tile_material, vpk_idx)
 
                 if uses_blend and not industrial_no_blend:
                     for iy in range(sample_size):
