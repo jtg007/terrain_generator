@@ -1374,7 +1374,11 @@ class MapPreviewWidget(QWidget):
     def set_raw_heights(self, heights: np.ndarray, mask: Optional[np.ndarray] = None):
 
         self._base_heights = heights.astype(np.float64).copy()
-        self._base_min = float(self._base_heights.min())
+        valid_heights = self._base_heights[self._base_heights > 0.1]
+        if len(valid_heights) > 0:
+            self._base_min = float(valid_heights.min())
+        else:
+            self._base_min = float(self._base_heights.min())
         self._base_max = float(self._base_heights.max())
         if self._height_overlay is None or self._height_overlay.shape != heights.shape:
             self._height_overlay = np.zeros_like(self._base_heights)
