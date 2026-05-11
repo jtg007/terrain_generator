@@ -21,7 +21,7 @@ from pathlib import Path
 # Import shared path detection
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.steam_paths import is_windows, find_empires_path, find_empires_bin
-from src.export_utils import COMPILE_SAFE_NODETAIL_MATERIAL
+from src.material_manager import COMPILE_SAFE_NODETAIL_MATERIAL
 
 DETAIL_HEAVY_TERRAIN_MATERIALS = [
     # Temperate

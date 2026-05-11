@@ -552,7 +552,7 @@ class TerrainGeneratorGUI(QMainWindow):
                 themes = data.get("themes", {})
                 skyboxes = data.get("skyboxes", SAFE_EMPIRES_SKYBOXES) or SAFE_EMPIRES_SKYBOXES
                 
-                from src.export_utils import get_texture_safety_status
+                from src.material_manager import get_texture_safety_status
                 safety = get_texture_safety_status(textures_path)
                 
                 # We need to return TWO things for legacy compatibility:
