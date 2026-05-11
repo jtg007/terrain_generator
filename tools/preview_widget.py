@@ -333,6 +333,8 @@ class VisualNode(QGraphicsEllipseItem):
         scene.addItem(self)
 
     def paint(self, painter, option, widget):
+        painter.save()
+        painter.scale(1, -1)
         r = 84
         rect = QRectF(-r, -r, r * 2, r * 2)
 
@@ -366,6 +368,8 @@ class VisualNode(QGraphicsEllipseItem):
             painter.setBrush(Qt.NoBrush)
             r_lane = self.lane_radius
             painter.drawEllipse(QRectF(-r_lane, -r_lane, r_lane * 2, r_lane * 2))
+
+        painter.restore()
 
     def boundingRect(self):
         r1 = self.clear_radius if self.clear_radius > 0 else 0
@@ -780,6 +784,7 @@ class MapPreviewWidget(QWidget):
 
         self.scene = QGraphicsScene()
         self.view = CustomGraphicsView(self.scene, self)
+        self.view.scale(1, -1)
         self.view.setRenderHint(QPainter.Antialiasing)
         self.view.setDragMode(QGraphicsView.NoDrag)
         self.view.setStyleSheet("background-color: #0d0d10; border: 1px solid #2e2e36;")
@@ -1100,6 +1105,8 @@ class MapPreviewWidget(QWidget):
                         pw.resource_moved.emit(self.index, self.x(), self.y())
 
             def paint(self, painter, option, widget):
+                painter.save()
+                painter.scale(1, -1)
                 rect = QRectF(-84, -84, 168, 168)
 
                 if self.entity_type == "res":
@@ -1114,7 +1121,7 @@ class MapPreviewWidget(QWidget):
                     painter.setBrush(Qt.NoBrush)
                     painter.drawRect(rect.adjusted(-4, -4, 4, 4))
                     painter.setPen(QColor(255, 50, 50))
-                    painter.drawText(0, -95, "⚠")
+                    painter.drawText(-6, 100, "⚠")
 
                 # Draw clearance radius
                 if self.clear_radius > 0:
@@ -1124,6 +1131,8 @@ class MapPreviewWidget(QWidget):
                     painter.drawEllipse(
                         QRectF(-r_clear, -r_clear, r_clear * 2, r_clear * 2)
                     )
+
+                painter.restore()
 
         if (
             self.imp_base
@@ -1348,7 +1357,7 @@ class MapPreviewWidget(QWidget):
             if world_x is None or world_y is None:
                 return
             sx = world_x - self.origin_x - (self.map_size_x / 2.0)
-            sy = (self.map_size_y / 2.0) - (world_y - self.origin_y)
+            sy = (world_y - self.origin_y) - (self.map_size_y / 2.0)
             marker_positions.append([sx, sy, 100.0])
             marker_colors.append([r, g, b, a])
 
@@ -1865,7 +1874,7 @@ class MapPreviewWidget(QWidget):
 
         def to_preview_xy(world_x, world_y):
             sx = (world_x - self.origin_x) - (self.map_size_x / 2.0)
-            sy = (self.map_size_y / 2.0) - (world_y - self.origin_y)
+            sy = (world_y - self.origin_y) - (self.map_size_y / 2.0)
             return sx, sy
 
         def add_box(world_x, world_y, size_xyz, color_rgba, z_offset=0.0):
