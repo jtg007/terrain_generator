@@ -891,9 +891,10 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
         else:
             base_t = np.full((rows, cols), floor_height, dtype=np.float32)
     else:
-        # In procedural mode, we use existing heights if available, otherwise None (will gen fBm)
-        # We only use original_heights if they look like they contain actual terrain data.
-        base_t = original_heights if (original_heights is not None and np.any(original_heights > 0)) else None
+        # In procedural mode, we ALWAYS regenerate from scratch (None)
+        # We must NOT use original_heights because it creates a recursive feedback loop
+        # where the canyon noise is applied multiple times to the same heightmap.
+        base_t = None
 
     # Generate the terrain base [0, 1]
 
@@ -1021,7 +1022,7 @@ def flatten_base_areas(
     """
     Flatten areas where bases will be placed for competitive gameplay.
     """
-    if spec.base_clear_radius <= 0:
+    if spec.base_clear_radius <= 0 and spec.resource_clear_radius <= 0:
         return grid
 
     rows = grid.rows
@@ -1065,47 +1066,48 @@ def flatten_base_areas(
     imp_target_height = imp_avg_height
     nf_target_height = nf_avg_height
 
-    # We want the plateau to be perfectly flat for the inner 60% of the radius.
-    plateau_radius = base_radius * 0.6
-    falloff_dist = base_radius - plateau_radius
+    if base_radius > 0:
+        # We want the plateau to be perfectly flat for the inner 60% of the radius.
+        plateau_radius = base_radius * 0.6
+        falloff_dist = base_radius - plateau_radius
 
-    # Flatten bases
-    for r in range(rows):
-        world_y = spec.origin_y + r * vertex_spacing
-        for c in range(cols):
-            world_x = spec.origin_x + c * vertex_spacing
+        # Flatten bases
+        for r in range(rows):
+            world_y = spec.origin_y + r * vertex_spacing
+            for c in range(cols):
+                world_x = spec.origin_x + c * vertex_spacing
 
-            dist_to_imp = 999999.0
-            if imp_base_x is not None and imp_base_y is not None:
-                dist_to_imp = math.sqrt(
-                    (world_x - imp_base_x) ** 2 + (world_y - imp_base_y) ** 2
-                )
+                dist_to_imp = 999999.0
+                if imp_base_x is not None and imp_base_y is not None:
+                    dist_to_imp = math.sqrt(
+                        (world_x - imp_base_x) ** 2 + (world_y - imp_base_y) ** 2
+                    )
 
-            dist_to_nf = 999999.0
-            if nf_base_x is not None and nf_base_y is not None:
-                dist_to_nf = math.sqrt(
-                    (world_x - nf_base_x) ** 2 + (world_y - nf_base_y) ** 2
-                )
+                dist_to_nf = 999999.0
+                if nf_base_x is not None and nf_base_y is not None:
+                    dist_to_nf = math.sqrt(
+                        (world_x - nf_base_x) ** 2 + (world_y - nf_base_y) ** 2
+                    )
 
-            if dist_to_imp < base_radius:
-                dist = dist_to_imp
-                target_height = imp_target_height
-            elif dist_to_nf < base_radius:
-                dist = dist_to_nf
-                target_height = nf_target_height
-            else:
-                continue
+                if dist_to_imp < base_radius:
+                    dist = dist_to_imp
+                    target_height = imp_target_height
+                elif dist_to_nf < base_radius:
+                    dist = dist_to_nf
+                    target_height = nf_target_height
+                else:
+                    continue
 
-            if dist <= plateau_radius:
-                t = 1.0
-            else:
-                t = 1.0 - ((dist - plateau_radius) / falloff_dist)
-                t = t * t * (3 - 2 * t)
+                if dist <= plateau_radius:
+                    t = 1.0
+                else:
+                    t = 1.0 - ((dist - plateau_radius) / falloff_dist)
+                    t = t * t * (3 - 2 * t)
 
-            t = t * flatness
+                t = t * flatness
 
-            current = new_heights[r, c]
-            new_heights[r, c] = float(current * (1.0 - t) + target_height * t)
+                current = new_heights[r, c]
+                new_heights[r, c] = float(current * (1.0 - t) + target_height * t)
 
     avg_height = spec.terrain_max_height * 0.15  # Fallback for resource nodes
     # Flatten resource nodes
@@ -2165,6 +2167,8 @@ def run_pipeline(
     print(f"  Step 1: Generate vertex grid ({spec.vertex_cols}x{spec.vertex_rows})")
     grid = generate_vertex_grid(spec)
 
+    pure_heights = None
+
     if initial_heights is not None:
         if initial_heights.shape != grid.heights.shape:
             from src.compat_utils import scipy_zoom_equivalent
@@ -2176,6 +2180,7 @@ def run_pipeline(
             )
         else:
             grid.heights = initial_heights.astype(np.float32).copy()
+        pure_heights = grid.heights.copy()
 
     if global_selection_mask is not None:
         if global_selection_mask.shape != grid.heights.shape:
@@ -2242,9 +2247,12 @@ def run_pipeline(
         if hasattr(grid, 'report') and not grid.report.get("pass", True):
             errors.append(f"Heightmap validation failed: {grid.report}")
 
+    if pure_heights is None:
+        pure_heights = grid.heights.copy()
+
     print(f"    Height range: {grid.min_height():.1f} to {grid.max_height():.1f}")
 
-    if spec.base_clear_radius > 0:
+    if spec.base_clear_radius > 0 or spec.resource_clear_radius > 0:
         print(
             f"  Step 2d: Pre-stamp base areas (radius={spec.base_clear_radius}, flatness={spec.base_flatness})"
         )
@@ -2261,7 +2269,7 @@ def run_pipeline(
         grid = calculate_slopes(grid)
         print("  Step 5: Smooth heights (BYPASSED for Canyon Generator)")
 
-        if spec.base_clear_radius > 0 and spec.base_flatness > 0.5:
+        if (spec.base_clear_radius > 0 or spec.resource_clear_radius > 0) and spec.base_flatness > 0.5:
             print("  Step 5b: Light touch-up for base areas")
             import copy
 
@@ -2333,6 +2341,7 @@ def run_pipeline(
         "cells": cells,
         "underlay": underlay,
         "errors": errors,
+        "pure_heights": pure_heights,
     }
 
 

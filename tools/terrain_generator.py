@@ -222,13 +222,20 @@ class PreviewWorker(QThread):
                             spec.custom_tile_materials[(x, y)] = id_to_material[mat_id]
 
             # Skip layout validation during preview to prevent crashes while dragging
+
+            # Use initial_heights ONLY if manual_terrain is True
+            initial_h = self.initial_heights if getattr(spec, "manual_terrain", False) else None
+
             result = run_pipeline(
                 spec,
                 skip_layout_validation=True,
                 global_selection_mask=self.global_selection_mask,
-                initial_heights=self.initial_heights,
+                initial_heights=initial_h,
             )
-            self.finished.emit(result["grid"], result["spec"])
+            grid = result["grid"]
+            if "pure_heights" in result:
+                grid.pure_heights = result["pure_heights"]
+            self.finished.emit(grid, result["spec"])
         except Exception:
             import traceback
 
@@ -1759,11 +1766,28 @@ class TerrainGeneratorGUI(QMainWindow):
             if self.config_model.preview_with_pipeline:
                 display_grid = apply_pipeline_for_preview(grid, spec)
 
+            if hasattr(grid, 'pure_heights'):
+                pure_heights = np.array(grid.pure_heights)
+            else:
+                pure_heights = np.array(grid.heights)
+
             heights = np.array(display_grid.heights)
-            min_h = heights.min()
-            max_h = heights.max()
+
+            # Use original pure height range for consistent tone mapping
+            # This prevents exposure flashing on erosion runs
+
+            # Find the actual min ignoring the purely black empty edge areas (which are close to 0)
+            valid_pure_heights = pure_heights[pure_heights > 0.1]
+            if len(valid_pure_heights) > 0:
+                min_h = float(valid_pure_heights.min())
+            else:
+                min_h = float(pure_heights.min())
+            max_h = float(pure_heights.max())
+
             if max_h > min_h:
                 normalized = (heights - min_h) / (max_h - min_h)
+                # Clip to 0-1 to prevent wrap-around bugs if heights has lower/higher values after erosion
+                normalized = np.clip(normalized, 0, 1)
             else:
                 normalized = np.zeros_like(heights)
 
@@ -1796,7 +1820,8 @@ class TerrainGeneratorGUI(QMainWindow):
                 if hasattr(grid, "global_selection_mask")
                 else None
             )
-            self.preview_widget.set_raw_heights(heights, mask=grid_mask)
+            # Pass the pure base heights so they can be reused cleanly for iterative previews
+            self.preview_widget.set_raw_heights(pure_heights, mask=grid_mask)
 
             imp_pos = (
                 self.config_model.custom_imp_base_x,
