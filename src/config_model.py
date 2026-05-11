@@ -53,7 +53,7 @@ class GUIConfigModel:
     # Texture and skybox selections
     terrain_material: str = "common/nature/blend_grass_mountainwall_000"
     skybox: str = "empsky_overcast3yellow"
-    use_nodetail_texture: bool = False
+    use_smart_details: bool = True
 
     # Base flattening settings
     base_clear_radius: int = 0

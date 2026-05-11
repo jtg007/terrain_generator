@@ -21,232 +21,11 @@ from pathlib import Path
 # Import shared path detection
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.steam_paths import is_windows, find_empires_path, find_empires_bin
-from src.material_manager import COMPILE_SAFE_NODETAIL_MATERIAL
-
-DETAIL_HEAVY_TERRAIN_MATERIALS = [
-    # Temperate
-    "common/nature/blend_grass_mountainwall_000",
-    "common/nature/blend_grass_mud_003",
-    "common/nature/grass_001",
-    "common/nature/grassfloor01",
-    "common/nature/grassfloor12",
-    # Terrain blends
-    "common/terrain/blend_grass01a_dirt01a",
-    "common/terrain/blend_grass01a_rock01a",
-    "common/terrain/blend_grass01b_dirt01a",
-    "common/terrain/blend_grass01c_dirt01a",
-    "common/terrain/terrain_grass_01a",
-    "common/terrain/redground2",
-    "common/terrain/redground3",
-    "common/terrain/redground4",
-    "common/terrain/blend_red2_red3",
-    "common/terrain/blend_red2_red4",
-    "common/terrain/blend_red3_red4",
-    "common/terrain/blend_snow01_rock01a",
-    "common/terrain/blend_sand02a_rock01a",
-    "common/terrain/blend_grass01c_sand01a",
-    "common/terrain/blend_grass01c_sand01b",
-    # Nature terrain
-    "nature/terrain/blend_grass1_dirt1",
-    "nature/terrain/blend_grass1_rock1",
-    "nature/terrain/blend_grass1_dirt2",
-    "nature/terrain/tarmac_01",
-    "nature/terrain/tarmac_02",
-    # Stene (dirt/grass/concrete)
-    "common/stene/dirtyconcrete",
-    "common/stene/grass02",
-    "common/stene/grassymud",
-    "common/stene/grassymud02",
-    "common/stene/dirtfloor001",
-    "common/stene/dirtfloor002",
-    "common/stene/drygrass",
-    "common/stene/grass01",
-    "common/stene/grass03",
-    # Desert
-    "common/nature/blend_grass_sandfloor009a_000",
-    "common/nature/sandfloor009a",
-    "common/stene/sand01",
-    "common/stene/grainysand",
-    "common/stene/shittysand",
-    "common/terrain/blend_grass01c_sand01a",
-    "common/terrain/blend_grass01c_sand01b",
-    # Snow
-    "common/emp_snow/blend_snowsnow01a",
-    "common/emp_snow/blend_snowsnow02b",
-    "common/emp_snow/snowfloor001b",
-    "common/emp_snow/snowfloor002b",
-    "common/emp_snow/snowfloor003b",
-    # Concrete / Industrial
-    "common/concrete/pavingground01",
-    "common/concrete/pavingground01b",
-    "common/concrete/pavingground02a",
-    "common/concrete/pavingground03a",
-    "common/concrete/pavingground03b",
-    # Nature blends
-    "nature/blenddirtgrass001a",
-    "nature/blenddirtgrass008a",
-    "nature/blenddirtgrass008b",
-    "nature/blendrockdirt008d",
-    "nature/blendrockgrass004a",
-    "nature/blendrockgrass008d",
-    "nature/dirtfloor009c",
-    "nature/ground/ground_dirt_pebbles",
-    "nature/cliffface001b",
-    "nature/cliff/stone_cliff_colorado",
-    "nature/blend_colorado_cliff_dirt_pebbles",
-    # Nature terrain
-    "nature/water/water_ocean_beneath",
-    # Nature broad
-    "common/nature/mountain_wall_000",
-    # Generic blends
-    "generic/l01/blend_dirt01grass_01",
-    "generic/l01/blend_earth_01grass_01",
-    "generic/l01/l01_grass_01",
-    "generic/l01/l01_grasscliff_01",
-    "generic/l01/blend_sandpebbles01grass_01",
-    "generic/l01/blend_rocklayered01grass_01",
-    "generic/l01/blend_rocklayered01grass_01skybox",
-    "generic/l04/l04_cliff_a03islegrass",
-    # Johnshandy world
-    "johnshandy/world/blendgrassrock",
-    "johnshandy/world/grass2dirtisle",
-    "johnshandy/world/isle_hilltopgrass01",
-    "johnshandy/world/blendsandpebblesgrass",
-    "johnshandy/world/blendsandpebbleskeefrock",
-    "johnshandy/world/blendsandpebblesreef",
-    "johnshandy/world/blendsandpebblesrock",
-    "johnshandy/world/grass2sandpebbles02",
-    "johnshandy/world/sandpebbles2sandpebbles",
-    "johnshandy/world/isle_cliffsiderock01",
-    # Mayama
-    "mayama/overlaydirt1",
-    # Wolandic
-    "wolandic/blenddirtgrass01",
-    "wolandic/blendsandgrass01",
-    # DZ
-    "dz/blend_snow_wall",
-    # Silk blends
-    "silk/silk_canyon_grass05a_grass09c",
-    "silk/silk_canyon_grass05a_ground02a",
-    "silk/silk_canyon_grass05a_rock05b",
-    "silk/silk_canyon_grass08c_grass09c",
-    "silk/silk_canyon_grass08c_rock05b",
-    "silk/silk_canyon_grass08d_rock05b",
-    "silk/silk_canyon_grass09c_rock05b",
-    "silk/silk_canyon_ground08c_grass09c",
-    "silk/silk_canyon_ground03a_ground02a",
-    "silk/silk_canyon_ground03a_ground06b",
-    "silk/silk_canyon_ground06b_rock05b",
-    "silk/silk_canyon_rock04c_rock05b",
-    "silk/silk_rock04a_rock05a",
-    "silk/silk_rock04b_rock05a",
-    "silk/silk_snow02b_concretefloor10b",
-    "silk/silk_snow02b_pavingground03a",
-    "silk/silk_snow02b_roadfloor06",
-    "silk/silk_snow02b_snow03b_seamless",
-    "silk/silk_pavingground02a",
-    "silk/silk_beach01a_sand02a",
-    "silk/silk_beach01a_sand02a_clouds",
-    "silk/silk_beach01b_ground02a",
-    "silk/silk_beach01b_ground02a_clouds",
-    "silk/silk_sand01a_sand02a",
-    "silk/silk_sand01a_sand02a_clouds",
-    "silk/silk_sand01b_sand02b",
-    "silk/silk_sand01b_sand02b_clouds",
-    "silk/silk_sand03a_ground06b",
-    "silk/silk_sand03a_ground06b_clouds",
-    "silk/silk_sand03b_ground06a",
-    "silk/silk_sand03b_ground06a_clouds",
-    "silk/silk_sand03c_ground06b",
-    "silk/silk_sand03c_ground06b_clouds",
-    # Silk desert blends
-    "silk/arid_blendcearth1rock6",
-    "silk/arid_blendcearth3rock6",
-    "silk/arid_blendcearth3rock6_x2",
-    # Map-specific (emp_coast)
-    "maps/emp_coast/blendgrass1dirt1",
-    "maps/emp_coast/blendvalvemuddirt1",
-    "maps/emp_coast/dirt_1",
-    "maps/emp_coast/grass_1",
-    # Map-specific (emp_mvalley)
-    "maps/emp_mvalley/blenddirtdirt",
-    "maps/emp_mvalley/blenddirtdirt2",
-    "maps/emp_mvalley/blenddirtsand",
-    "maps/emp_mvalley/blenddirtterra",
-    "maps/emp_mvalley/blendgraveldirt3",
-    "maps/emp_mvalley/redsand",
-    "maps/emp_mvalley/redground2",
-    "maps/emp_mvalley/redground3",
-    "maps/emp_mvalley/redground4",
-    # Map-specific (emp_arid)
-    "maps/emp_arid/blenddirtdirt_silk",
-    # Map-specific (emp_bush)
-    "maps/emp_bush/silk_blenddirt01grass07",
-    "maps/emp_bush/silk_blendgrass02bgrass07",
-    "maps/emp_bush/silk_blendgrass04grass07",
-    "maps/emp_bush/silk_blendgrassfloor002abgrass07",
-    # Map-specific (emp_canyon)
-    "maps/emp_canyon/silk_canyon_grass10a_grass10a",
-    "maps/emp_canyon/silk_canyon_grass10a_grass10a_b",
-    "maps/emp_canyon/silk_canyon_grass10a_ground09",
-    "maps/emp_canyon/silk_canyon_grass10a_ground09_lessdetail",
-    # Map-specific (emp_chain)
-    "maps/emp_chain/silk_chain_blendgrass5bbground2db",
-    "maps/emp_chain/silk_chain_blendgrass5bbground2db_detail",
-    "maps/emp_chain/silk_chain_blendgrass5bbground5db",
-    "maps/emp_chain/silk_chain_blendgrass5bbground5db_detail",
-    "maps/emp_chain/silk_chain_blendgrass5bbground5db_clouds_detail",
-    "maps/emp_chain/silk_chain_blendgrass5bbground7ab",
-    "maps/emp_chain/silk_chain_blendgrass5bbground7ab_detail",
-    "maps/emp_chain/silk_chain_blendgrass5bbground7ab_clouds_detail",
-    "maps/emp_chain/silk_chain_blendgrass5bbground8ab_clouds_detail",
-    "maps/emp_chain/silk_chain_blendmoss1a4xground5db_detail",
-    "maps/emp_chain/silk_chain_blendmoss1a4xground5db_clouds_detail",
-    "maps/emp_chain/silk_chain_blendrock9bbgrass5bb",
-    "maps/emp_chain/silk_chain_blendrock9bbmoss2a4x",
-    "maps/emp_chain/silk_chain_blendrock9bbground2db",
-    "maps/emp_chain/silk_chain_blendrock9bbground5db",
-    "maps/emp_chain/silk_chain_blendrock9bbground7ab",
-    "maps/emp_chain/silk_chain_blendrock9bbrock10b",
-    "maps/emp_chain/silk_chain_blendrock9bbsnow1a",
-    "maps/emp_chain/silk_chain_blendground4cbground7ab_clouds_detail",
-    "maps/emp_chain/silk_chain_blendgrass5bbground8ab_detail",
-    # Rubble
-    "common/rubble/blend_rubblefloor04_rubblefloor05",
-    # Nature tree/foliage (not terrain, but used on displacements in some tiles)
-    "common/nature/treebark01",
-    "common/nature/treebark02",
-    "common/nature/treebark05",
-    "common/nature/treebark05b",
-    # Legacy Empires texture reference
-    "nature/terrain/blend_dirt_grass_dmz_sscale",
-]
-
-
-def force_nodetail_materials(vmf_path: str) -> int:
-    """
-    Rewrite known terrain blend materials to a nodetail-safe material.
-    Returns replacement count.
-    """
-    path = Path(vmf_path)
-    content = path.read_text(encoding="utf-8", errors="ignore")
-    replacement_count = 0
-    for mat in DETAIL_HEAVY_TERRAIN_MATERIALS:
-        old = f'"material" "{mat}"'
-        new = f'"material" "{COMPILE_SAFE_NODETAIL_MATERIAL}"'
-        occurrences = content.count(old)
-        if occurrences > 0:
-            content = content.replace(old, new)
-            replacement_count += occurrences
-    path.write_text(content, encoding="utf-8")
-    return replacement_count
-
 
 def compile_vmf(
     vmf_path: str,
     sdk_path: str = "",
     empires_path: str = "",
-    nodetail: bool = False,
     auto_copy: bool = True,
     custom_output: str = "",
 ) -> bool:
@@ -303,21 +82,12 @@ def compile_vmf(
 
     temp_vmf = os.path.join(sdk_path, vmf_name)
     shutil.copy2(str(vmf_path), temp_vmf)
-    if nodetail:
-        replaced = force_nodetail_materials(temp_vmf)
-        if replaced > 0:
-            print(
-                "Nodetail material override enabled:"
-                f" replaced {replaced} terrain material reference(s)."
-            )
 
-    def build_cmd(use_nodetail: bool) -> list:
+    def build_cmd() -> list:
         if is_windows():
             cmd = [vbsp_exe, "-game", empires_path]
         else:
             cmd = ["wine", "vbsp.exe", "-game", empires_path]
-        if use_nodetail:
-            cmd.append("-nodetail")
         cmd.append(vmf_name)
         return cmd
 
@@ -333,13 +103,13 @@ def compile_vmf(
                 "Reduce Tiles X/Y or Tile Size."
             )
         elif "Too many detail props emitted" in combined_output:
-            print("Tip: Enable 'Use nodetail texture' in Settings.")
+            print("Tip: Engine limit exceeded for detail props. Use Smart Details.")
         else:
             print("Tip: Check geometry and entity placement near map bounds.")
 
     try:
         result = subprocess.run(
-            build_cmd(nodetail),
+            build_cmd(),
             cwd=sdk_path,
             capture_output=True,
             text=True,
@@ -355,40 +125,53 @@ def compile_vmf(
 
         if result.returncode != 0:
             combined_output = f"{result.stdout}\n{result.stderr}"
-            if (not nodetail) and ("Too many detail props emitted" in combined_output):
-                print("Detail prop limit hit. Retrying compile with nodetail fallback...")
-                replaced = force_nodetail_materials(temp_vmf)
-                if replaced > 0:
-                    print(
-                        "Nodetail material override enabled:"
-                        f" replaced {replaced} terrain material reference(s)."
-                    )
-                retry_result = subprocess.run(
-                    build_cmd(True),
-                    cwd=sdk_path,
-                    capture_output=True,
-                    text=True,
-                    timeout=300,
-                )
-                if retry_result.stdout:
-                    print(retry_result.stdout)
-                if retry_result.stderr:
-                    print("STDERR:", retry_result.stderr)
-                print("-" * 60)
-                if retry_result.returncode != 0:
-                    print("Compile failed.")
-                    combined_output = f"{retry_result.stdout}\n{retry_result.stderr}"
-                    print_failure_hint(combined_output)
-                    print(f"Error output:\n{retry_result.stdout}\n{retry_result.stderr}")
-                    return False
-            else:
-                print("Compile failed.")
-                print_failure_hint(combined_output)
-                print(f"Error output:\n{result.stdout}\n{result.stderr}")
-                return False
+            print("Compile failed.")
+            print_failure_hint(combined_output)
+            print(f"Error output:\n{result.stdout}\n{result.stderr}")
+            return False
 
         generated_bsp = os.path.join(sdk_path, vmf_name.replace(".vmf", ".bsp"))
         if os.path.exists(generated_bsp):
+
+            # --- BSPZIP Packing ---
+            bspzip_exe = os.path.join(sdk_path, "bspzip.exe")
+            vmf_assets_dir = project_root / "materials" / "vmf_generator_assets"
+
+            if os.path.exists(bspzip_exe) and vmf_assets_dir.exists():
+                print("Running bspzip to pack custom VMTs and detail scripts...")
+                packlist_path = project_root / "temp_packlist.txt"
+
+                packlist_lines = []
+                for asset in vmf_assets_dir.rglob("*"):
+                    if asset.is_file():
+                        # Internal path inside BSP
+                        rel_internal = f"materials/vmf_generator_assets/{asset.name}"
+                        # External absolute path
+                        abs_external = str(asset.resolve())
+                        packlist_lines.append(rel_internal)
+                        packlist_lines.append(abs_external)
+
+                if packlist_lines:
+                    packlist_path.write_text("\n".join(packlist_lines) + "\n")
+
+                    bspzip_cmd = [bspzip_exe, "-addlist", generated_bsp, str(packlist_path), generated_bsp]
+                    if not is_windows():
+                        bspzip_cmd = ["wine"] + bspzip_cmd
+
+                    try:
+                        subprocess.run(
+                            bspzip_cmd,
+                            cwd=sdk_path,
+                            capture_output=True,
+                            text=True,
+                            timeout=60,
+                        )
+                        print(f"Packed {len(packlist_lines)//2} files into BSP.")
+                    except Exception as e:
+                        print(f"Warning: Failed to run bspzip: {e}")
+                    finally:
+                        packlist_path.unlink(missing_ok=True)
+
             shutil.copy2(generated_bsp, bsp_path)
             os.remove(generated_bsp)
             print(f"BSP created: {bsp_path}")
@@ -513,9 +296,6 @@ def main():
     parser.add_argument("--sdk", help="Path to Empires bin directory")
     parser.add_argument("--empires-path", help="Path to Empires root directory")
     parser.add_argument(
-        "--nodetail", action="store_true", help="Skip detail props (for large maps)"
-    )
-    parser.add_argument(
         "--no-auto-copy", action="store_true", help="Disable auto copying to Empires folder"
     )
     parser.add_argument(
@@ -524,7 +304,7 @@ def main():
 
     args = parser.parse_args()
 
-    success = compile_vmf(args.vmf, args.sdk, args.empires_path, args.nodetail, not args.no_auto_copy, args.custom_output)
+    success = compile_vmf(args.vmf, args.sdk, args.empires_path, not args.no_auto_copy, args.custom_output)
     sys.exit(0 if success else 1)
 
 

@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from typing import Optional, List, Tuple, Dict, Any
 
 from src.terrain_pipeline import slope_to_alpha
-from src.material_manager import get_nodetail_variant, THEME_BLEND_MATERIAL
+from src.material_manager import THEME_BLEND_MATERIAL
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "tools" / "vmflib"))
 from vmflib import vmf
@@ -81,7 +81,7 @@ class PipelineSpec:
     output_dir: str = "."
     rules_file: str = "map_rules.json"
     use_enhanced_spawning: bool = True
-    include_detail_props: bool = False
+    use_smart_details: bool = True
     disable_commander: bool = False
     disable_buildings: bool = False
     disable_resource_nodes: bool = False
@@ -304,9 +304,28 @@ class DisplacementVMF:
 
         valve_map = vmf.ValveMap()
         valve_map.world.properties["maxpropscreenwidth"] = "-1"
-        if self.spec.include_detail_props:
+
+        map_width = tiles_x * tile_size
+        map_height = tiles_y * tile_size
+
+        # Apply Smart Details if enabled
+        terrain_material = self.spec.terrain_material
+        if getattr(self.spec, "use_smart_details", False):
+            from src.detail_manager import calculate_smart_density, generate_auto_detail_vbsp, generate_smart_vmt_patch
+
+            # 1. Calculate density
+            density = calculate_smart_density(map_width, map_height)
+
+            # 2. Generate auto_detail.vbsp and set worldspawn keys
+            # Use the output directory parent as project root, assuming output_dir is "mapsrc"
+            project_root = Path(self.spec.output_dir).parent
+            detail_script = generate_auto_detail_vbsp(project_root, density)
+
             valve_map.world.properties["detailmaterial"] = "detail/detailsprites"
-            valve_map.world.properties["detailvbsp"] = "empires_custom_detail.vbsp"
+            valve_map.world.properties["detailvbsp"] = detail_script
+
+            # 3. Generate VMT patch and override terrain material
+            terrain_material = generate_smart_vmt_patch(project_root, terrain_material)
         else:
             valve_map.world.properties.pop("detailmaterial", None)
             valve_map.world.properties.pop("detailvbsp", None)
@@ -480,7 +499,7 @@ class DisplacementVMF:
                     disp_info.allowed_verts.properties[f"row{i}"] = "-1"
 
                 # Selective Procedural Texturing based on Theme and Zone Scoring
-                tile_material = self.spec.terrain_material
+                tile_material = terrain_material
                 zone_score = self.calculate_tile_zone_score(col_idx, row_idx)
                 
                 theme_name = getattr(self.spec, "current_theme", "Temperate")
@@ -640,10 +659,8 @@ class DisplacementVMF:
                     if max_tile_z < water_level:
                         is_underwater = True
 
-                # Conditional Material Stripping
-                if is_scenery or is_under_base or is_underwater:
-                    vpk_idx = getattr(self.spec, "vpk_index", None)
-                    tile_material = get_nodetail_variant(tile_material, vpk_idx)
+                # Detail props are now handled by the Smart Detail system
+                # which globally scales density based on map size.
 
                 if uses_blend and not industrial_no_blend:
                     for iy in range(sample_size):
@@ -1108,7 +1125,7 @@ class DisplacementVMF:
             )
 
         # Spawn func_detail_blocker for bases
-        if self.spec.include_detail_props:
+        if getattr(self.spec, "use_smart_details", False):
             base_radius = self.spec.base_clear_radius
 
             def spawn_func_detail_blocker(bx: float, by: float):

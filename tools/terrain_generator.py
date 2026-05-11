@@ -426,7 +426,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model = GUIConfigModel()
         self._is_dirty = False
         self.config = Config()
-        self.config_model.use_nodetail_texture = self.config.get("nodetail", False)
+        self.config_model.use_smart_details = self.config.get("smart_details", True)
 
         # Load Empires path from config to build VPK index early
         empires_path = self.config.get("empires_path", "")
@@ -709,16 +709,10 @@ class TerrainGeneratorGUI(QMainWindow):
         sidebar_layout.addLayout(project_row)
         sidebar_layout.addSpacing(4)
 
-        self.btn_generate = QPushButton("Generate VMF")
-        self.btn_generate.setObjectName("GenerateButton")
-        self.btn_generate.setMinimumHeight(40)
-        self.btn_generate.clicked.connect(self.generate_map)
-        sidebar_layout.addWidget(self.btn_generate)
-
-        self.btn_compile = QPushButton("Compile (VBSP)")
+        self.btn_compile = QPushButton("Compile VMT/BSP")
         self.btn_compile.setObjectName("CompileButton")
         self.btn_compile.setMinimumHeight(40)
-        self.btn_compile.clicked.connect(self.compile_map)
+        self.btn_compile.clicked.connect(self.compile_map_action)
         sidebar_layout.addWidget(self.btn_compile)
 
         # --- Main Area ---
@@ -1471,7 +1465,8 @@ class TerrainGeneratorGUI(QMainWindow):
         self.chk_disable_flags = QCheckBox("No Flags")
         self.chk_minimal_map = QCheckBox("Minimal (No Props)")
         self.chk_terrain_only = QCheckBox("Terrain Only")
-        self.chk_nodetail = QCheckBox("Use nodetail texture")
+        self.chk_smart_details = QCheckBox("Enable Smart Details")
+        self.chk_smart_details.setToolTip("Recommended for large maps to avoid hitting detail prop limits.")
         self.chk_manual_terrain = QCheckBox("Manual terrain")
         self.chk_invert_lanes = QCheckBox("Invert Lanes (Raised)")
         self.chk_preview_pipeline = QCheckBox("Preview with pipeline")
@@ -1482,7 +1477,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.chk_disable_flags.toggled.connect(self.sync_to_model)
         self.chk_minimal_map.toggled.connect(self.sync_to_model)
         self.chk_terrain_only.toggled.connect(self.sync_to_model)
-        self.chk_nodetail.toggled.connect(self.on_nodetail_changed)
+        self.chk_smart_details.toggled.connect(self.on_smart_details_changed)
         self.chk_manual_terrain.toggled.connect(self.sync_to_model)
         self.chk_invert_lanes.toggled.connect(self.sync_to_model)
         self.chk_preview_pipeline.toggled.connect(self.sync_to_model)
@@ -1513,7 +1508,7 @@ class TerrainGeneratorGUI(QMainWindow):
         spawn_grid.addWidget(self.chk_disable_flags, 1, 1)
         spawn_grid.addWidget(self.chk_minimal_map, 2, 0)
         spawn_grid.addWidget(self.chk_terrain_only, 2, 1)
-        spawn_grid.addWidget(self.chk_nodetail, 3, 0, 1, 2)
+        spawn_grid.addWidget(self.chk_smart_details, 3, 0, 1, 2)
         sec_settings.content_layout.addLayout(spawn_grid)
 
         preview_grid = QGridLayout()
@@ -2363,11 +2358,11 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config.set("custom_output_folder", text)
         self.update_custom_status()
 
-    def on_nodetail_changed(self):
-        """Save nodetail setting to config."""
-        enabled = self.chk_nodetail.isChecked()
-        self.config.set("nodetail", enabled)
-        self.config_model.use_nodetail_texture = enabled
+    def on_smart_details_changed(self):
+        """Save smart details setting to config."""
+        enabled = self.chk_smart_details.isChecked()
+        self.config.set("smart_details", enabled)
+        self.config_model.use_smart_details = enabled
 
     def show_map_size_help(self):
         """Show compile-safe size guidance for current map settings."""
@@ -2573,7 +2568,7 @@ class TerrainGeneratorGUI(QMainWindow):
             self.chk_disable_flags,
             self.chk_minimal_map,
             self.chk_terrain_only,
-            self.chk_nodetail,
+            self.chk_smart_details,
             self.slider_resource_clear,
             self.chk_manual_terrain,
             self.chk_invert_lanes,
@@ -2676,7 +2671,7 @@ class TerrainGeneratorGUI(QMainWindow):
             self.chk_disable_flags.setChecked(self.config_model.disable_capture_points)
             self.chk_minimal_map.setChecked(self.config_model.minimal_map)
             self.chk_terrain_only.setChecked(self.config_model.terrain_only)
-            self.chk_nodetail.setChecked(self.config_model.use_nodetail_texture)
+            self.chk_smart_details.setChecked(self.config_model.use_smart_details)
             self.chk_manual_terrain.setChecked(self.config_model.manual_terrain)
             self.chk_invert_lanes.setChecked(self.config_model.invert_lanes)
             self.chk_preview_pipeline.setChecked(
@@ -2780,7 +2775,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.disable_capture_points = self.chk_disable_flags.isChecked()
         self.config_model.minimal_map = self.chk_minimal_map.isChecked()
         self.config_model.terrain_only = self.chk_terrain_only.isChecked()
-        self.config_model.use_nodetail_texture = self.chk_nodetail.isChecked()
+        self.config_model.use_smart_details = self.chk_smart_details.isChecked()
         self.config_model.manual_terrain = self.chk_manual_terrain.isChecked()
         self.config_model.invert_lanes = self.chk_invert_lanes.isChecked()
         self.config_model.preview_with_pipeline = self.chk_preview_pipeline.isChecked()
@@ -2871,14 +2866,14 @@ class TerrainGeneratorGUI(QMainWindow):
                 "color: #22c55e; font-size: 11px; "
                 "background: #122218; border-radius: 6px; padding: 8px 10px;"
             )
-            self.btn_generate.setEnabled(True)
+            self.btn_compile.setEnabled(True)
         else:
             self.lbl_validation.setText(f"✗  {msg}")
             self.lbl_validation.setStyleSheet(
                 "color: #ef4444; font-size: 11px; "
                 "background: #221212; border-radius: 6px; padding: 8px 10px;"
             )
-            self.btn_generate.setEnabled(False)
+            self.btn_compile.setEnabled(False)
 
     def update_node_clear_radii(self):
         """Update clear radii on all visual nodes in editor/preview."""
@@ -2973,8 +2968,8 @@ class TerrainGeneratorGUI(QMainWindow):
             )
             return
 
-        self.btn_generate.setEnabled(False)
-        self.btn_generate.setText("Generating...")
+        self.btn_compile.setEnabled(False)
+        self.btn_compile.setText("Generating...")
 
         # Copy the VPK index so it's available to the worker
         self.config_model.vpk_index = self._vpk_index
@@ -3099,8 +3094,8 @@ class TerrainGeneratorGUI(QMainWindow):
             QMessageBox.critical(self, "Load Error", f"Could not load project:\n{e}")
 
     def on_generation_finished(self, success, msg, warning):
-        self.btn_generate.setEnabled(True)
-        self.btn_generate.setText("Generate VMF")
+        self.btn_compile.setEnabled(True)
+        self.btn_compile.setText("Compile VMT/BSP")
 
         if success:
             map_name = self.txt_map_name.text().strip() or "gui_terrain"
@@ -3142,16 +3137,43 @@ class TerrainGeneratorGUI(QMainWindow):
                 QMessageBox.warning(
                     self, "Generation Warning", f"{msg}\n\nWARNING:\n{warning}"
                 )
-            else:
+            elif not getattr(self, "_wants_compile", False):
                 QMessageBox.information(self, "Success", msg)
+
+            # Optionally start compile step if user requested it
+            if getattr(self, "_wants_compile", False):
+                self._wants_compile = False # reset flag
+                self.start_compile_process()
         else:
             QMessageBox.critical(self, "Generation Failed", msg)
+            self._wants_compile = False
 
-    def compile_map(self):
+    def compile_map_action(self):
+        # Ask user whether to just generate VMF, or generate and then compile
+        reply = QMessageBox.question(
+            self,
+            "Compile VMT/BSP",
+            "Do you want to run the full BSP compile process?\n\n"
+            "Yes: Generates VMF and compiles to BSP/VMT.\n"
+            "No: Generates VMF only.",
+            QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+            QMessageBox.Yes
+        )
+
+        if reply == QMessageBox.Cancel:
+            return
+
+        # Store user intent
+        self._wants_compile = (reply == QMessageBox.Yes)
+
+        # Start generation first
+        self.generate_map()
+
+    def start_compile_process(self):
         vmf_path = getattr(self, "_last_vmf_path", None)
         if not vmf_path or not Path(vmf_path).exists():
             QMessageBox.warning(
-                self, "No VMF", "Generate a map first before compiling."
+                self, "No VMF", "Map generation failed or missing, cannot compile."
             )
             return
 
@@ -3161,22 +3183,19 @@ class TerrainGeneratorGUI(QMainWindow):
         empires_path = self.config.get("empires_path", "")
         auto_copy = self.config.get("auto_copy_to_empires", True)
 
-        # Use the specific project root if it was just generated
         custom_folder = getattr(self, "_last_custom_project_root", None)
         if not custom_folder:
             custom_folder = self.config.get("custom_output_folder", "")
 
-        nodetail = self.config.get("nodetail", False)
-
         self.compile_worker = CompileWorker(
-            vmf_path, empires_path, auto_copy, custom_folder, nodetail
+            vmf_path, empires_path, auto_copy, custom_folder
         )
         self.compile_worker.finished.connect(self.on_compile_finished)
         self.compile_worker.start()
 
     def on_compile_finished(self, success, msg):
         self.btn_compile.setEnabled(True)
-        self.btn_compile.setText("Compile (VBSP)")
+        self.btn_compile.setText("Compile VMT/BSP")
 
         if success:
             QMessageBox.information(self, "Compile Success", msg)
