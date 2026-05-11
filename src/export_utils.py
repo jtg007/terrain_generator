@@ -75,7 +75,7 @@ def export_vmf(
         config_model.terrain_material,
         map_width,
         map_height,
-        config_model.use_nodetail_texture,
+        config_model.use_smart_details,
         vpk_index=getattr(config_model, "vpk_index", None),
     )
 
@@ -108,6 +108,7 @@ def export_vmf(
         output_dir=str(mapsrc_dir),
         rules_file="map_rules.json",
         use_enhanced_spawning=True,
+        use_smart_details=config_model.use_smart_details,
         base_clear_radius=config_model.base_clear_radius,
         base_flatness=config_model.base_flatness,
         disable_commander=config_model.disable_commander,
