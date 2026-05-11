@@ -102,6 +102,7 @@ class PipelineSpec:
     custom_tile_materials: Optional[Dict[Tuple[int, int], str]] = None
     
     current_theme: str = "Temperate"
+    terrain_texture_scale: Optional[float] = None  # None = Auto (theme-based)
     corridor_detail_width: int = 2048
     transition_width: int = 1536
     scenery_variation_noise: float = 0.4
@@ -739,11 +740,14 @@ class DisplacementVMF:
                 top_face = floor_block.top()
                 top_face.lightmapscale = 32
 
-                uaxis_scale = 0.25
-                vaxis_scale = 0.25
+                if self.spec.terrain_texture_scale is not None:
+                    tex_scale = self.spec.terrain_texture_scale
+                else:
+                    from src.material_manager import get_theme_texture_scale
+                    tex_scale = get_theme_texture_scale(self.spec.current_theme)
 
-                top_face.uaxis = f"[1 0 0 0] {uaxis_scale}"
-                top_face.vaxis = f"[0 -1 0 0] {vaxis_scale}"
+                top_face.uaxis = f"[1 0 0 0] {tex_scale}"
+                top_face.vaxis = f"[0 -1 0 0] {tex_scale}"
 
                 disp_infos[(col_idx, row_idx)] = disp_info
                 floor_blocks[(col_idx, row_idx)] = floor_block
@@ -1135,9 +1139,10 @@ class DisplacementVMF:
                 )
                 bz = quantize_coord(bz, 1.0)
 
-                # Bounding box coordinates
-                w = base_radius * 2
-                h = base_radius * 2
+                # Bounding box coordinates — minimum 1024 to avoid degenerate brushes
+                blocker_size = max(base_radius * 2, 1024)
+                w = blocker_size
+                h = blocker_size
                 thickness = 128
 
                 blocker = vmf_lib.Entity("func_detail_blocker")

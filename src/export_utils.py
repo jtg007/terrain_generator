@@ -125,6 +125,7 @@ def export_vmf(
         custom_layout_nodes=getattr(spec, "custom_layout_nodes", None),
         custom_layout_connections=getattr(spec, "custom_layout_connections", None),
         current_theme=getattr(config_model, "current_theme", "Temperate"),
+        terrain_texture_scale=getattr(config_model, "terrain_texture_scale", None),
         corridor_detail_width=getattr(config_model, "corridor_detail_width", 2048),
         transition_width=getattr(config_model, "transition_width", 1536),
         scenery_variation_noise=getattr(config_model, "scenery_variation_noise", 0.4),

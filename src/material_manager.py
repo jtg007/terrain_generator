@@ -1,3 +1,4 @@
+import json
 from typing import Optional, Tuple
 from pathlib import Path
 
@@ -28,6 +29,21 @@ THEME_BLEND_MATERIAL: dict[str, tuple[str, str]] = {
     ),
 }
 
+THEME_TEXTURE_SCALES: dict[str, float] = {
+    "Temperate": 0.5,
+    "Desert": 1.0,
+    "Snow": 1.0,
+    "Industrial": 0.25,
+    "Wasteland": 0.5,
+    "Generic": 0.5,
+}
+
+
+def get_theme_texture_scale(theme: str) -> float:
+    """Return ideal texture scale for given theme name."""
+    return THEME_TEXTURE_SCALES.get(theme, 0.5)
+
+
 def choose_compile_safe_material(
     requested_material: str,
     map_width: int,
@@ -40,3 +56,17 @@ def choose_compile_safe_material(
     # Smart Detail system handles detail props dynamically
     # so we no longer need to restrict materials or issue warnings here.
     return requested_material, None
+
+
+def get_texture_safety_status(textures_path: str | Path) -> dict[str, bool]:
+    """Return dict mapping each material path to safety bool.
+
+    All materials listed in textures.json are curated and considered safe.
+    """
+    with open(textures_path) as f:
+        data = json.load(f)
+    safety: dict[str, bool] = {}
+    for theme in data.get("themes", {}).values():
+        for entry in theme.get("materials", []):
+            safety[entry["path"]] = True
+    return safety

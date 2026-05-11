@@ -330,5 +330,45 @@ def spawn_lighting(
         sun_color = "249 216 147"
     sun_ent.properties["rendercolor"] = sun_color
 
+    # 1. Add Light and Sun to the map
     valve_map.world.children.append(light_ent)
     valve_map.world.children.append(sun_ent)
+
+    # ---------------------------------------------------------
+    # NEW: TONEMAP CONTROLLER & LOGIC AUTO (To prevent snow blindness)
+    # ---------------------------------------------------------
+
+    # Create Tonemap Controller
+    tonemap_ent = vmf_lib.Entity("env_tonemap_controller")
+    tonemap_ent.origin = "0.0 0.0 0.0"
+    tonemap_ent.properties["targetname"] = "tonemap_global"
+    valve_map.world.children.append(tonemap_ent)
+
+    # Check if we are currently generating a snow map or overcast map
+    is_snow_map = "snow" in target_sky or "overcast" in target_sky
+
+    # Set dynamic exposure values
+    if is_snow_map:
+        exposure_max = "1.2"  # Heavily throttled so the snow doesn't blind the player
+        exposure_min = "0.5"
+    else:
+        exposure_max = "2.0"  # Standard limit for normal maps
+        exposure_min = "0.75"
+
+    # Create Logic Auto to send the values to the tonemap controller on map start
+    logic_auto = vmf_lib.Entity("logic_auto")
+    logic_auto.origin = "0.0 0.0 0.0"
+
+    # Safe way to create VMF outputs (compatible with most vmflib versions)
+    try:
+        # Attempt using the official Output object
+        logic_auto.outputs.append(vmf_lib.Output("OnMapSpawn", "tonemap_global", "SetAutoExposureMax", exposure_max, 0.0))
+        logic_auto.outputs.append(vmf_lib.Output("OnMapSpawn", "tonemap_global", "SetAutoExposureMin", exposure_min, 0.0))
+    except AttributeError:
+        # Fallback in case the library expects outputs directly as properties in a list
+        logic_auto.properties["OnMapSpawn"] = [
+            f"tonemap_global,SetAutoExposureMax,{exposure_max},0,-1",
+            f"tonemap_global,SetAutoExposureMin,{exposure_min},0,-1"
+        ]
+
+    valve_map.world.children.append(logic_auto)

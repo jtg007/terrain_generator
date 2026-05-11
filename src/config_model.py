@@ -54,6 +54,7 @@ class GUIConfigModel:
     terrain_material: str = "common/nature/blend_grass_mountainwall_000"
     skybox: str = "empsky_overcast3yellow"
     use_smart_details: bool = True
+    auto_texture_scale: bool = True  # True = use theme-based smart scale
 
     # Base flattening settings
     base_clear_radius: int = 0
@@ -87,6 +88,7 @@ class GUIConfigModel:
     
     # Theme & Optimization
     current_theme: str = "Temperate"
+    terrain_texture_scale: Optional[float] = None  # None = Auto (theme-based)
     corridor_detail_width: int = 2048
     transition_width: int = 1536
     scenery_variation_noise: float = 0.4

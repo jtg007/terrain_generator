@@ -1395,6 +1395,26 @@ class TerrainGeneratorGUI(QMainWindow):
         sec_theme.content_layout.addLayout(theme_row)
         self.combo_theme.currentIndexChanged.connect(self._on_theme_changed_sync)
 
+        # Texture Scale — Auto by Theme
+        ts_row = QHBoxLayout()
+        ts_row.setSpacing(8)
+        self.chk_auto_texture_scale = QCheckBox("Auto-Scale by Theme")
+        self.chk_auto_texture_scale.setChecked(True)
+        self.chk_auto_texture_scale.setToolTip("When checked, texture scale adapts to the active theme automatically")
+        ts_row.addWidget(self.chk_auto_texture_scale)
+        self.slider_texture_scale = QSlider(Qt.Horizontal)
+        self.slider_texture_scale.setRange(10, 200)  # 0.1 to 2.0
+        self.slider_texture_scale.setEnabled(False)
+        self.lbl_texture_scale_val = QLabel("Auto")
+        ts_row.addWidget(self.slider_texture_scale, 1)
+        ts_row.addWidget(self.lbl_texture_scale_val)
+        sec_theme.content_layout.addLayout(ts_row)
+        self.chk_auto_texture_scale.toggled.connect(self._on_auto_scale_toggled)
+        self.slider_texture_scale.valueChanged.connect(
+            lambda v: self.lbl_texture_scale_val.setText(f"{v / 100:.1f}")
+        )
+        self.slider_texture_scale.valueChanged.connect(self.sync_to_model)
+
         # Corridor Detail Width
         cdw_row = QHBoxLayout()
         cdw_row.setSpacing(8)
@@ -2476,6 +2496,16 @@ class TerrainGeneratorGUI(QMainWindow):
         
         self.sync_to_model()
 
+    def _on_auto_scale_toggled(self, checked: bool):
+        """Enable/disable texture scale slider based on auto checkbox."""
+        self.slider_texture_scale.setEnabled(not checked)
+        if checked:
+            self.lbl_texture_scale_val.setText("Auto")
+        else:
+            v = self.slider_texture_scale.value()
+            self.lbl_texture_scale_val.setText(f"{v / 100:.1f}")
+        self.sync_to_model()
+
     def update_empires_status(self):
         """Update the status label for Empires path."""
         path = self.edit_empires_path.text()
@@ -2573,6 +2603,8 @@ class TerrainGeneratorGUI(QMainWindow):
             self.chk_manual_terrain,
             self.chk_invert_lanes,
             self.chk_preview_pipeline,
+            self.chk_auto_texture_scale,
+            self.slider_texture_scale,
         ):
             self.spin_seed.setValue(self.config_model.seed)
             self.spin_tiles_x.setValue(self.config_model.tiles_x)
@@ -2679,6 +2711,15 @@ class TerrainGeneratorGUI(QMainWindow):
             )
         
         self.combo_theme.setCurrentText(self.config_model.current_theme)
+        self.chk_auto_texture_scale.setChecked(self.config_model.auto_texture_scale)
+        self.slider_texture_scale.setEnabled(not self.config_model.auto_texture_scale)
+        if self.config_model.auto_texture_scale or self.config_model.terrain_texture_scale is None:
+            self.slider_texture_scale.setValue(100)  # 1.0 = neutral position
+            self.lbl_texture_scale_val.setText("Auto")
+        else:
+            sv = int(self.config_model.terrain_texture_scale * 100)
+            self.slider_texture_scale.setValue(sv)
+            self.lbl_texture_scale_val.setText(f"{self.config_model.terrain_texture_scale:.1f}")
         self.slider_corridor_width.setValue(self.config_model.corridor_detail_width)
         self.lbl_corridor_width_val.setText(str(self.config_model.corridor_detail_width))
         self.slider_transition_width.setValue(self.config_model.transition_width)
@@ -2723,6 +2764,11 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.lane_node_radius = self.slider_lane_node_radius.value()
         
         self.config_model.current_theme = self.combo_theme.currentText()
+        self.config_model.auto_texture_scale = self.chk_auto_texture_scale.isChecked()
+        if self.chk_auto_texture_scale.isChecked():
+            self.config_model.terrain_texture_scale = None
+        else:
+            self.config_model.terrain_texture_scale = self.slider_texture_scale.value() / 100.0
         self.config_model.corridor_detail_width = self.slider_corridor_width.value()
         self.lbl_corridor_width_val.setText(str(self.config_model.corridor_detail_width))
         self.config_model.transition_width = self.slider_transition_width.value()
