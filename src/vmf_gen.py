@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from typing import Optional, List, Tuple, Dict, Any
 
 from src.terrain_pipeline import slope_to_alpha
-from src.export_utils import get_nodetail_variant
+from src.material_manager import get_nodetail_variant, THEME_BLEND_MATERIAL
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "tools" / "vmflib"))
 from vmflib import vmf
@@ -24,33 +24,6 @@ from vmflib.types import Vertex, Output
 from vmflib.brush import DispInfo
 from vmflib.tools import Block
 from vmflib import vmf as vmf_lib
-
-THEME_BLEND_MATERIAL: dict[str, tuple[str, str]] = {
-    "Temperate": (
-        "common/nature/blend_grass_mountainwall_000",
-        "common/nature/blend_grass_mountainwall_000",
-    ),
-    "Desert": (
-        "common/nature/blend_grass_sandfloor009a_000",
-        "common/nature/blend_grass_sandfloor009a_000",
-    ),
-    "Snow": (
-        "common/terrain/blend_snow01_rock01a",
-        "common/terrain/blend_snow01_rock01a",
-    ),
-    "Industrial": (
-        "common/stene/dirtyconcrete",
-        "common/stene/dirtyconcrete",
-    ),
-    "Wasteland": (
-        "common/terrain/blend_red2_red3",
-        "common/terrain/blend_red2_red3",
-    ),
-    "Generic": (
-        "common/nature/blend_grass_mud_003",
-        "common/nature/blend_grass_mud_003",
-    ),
-}
 
 
 SAFE_EMPIRES_SKYBOXES = [
