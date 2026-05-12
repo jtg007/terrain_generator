@@ -126,17 +126,15 @@ def spawn_base_entities_enhanced(
         commander_entity.origin = (
             f"{quantize_coord(commander_x)} {quantize_coord(commander_y)} {commander_z}"
         )
-        commander_entity.properties["TeamNum"] = str(team_num)
+        commander_entity.properties["team"] = str(team_num)
         commander_entity.properties["angles"] = f"0 {(commander_yaw + 90) % 360} 0"
-        valve_map.world.children.append(commander_entity)
 
     if not skip_buildings:
         barracks_entity = vmf_lib.Entity(barracks_class)
         barracks_entity.origin = f"{quantize_coord(origin_x):.1f} {quantize_coord(origin_y):.1f} {barracks_z:.1f}"
         barracks_entity.properties["angles"] = f"0 {barracks_yaw:.1f} 0"
-        barracks_entity.properties["TeamNum"] = str(team_num)
+        barracks_entity.properties["team"] = str(team_num)
         barracks_entity.properties["startBuilt"] = "1"
-        valve_map.world.children.append(barracks_entity)
 
         spawn_base_buildings(
             valve_map, faction, origin_x, origin_y, terrain_height, rules
@@ -206,13 +204,12 @@ def spawn_base_buildings(
 
             building_entity = vmf_lib.Entity(building_classes[building_type])
             building_entity.origin = f"{quantize_coord(building_x)} {quantize_coord(building_y)} {building_z}"
-            building_entity.properties["TeamNum"] = str(team_num)
+            building_entity.properties["team"] = str(team_num)
             if building_type in building_models:
                 building_entity.properties["model"] = building_models[building_type]
             building_entity.properties["startBuilt"] = "1"
             if building_type in ("mgturret", "mlturret"):
                 building_entity.properties["level"] = "2"
-            valve_map.world.children.append(building_entity)
 
 
 def spawn_resource_nodes_enhanced(
@@ -349,7 +346,7 @@ def spawn_resource_nodes_enhanced(
         resource_logic = vmf_lib.Entity("emp_resource_point")
         resource_logic.origin = f"{node_x:.1f} {node_y:.1f} {node_z:.1f}"
         resource_logic.properties["targetname"] = point_targetname
-        resource_logic.properties["TeamNum"] = str(team_num)
+        resource_logic.properties["team"] = str(team_num)
         resource_logic.properties["StartDisabled"] = "0"
         resource_logic.properties["Enabled"] = "1"
         resource_logic.properties["ResourcesSecond"] = "3"
@@ -358,7 +355,7 @@ def spawn_resource_nodes_enhanced(
         resource_prop = vmf_lib.Entity("emp_resource_point_prop")
         resource_prop.origin = f"{prop_x:.1f} {prop_y:.1f} {prop_z:.1f}"
         resource_prop.properties["targetname"] = model_targetname
-        resource_prop.properties["TeamNum"] = str(team_num)
+        resource_prop.properties["team"] = str(team_num)
         resource_prop.properties["model"] = "models/props_wasteland/rockcliff01b.mdl"
         resource_prop.properties["Enabled"] = "1"
         resource_prop.properties["angles"] = f"0 {random.uniform(0, 360):.1f} 0"
@@ -389,10 +386,6 @@ def spawn_resource_nodes_enhanced(
         smoke.properties["JetLength"] = "200"
         smoke.properties["SmokeMaterial"] = "particle/particle_smokegrenade.vmt"
         smoke.properties["rendercolor"] = "100 100 100"
-
-        valve_map.world.children.append(resource_logic)
-        valve_map.world.children.append(resource_prop)
-        valve_map.world.children.append(smoke)
 
 
 def spawn_custom_resources(
@@ -526,10 +519,6 @@ def spawn_custom_resources(
         smoke.properties["SmokeMaterial"] = "particle/particle_smokegrenade.vmt"
         smoke.properties["rendercolor"] = "100 100 100"
 
-        valve_map.world.children.append(resource_logic)
-        valve_map.world.children.append(resource_prop)
-        valve_map.world.children.append(smoke)
-
 
 def spawn_info_nodes(
     valve_map: vmf.ValveMap,
@@ -595,7 +584,6 @@ def spawn_info_nodes(
             node.properties["angles"] = f"0 {yaw} 0"
             node.properties["nodetype"] = "0"
             node.properties["targetname"] = f"node_{node_id}"
-            valve_map.world.children.append(node)
             node_id += 1
 
     remaining_nodes = node_count - len(clustered_points) * min_cluster_size
@@ -610,7 +598,6 @@ def spawn_info_nodes(
         node.properties["angles"] = f"0 {yaw} 0"
         node.properties["nodetype"] = "0"
         node.properties["targetname"] = f"node_{node_id}"
-        valve_map.world.children.append(node)
         node_id += 1
 
 
@@ -660,10 +647,6 @@ def spawn_required_entities_enhanced(
     info_overview.origin = f"{center_x:.1f} {center_y:.1f} {overview_z:.1f}"
     info_overview.properties["angles"] = "90 0 0"
 
-    # Important: append the required entities to the map
-    valve_map.children.append(info_params)
-    valve_map.children.append(info_overview)
-
 
 def spawn_player_spawn_points(
     valve_map: vmf.ValveMap,
@@ -695,7 +678,6 @@ def spawn_player_spawn_points(
             spawn = vmf_lib.Entity("emp_info_player_Imp")
             spawn.origin = f"{quantize_coord(spawn_x)} {quantize_coord(spawn_y)} {quantize_coord(terrain_height + 16)}"
             spawn.properties["angles"] = f"0 {angle} 0"
-            valve_map.world.children.append(spawn)
 
     if nf_base_x is not None and nf_base_y is not None:
         for i in range(nf_count):
@@ -707,7 +689,6 @@ def spawn_player_spawn_points(
             spawn = vmf_lib.Entity("emp_info_player_NF")
             spawn.origin = f"{quantize_coord(spawn_x)} {quantize_coord(spawn_y)} {quantize_coord(terrain_height + 16)}"
             spawn.properties["angles"] = f"0 {angle} 0"
-            valve_map.world.children.append(spawn)
 
 
 def spawn_capture_points(
@@ -743,10 +724,8 @@ def spawn_capture_points(
         cap.origin = f"{quantize_coord(cap_x)} {quantize_coord(cap_y)} {quantize_coord(terrain_height + 8)}"
         cap.properties["point_num"] = str(i)
         cap.properties["neutral_owner"] = "0"
-        valve_map.world.children.append(cap)
 
         cap_model = vmf_lib.Entity("emp_cap_model")
         cap_model.origin = f"{quantize_coord(cap_x)} {quantize_coord(cap_y)} {quantize_coord(terrain_height + 8)}"
         cap_model.properties["model"] = "models/common/emp_snow/flag_capmodel1a.mdl"
         cap_model.properties["angles"] = "0 0 0"
-        valve_map.world.children.append(cap_model)
