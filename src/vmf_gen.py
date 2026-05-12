@@ -313,23 +313,27 @@ class DisplacementVMF:
         # Apply Smart Details if enabled
         terrain_material = self.spec.terrain_material
         base_terrain_material = terrain_material
+        patched_material = None
         if getattr(self.spec, "use_smart_details", False):
-            from src.detail_manager import calculate_smart_density, generate_auto_detail_vbsp, generate_smart_vmt_patch
+            from src.detail_manager import (
+                calculate_smart_density,
+                generate_auto_detail_vbsp,
+                generate_smart_vmt_patch,
+            )
 
             # 1. Calculate density
             density = calculate_smart_density(map_width, map_height)
 
             # 2. Generate auto_detail.vbsp and set worldspawn keys
-            # Use the output directory parent as project root, assuming output_dir is "mapsrc"
             project_root = Path(self.spec.output_dir).parent
             detail_script = generate_auto_detail_vbsp(project_root, density)
 
             valve_map.world.properties["detailmaterial"] = "detail/detailsprites"
             valve_map.world.properties["detailvbsp"] = detail_script
+            valve_map.world.properties["detailfile"] = detail_script
 
-            # 3. Generate VMT patch for optional packing, but keep terrain faces on
-            # real Empires materials so Hammer/game never show missing textures.
-            generate_smart_vmt_patch(project_root, terrain_material)
+            # 3. Generate VMT patch and use it for the terrain faces
+            patched_material = generate_smart_vmt_patch(project_root, terrain_material)
         else:
             valve_map.world.properties.pop("detailmaterial", None)
             valve_map.world.properties.pop("detailvbsp", None)
@@ -481,7 +485,7 @@ class DisplacementVMF:
             theme_name,
             THEME_BLEND_MATERIAL["Generic"],
         )
-        global_blend_material = base_terrain_material
+        global_blend_material = patched_material if patched_material else base_terrain_material
         if "blend" not in global_blend_material.lower():
             global_blend_material = theme_blend_mat
 
@@ -506,6 +510,14 @@ class DisplacementVMF:
         paint_target = getattr(self.spec, "custom_tile_paint_target", "floor").lower()
         if paint_target not in {"floor", "walls", "all"}:
             paint_target = "floor"
+
+        from src.material_manager import get_theme_texture_scale
+
+        theme_tex_scale = (
+            self.spec.terrain_texture_scale
+            if self.spec.terrain_texture_scale is not None
+            else get_theme_texture_scale(self.spec.current_theme)
+        )
 
         for row_idx in range(tiles_y):
             for col_idx in range(tiles_x):
@@ -775,14 +787,16 @@ class DisplacementVMF:
                 top_face = floor_block.top()
                 top_face.lightmapscale = 32
 
-                if self.spec.terrain_texture_scale is not None:
-                    tex_scale = self.spec.terrain_texture_scale
-                else:
-                    from src.material_manager import get_theme_texture_scale
-                    tex_scale = get_theme_texture_scale(self.spec.current_theme)
+                # Compensate for Z-projection stretching on slopes
+                # stretching_factor = sqrt(1 + slope^2)
+                stretching_factor = math.sqrt(1.0 + slope**2)
+                # Clamp compensation to avoid extreme tiling/seams (as requested: max 2.5)
+                stretching_factor = min(2.5, stretching_factor)
 
-                top_face.uaxis = f"[1 0 0 0] {tex_scale}"
-                top_face.vaxis = f"[0 -1 0 0] {tex_scale}"
+                tex_scale = theme_tex_scale / stretching_factor
+
+                top_face.uaxis = f"[1 0 0 0] {tex_scale:.4f}"
+                top_face.vaxis = f"[0 -1 0 0] {tex_scale:.4f}"
 
                 disp_infos[(col_idx, row_idx)] = disp_info
                 floor_blocks[(col_idx, row_idx)] = floor_block
@@ -791,6 +805,7 @@ class DisplacementVMF:
                 tile_alpha_store[(col_idx, row_idx)] = tile_alphas.copy()
 
         from collections import Counter
+
         print(f"[Terrain] Band distribution: {dict(Counter(band_list))}")
 
         # Second Pass: Average border alphas and attach disp_info

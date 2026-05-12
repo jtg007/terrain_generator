@@ -1,0 +1,8 @@
+Patch
+{
+    include "materials/common/nature/blend_grass_mountainwall_000.vmt"
+    insert
+    {
+        "%detailtype" "auto_grass_profile"
+    }
+}
