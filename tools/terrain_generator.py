@@ -1732,7 +1732,7 @@ class TerrainGeneratorGUI(QMainWindow):
             return
 
         try:
-            self.config_model.vpk_index = self._vpk_index
+            self.config_model.vpk_index = list(self._vpk_index)
             nodes, connections, resources, _, global_mask, texture_overlay, texture_mapping, next_texture_id, tile_overlay = (
                 self.preview_widget.get_layout_from_editor()
             )
@@ -3018,7 +3018,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.btn_compile.setText("Generating...")
 
         # Copy the VPK index so it's available to the worker
-        self.config_model.vpk_index = self._vpk_index
+        self.config_model.vpk_index = list(self._vpk_index)
 
         # Run generation in background
         map_name = self.txt_map_name.text().strip() or "gui_terrain"

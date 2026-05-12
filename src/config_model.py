@@ -81,7 +81,7 @@ class GUIConfigModel:
     invert_lanes: bool = False
 
     # Store the VPK index to pass to TerrainSpec
-    vpk_index: Optional[set[str]] = None
+    vpk_index: Optional[list[str]] = None
     canyon_natural: bool = False
     preview_with_pipeline: bool = False
     custom_tile_materials: Optional[dict] = None

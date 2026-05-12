@@ -50,7 +50,7 @@ def choose_compile_safe_material(
     map_height: int,
     use_smart_details: bool = False,
     textures_path: str | Path | None = None,
-    vpk_index: set[str] | None = None,
+    vpk_index: list[str] | None = None,
 ) -> Tuple[str, Optional[str]]:
     """Return (material_name, optional_warning)."""
     # Smart Detail system handles detail props dynamically

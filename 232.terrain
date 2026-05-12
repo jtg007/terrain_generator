@@ -2,7 +2,7 @@
   "version": 1,
   "map_name": "gui_terrain",
   "config": {
-    "seed": 676539007,
+    "seed": 12345,
     "tiles_x": 12,
     "tiles_y": 12,
     "cell_size": 1664,
@@ -18,8 +18,8 @@
     "feature_scale": 1.8,
     "warp_strength": 1.0,
     "plateau_noise": 0.12,
-    "maze_size": 80,
-    "lane_numbers": 4,
+    "maze_size": 90,
+    "lane_numbers": 2,
     "wall_slope": 0.06,
     "lane_depth": 0.72,
     "blur_radius": 0.0,
@@ -40,11 +40,24 @@
     "disable_capture_points": true,
     "minimal_map": false,
     "terrain_only": false,
-    "custom_imp_base_x": null,
-    "custom_imp_base_y": null,
-    "custom_nf_base_x": null,
-    "custom_nf_base_y": null,
-    "custom_resources": [],
+    "custom_imp_base_x": -5605.214903248463,
+    "custom_imp_base_y": -1731.1598616042832,
+    "custom_nf_base_x": 4800.45950812431,
+    "custom_nf_base_y": -2432.9814271195332,
+    "custom_resources": [
+      [
+        65.50334611475667,
+        2882.147229049293
+      ],
+      [
+        -2835.35912468161,
+        -318.15910970024663
+      ],
+      [
+        3499.750206702713,
+        -673.7487028946399
+      ]
+    ],
     "manual_terrain": false,
     "invert_lanes": false,
     "vpk_index": 
