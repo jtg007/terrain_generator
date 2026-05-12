@@ -100,6 +100,7 @@ class PipelineSpec:
     custom_layout_connections: Optional[List[Any]] = None
     manual_terrain: bool = False
     custom_tile_materials: Optional[Dict[Tuple[int, int], str]] = None
+    custom_tile_paint_target: str = "floor"
     
     current_theme: str = "Temperate"
     terrain_texture_scale: Optional[float] = None  # None = Auto (theme-based)
@@ -311,6 +312,7 @@ class DisplacementVMF:
 
         # Apply Smart Details if enabled
         terrain_material = self.spec.terrain_material
+        base_terrain_material = terrain_material
         if getattr(self.spec, "use_smart_details", False):
             from src.detail_manager import calculate_smart_density, generate_auto_detail_vbsp, generate_smart_vmt_patch
 
@@ -325,8 +327,9 @@ class DisplacementVMF:
             valve_map.world.properties["detailmaterial"] = "detail/detailsprites"
             valve_map.world.properties["detailvbsp"] = detail_script
 
-            # 3. Generate VMT patch and override terrain material
-            terrain_material = generate_smart_vmt_patch(project_root, terrain_material)
+            # 3. Generate VMT patch for optional packing, but keep terrain faces on
+            # real Empires materials so Hammer/game never show missing textures.
+            generate_smart_vmt_patch(project_root, terrain_material)
         else:
             valve_map.world.properties.pop("detailmaterial", None)
             valve_map.world.properties.pop("detailvbsp", None)
@@ -460,6 +463,49 @@ class DisplacementVMF:
         map_z_min = float(working_heightmap.min()) * height_scale
         map_z_max = float(working_heightmap.max()) * height_scale
         band_list = []
+        custom_paint_centers: List[Tuple[float, float]] = []
+        custom_tile_material_map: Dict[Tuple[int, int], str] = {}
+        if self.spec.custom_tile_materials:
+            for (custom_col, custom_row), custom_mat in self.spec.custom_tile_materials.items():
+                custom_paint_centers.append(
+                    (
+                        origin_x + (custom_col + 0.5) * tile_size,
+                        origin_y + (custom_row + 0.5) * tile_size,
+                    )
+                )
+                custom_tile_material_map[(custom_col, custom_row)] = custom_mat
+        paint_inner_radius = tile_size / 2.0
+        paint_transition_radius = tile_size * 1.5
+        theme_name = getattr(self.spec, "current_theme", "Temperate")
+        theme_blend_mat, _ = THEME_BLEND_MATERIAL.get(
+            theme_name,
+            THEME_BLEND_MATERIAL["Generic"],
+        )
+        global_blend_material = base_terrain_material
+        if "blend" not in global_blend_material.lower():
+            global_blend_material = theme_blend_mat
+
+        if getattr(self.spec, "vpk_index", None) is not None:
+            vpk_idx = self.spec.vpk_index
+
+            if vpk_idx:
+                vmt = f"materials/{global_blend_material.lower()}.vmt"
+                if vmt not in vpk_idx:
+                    for theme_candidate, _ in THEME_BLEND_MATERIAL.values():
+                        candidate_vmt = f"materials/{theme_candidate.lower()}.vmt"
+                        if candidate_vmt in vpk_idx:
+                            global_blend_material = theme_candidate
+                            break
+
+        uses_blend_material = "blend" in global_blend_material.lower()
+        if custom_paint_centers and not uses_blend_material:
+            print(
+                f"[Terrain Paint] '{global_blend_material}' is not a blend material; "
+                "custom tile alpha paint will not be visible."
+            )
+        paint_target = getattr(self.spec, "custom_tile_paint_target", "floor").lower()
+        if paint_target not in {"floor", "walls", "all"}:
+            paint_target = "floor"
 
         for row_idx in range(tiles_y):
             for col_idx in range(tiles_x):
@@ -499,11 +545,9 @@ class DisplacementVMF:
                 for i in range((2**power) + 1):
                     disp_info.allowed_verts.properties[f"row{i}"] = "-1"
 
-                # Selective Procedural Texturing based on Theme and Zone Scoring
-                tile_material = terrain_material
+                # Theme texturing uses one blend material; variation comes from alpha.
                 zone_score = self.calculate_tile_zone_score(col_idx, row_idx)
                 
-                theme_name = getattr(self.spec, "current_theme", "Temperate")
                 theme = self.themes.get(theme_name, self.themes.get("Generic", {}))
                 defaults = theme.get("defaults", {})
                 
@@ -584,50 +628,13 @@ class DisplacementVMF:
                     print(f"[Terrain] tile(0,0): z={tile_z:.0f} ratio={ratio:.2f} "
                           f"slope={slope:.3f} band={band}")
 
-                blend_mat, cliff_mat = THEME_BLEND_MATERIAL.get(
-                    theme_name,
-                    THEME_BLEND_MATERIAL["Generic"]
-                )
+                tile_material = global_blend_material
+                uses_blend = uses_blend_material
+                if (col_idx, row_idx) in custom_tile_material_map:
+                    tile_material = custom_tile_material_map[(col_idx, row_idx)]
+                    uses_blend = "blend" in tile_material.lower()
 
-                # Verify blend/cliff materials exist if vpk index is available
-                if getattr(self.spec, "vpk_index", None) is not None:
-                    vpk_idx = self.spec.vpk_index
-
-                    # Try fallback to first safe available if missing
-                    def verify_mat(mat):
-                        if not vpk_idx:
-                            return mat
-                        vmt = f"materials/{mat.lower()}.vmt"
-                        if vmt in vpk_idx:
-                            return mat
-                        # Missing! Fallback to any safe material in the theme if possible
-                        # The UI might have stripped it, but we can just use the first available from THEME_BLEND_MATERIAL
-                        for _, (b_mat, c_mat) in THEME_BLEND_MATERIAL.items():
-                            if f"materials/{b_mat.lower()}.vmt" in vpk_idx:
-                                return b_mat
-                        return mat # Fallback failed
-
-                    blend_mat = verify_mat(blend_mat)
-                    cliff_mat = verify_mat(cliff_mat)
-
-                if is_cliff:
-                    tile_material = cliff_mat
-                    uses_blend = True
-                else:
-                    tile_material = blend_mat
-                    uses_blend = True
-
-                # Industrial has no blend shader — skip alpha generation
-                industrial_no_blend = (theme_name == "Industrial")
-
-                # Manual Paint Override
-                if hasattr(self.spec, "custom_tile_materials") and self.spec.custom_tile_materials:
-                    if (col_idx, row_idx) in self.spec.custom_tile_materials:
-                        tile_material = self.spec.custom_tile_materials[(col_idx, row_idx)]
-                        # Determine uses_blend for custom material? We'll assume yes if "blend" is in the name
-                        uses_blend = "blend" in tile_material.lower()
-
-                # Selective Alpha Blending: Generate slope-based alphas ONLY for playable/painted blend materials
+                # Selective alpha blending for playable/painted blend materials.
                 tile_alphas = np.zeros((sample_size, sample_size), dtype=int)
 
                 # Calculate if this tile is deep scenery, under bases, or beneath water
@@ -663,7 +670,7 @@ class DisplacementVMF:
                 # Detail props are now handled by the Smart Detail system
                 # which globally scales density based on map size.
 
-                if uses_blend and not industrial_no_blend:
+                if uses_blend:
                     for iy in range(sample_size):
                         for ix in range(sample_size):
                             px = col_idx * (grid_size - 1) + ix
@@ -685,11 +692,38 @@ class DisplacementVMF:
                             h_ym = working_heightmap[py_m, px] * height_scale
                             h_yp = working_heightmap[py_p, px] * height_scale
 
-                            dz_dx = (h_xp - h_xm) / (2.0 * tile_size)
-                            dz_dy = (h_yp - h_ym) / (2.0 * tile_size)
+                            dz_dx = (h_xp - h_xm) / (2.0 * vertex_spacing)
+                            dz_dy = (h_yp - h_ym) / (2.0 * vertex_spacing)
                             v_slope = math.sqrt(dz_dx**2 + dz_dy**2)
 
                             slope_alpha = slope_to_alpha(v_slope)
+                            paint_alpha = 0
+                            if custom_paint_centers:
+                                nearest_paint_dist = min(
+                                    math.sqrt(
+                                        (vx_world_x - center_x) ** 2
+                                        + (vx_world_y - center_y) ** 2
+                                    )
+                                    for center_x, center_y in custom_paint_centers
+                                )
+                                if nearest_paint_dist < paint_inner_radius:
+                                    paint_alpha = 255
+                                elif nearest_paint_dist < paint_transition_radius:
+                                    blend_t = (
+                                        (nearest_paint_dist - paint_inner_radius)
+                                        / (paint_transition_radius - paint_inner_radius)
+                                    )
+                                    paint_alpha = int(255 * (1.0 - blend_t))
+
+                                if paint_alpha > 0 and paint_target != "all":
+                                    floor_t = (
+                                        (0.55 - v_slope) / 0.35
+                                        if paint_target == "floor"
+                                        else (v_slope - 0.2) / 0.35
+                                    )
+                                    floor_t = max(0.0, min(1.0, floor_t))
+                                    floor_t = floor_t * floor_t * (3.0 - 2.0 * floor_t)
+                                    paint_alpha = int(paint_alpha * floor_t)
 
                             # Height bias only on genuinely HIGH tiles (ratio > 0.65)
                             # and only when the tile itself is high — not edge bleed.
@@ -701,7 +735,8 @@ class DisplacementVMF:
                             else:
                                 height_bias = 0
 
-                            final_alpha = min(255, slope_alpha + height_bias)
+                            slope_alpha = min(255, slope_alpha + height_bias)
+                            final_alpha = max(slope_alpha, paint_alpha)
 
                             # Vertex Alpha Culling Optimization:
                             # 255 = Rock/No-detail. 0 = Grass.

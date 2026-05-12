@@ -155,6 +155,7 @@ class PreviewWorker(QThread):
         texture_overlay=None,
         texture_mapping=None,
         tile_overlay=None,
+        tile_paint_target="floor",
     ):
         super().__init__()
         self.config_model = config_model
@@ -166,6 +167,7 @@ class PreviewWorker(QThread):
         self.texture_overlay = texture_overlay
         self.texture_mapping = texture_mapping
         self.tile_overlay = tile_overlay
+        self.tile_paint_target = tile_paint_target
 
     def run(self):
         try:
@@ -181,6 +183,7 @@ class PreviewWorker(QThread):
             spec.disable_commander = True
             spec.disable_buildings = True
             spec.disable_resource_nodes = True
+            spec.custom_tile_paint_target = self.tile_paint_target
 
             if self.custom_nodes is not None:
                 spec.custom_layout_nodes = self.custom_nodes
@@ -264,6 +267,7 @@ class GenerationWorker(QThread):
         texture_overlay=None,
         texture_mapping=None,
         tile_overlay=None,
+        tile_paint_target="floor",
     ):
         super().__init__()
         self.config_model = config_model
@@ -277,6 +281,7 @@ class GenerationWorker(QThread):
         self.texture_overlay = texture_overlay
         self.texture_mapping = texture_mapping
         self.tile_overlay = tile_overlay
+        self.tile_paint_target = tile_paint_target
         self.project_root = None
         
         # Ensure layout data is persisted to the model for export_vmf awareness
@@ -292,6 +297,7 @@ class GenerationWorker(QThread):
             self.project_root.mkdir(parents=True, exist_ok=True)
 
             spec = self.config_model.make_spec()
+            spec.custom_tile_paint_target = self.tile_paint_target
             if self.custom_nodes and self.custom_connections:
                 spec.custom_layout_nodes = self.custom_nodes
                 spec.custom_layout_connections = self.custom_connections
@@ -1561,6 +1567,9 @@ class TerrainGeneratorGUI(QMainWindow):
 
         self.preview_widget = MapPreviewWidget()
         self.preview_widget.set_themes(self.texture_themes)
+        self.preview_widget.set_tile_paint_target(
+            getattr(self.config_model, "custom_tile_paint_target", "floor")
+        )
         self.preview_widget.setMinimumWidth(200)
 
         # Inner splitter: config scroll | tabs
@@ -1736,6 +1745,8 @@ class TerrainGeneratorGUI(QMainWindow):
             nodes, connections, resources, _, global_mask, texture_overlay, texture_mapping, next_texture_id, tile_overlay = (
                 self.preview_widget.get_layout_from_editor()
             )
+            tile_paint_target = self.preview_widget.get_tile_paint_target()
+            self.config_model.custom_tile_paint_target = tile_paint_target
 
             initial_heights = None
             if not self._force_full_regen and hasattr(self.preview_widget, "_base_heights"):
@@ -1751,6 +1762,7 @@ class TerrainGeneratorGUI(QMainWindow):
                 texture_overlay=texture_overlay,
                 texture_mapping=texture_mapping,
                 tile_overlay=tile_overlay,
+                tile_paint_target=tile_paint_target,
             )
             self.preview_worker.finished.connect(self.on_preview_finished)
             self.preview_worker.start()
@@ -2726,6 +2738,10 @@ class TerrainGeneratorGUI(QMainWindow):
         self.lbl_transition_width_val.setText(str(self.config_model.transition_width))
         self.slider_hero_prop.setValue(int(self.config_model.hero_prop_density * 100))
         self.lbl_hero_prop_val.setText(f"{int(self.config_model.hero_prop_density * 100)}%")
+        if hasattr(self, "preview_widget"):
+            self.preview_widget.set_tile_paint_target(
+                getattr(self.config_model, "custom_tile_paint_target", "floor")
+            )
 
         if self.config_model.custom_image_path:
             self.chk_custom_image.setChecked(True)
@@ -2778,6 +2794,9 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.lane_width_scale = self.slider_lane_width.value() / 100.0
         if hasattr(self, "preview_widget"):
             self.preview_widget.set_lane_scale(self.config_model.lane_width_scale)
+            self.config_model.custom_tile_paint_target = (
+                self.preview_widget.get_tile_paint_target()
+            )
         self.config_model.mountain_height_scale = (
             self.slider_mountain_height.value() / 100.0
         )
@@ -3025,6 +3044,8 @@ class TerrainGeneratorGUI(QMainWindow):
         layout_nodes, layout_conns, layout_res, height_overlay, global_mask, texture_overlay, texture_mapping, next_texture_id, tile_overlay = (
             self.preview_widget.get_layout_from_editor()
         )
+        tile_paint_target = self.preview_widget.get_tile_paint_target()
+        self.config_model.custom_tile_paint_target = tile_paint_target
 
         initial_heights = None
         if hasattr(self.preview_widget, "_base_heights"):
@@ -3042,6 +3063,7 @@ class TerrainGeneratorGUI(QMainWindow):
             texture_overlay=texture_overlay,
             texture_mapping=texture_mapping,
             tile_overlay=tile_overlay,
+            tile_paint_target=tile_paint_target,
         )
         self.worker.finished.connect(self.on_generation_finished)
         self.worker.start()
@@ -3073,6 +3095,7 @@ class TerrainGeneratorGUI(QMainWindow):
                 "texture_mapping": texture_mapping,
                 "next_texture_id": next_texture_id,
                 "tile_overlay": tile_overlay,
+                "tile_paint_target": self.preview_widget.get_tile_paint_target(),
                 "map_name": self.txt_map_name.text().strip(),
             }
 
@@ -3127,6 +3150,7 @@ class TerrainGeneratorGUI(QMainWindow):
                 data.get("texture_mapping"),
                 data.get("next_texture_id", 1),
                 data.get("tile_overlay"),
+                data.get("tile_paint_target", getattr(self.config_model, "custom_tile_paint_target", "floor")),
             )
 
             self._is_dirty = False

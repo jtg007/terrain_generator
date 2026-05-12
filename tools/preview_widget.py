@@ -560,6 +560,19 @@ class MapPreviewWidget(QWidget):
         layout_t.addWidget(self.combo_texture)
         self.combo_texture.setVisible(False)
 
+        self.combo_paint_target = QComboBox()
+        self.combo_paint_target.setObjectName("TilePaintTargetCombo")
+        self.combo_paint_target.setFixedWidth(90)
+        self.combo_paint_target.setToolTip("Choose which terrain slopes tile paint affects")
+        self.combo_paint_target.addItem("Floor", "floor")
+        self.combo_paint_target.addItem("Walls", "walls")
+        self.combo_paint_target.addItem("All", "all")
+        layout_t.addWidget(self.combo_paint_target)
+        self.combo_paint_target.setVisible(False)
+        self.combo_paint_target.currentIndexChanged.connect(
+            self._on_tile_paint_target_changed
+        )
+
         self.lbl_mode_info = QLabel("")
         self.lbl_mode_info.setStyleSheet("color: #aaa; font-size: 10px; font-weight: bold; margin-left: 10px;")
         layout_t.addWidget(self.lbl_mode_info)
@@ -914,6 +927,7 @@ class MapPreviewWidget(QWidget):
         self._texture_mapping = {}    # mapping from string material to integer id (and 0=default)
         self._all_themes = {}        # {theme_name: [material_entries]}
         self._next_texture_id = 1
+        self._tile_paint_target = "floor"
         self._sculpting = False
         self._tile_painting = False
         self._tile_paint_snapshot = None
@@ -2128,6 +2142,28 @@ class MapPreviewWidget(QWidget):
                 b = a + 1
                 c = (iix + 1) * ny + iiy
                 d = c + 1
+                target = self.get_tile_paint_target()
+                if target != "all":
+                    dx = float(abs(x_sub[1] - x_sub[0])) if nx > 1 else 1.0
+                    dy = float(abs(y_sub[1] - y_sub[0])) if ny > 1 else 1.0
+                    dz_dx, dz_dy = np.gradient(z_sub, dx, dy)
+                    slope = np.sqrt(dz_dx * dz_dx + dz_dy * dz_dy)
+                    quad_slope = (
+                        slope[:-1, :-1]
+                        + slope[1:, :-1]
+                        + slope[:-1, 1:]
+                        + slope[1:, 1:]
+                    ) * 0.25
+                    if target == "floor":
+                        keep_quads = quad_slope.reshape(-1) < 0.55
+                    else:
+                        keep_quads = quad_slope.reshape(-1) > 0.2
+                    if not np.any(keep_quads):
+                        continue
+                    a = a[keep_quads]
+                    b = b[keep_quads]
+                    c = c[keep_quads]
+                    d = d[keep_quads]
                 faces = np.concatenate([
                     np.stack([a, b, d], axis=1),
                     np.stack([a, d, c], axis=1),
@@ -2260,11 +2296,12 @@ class MapPreviewWidget(QWidget):
         else:
             self.combo_texture.setVisible(False)
             self.combo_theme.setVisible(False)
+        self.combo_paint_target.setVisible(actual_mode == 13)
 
         if actual_mode == 12:
             self.lbl_mode_info.setText("TEXTURE MODE – painting coarse regions")
         elif actual_mode == 13:
-            self.lbl_mode_info.setText("TILE PAINT – left paint, right erase, drag to fill")
+            self.lbl_mode_info.setText("TILE PAINT – target floor/walls/all, right erase")
         else:
             self.lbl_mode_info.setText("")
 
@@ -2300,6 +2337,30 @@ class MapPreviewWidget(QWidget):
                 if isinstance(item, VisualNode) or hasattr(item, "is_fixed_entity"):
                     item.setFlag(QGraphicsItem.ItemIsMovable, False)
                     item.setFlag(QGraphicsItem.ItemIsSelectable, False)
+
+    def get_tile_paint_target(self) -> str:
+        if hasattr(self, "combo_paint_target"):
+            target = self.combo_paint_target.currentData()
+            if target in {"floor", "walls", "all"}:
+                return target
+        return getattr(self, "_tile_paint_target", "floor")
+
+    def set_tile_paint_target(self, target: str):
+        if target not in {"floor", "walls", "all"}:
+            target = "floor"
+        self._tile_paint_target = target
+        if hasattr(self, "combo_paint_target"):
+            idx = self.combo_paint_target.findData(target)
+            if idx >= 0:
+                old_block = self.combo_paint_target.blockSignals(True)
+                self.combo_paint_target.setCurrentIndex(idx)
+                self.combo_paint_target.blockSignals(old_block)
+
+    def _on_tile_paint_target_changed(self):
+        self._tile_paint_target = self.get_tile_paint_target()
+        if getattr(self, "current_mode", None) == 13:
+            self._update_3d_tile_overlay()
+        self.layout_changed.emit()
 
     def clear_scene_nodes(self):
         # 1. Collect all layout items (Nodes, Edges, Paths)
@@ -2909,7 +2970,7 @@ class MapPreviewWidget(QWidget):
             self._tile_overlay.copy() if getattr(self, "_tile_overlay", None) is not None else None
         )
 
-    def set_layout_to_editor(self, nodes, connections, resources, imp_base, nf_base, height_overlay, global_mask, texture_overlay=None, texture_mapping=None, next_texture_id=1, tile_overlay=None):
+    def set_layout_to_editor(self, nodes, connections, resources, imp_base, nf_base, height_overlay, global_mask, texture_overlay=None, texture_mapping=None, next_texture_id=1, tile_overlay=None, tile_paint_target="floor"):
         """Restore the editor state from a saved project."""
         # 1. Clear current state (without adding to history)
         items_to_remove = []
@@ -2977,6 +3038,7 @@ class MapPreviewWidget(QWidget):
             self._tile_overlay = tile_overlay.copy()
         elif hasattr(self, "_tiles_x") and hasattr(self, "_tiles_y"):
             self._tile_overlay = np.zeros((self._tiles_y, self._tiles_x), dtype=np.int32)
+        self.set_tile_paint_target(tile_paint_target)
 
         # 5. Refresh UI
         self._rerender_heightmap()

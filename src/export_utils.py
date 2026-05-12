@@ -131,6 +131,7 @@ def export_vmf(
         scenery_variation_noise=getattr(config_model, "scenery_variation_noise", 0.4),
         hero_prop_density=getattr(config_model, "hero_prop_density", 0.5),
         custom_tile_materials=spec.custom_tile_materials,
+        custom_tile_paint_target=getattr(spec, "custom_tile_paint_target", "floor"),
     )
 
     vmf_gen = DisplacementVMF(vmf_spec)

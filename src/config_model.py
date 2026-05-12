@@ -85,6 +85,7 @@ class GUIConfigModel:
     canyon_natural: bool = False
     preview_with_pipeline: bool = False
     custom_tile_materials: Optional[dict] = None
+    custom_tile_paint_target: str = "floor"
     
     # Theme & Optimization
     current_theme: str = "Temperate"
@@ -277,6 +278,7 @@ class GUIConfigModel:
             material=self.terrain_material,
             skybox=self.skybox,
             custom_tile_materials=self.custom_tile_materials,
+            custom_tile_paint_target=self.custom_tile_paint_target,
             current_theme=self.current_theme,
             corridor_detail_width=self.corridor_detail_width,
             transition_width=self.transition_width,

@@ -83,6 +83,7 @@ def save_project(path: str, config: GUIConfigModel, layout_data: Dict[str, Any])
         sculpt_data["tile_overlay"] = array_to_b64(tile_overlay)
         sculpt_data["tile_overlay_shape"] = tile_overlay.shape
         sculpt_data["tile_overlay_dtype"] = str(tile_overlay.dtype)
+    sculpt_data["tile_paint_target"] = layout_data.get("tile_paint_target", "floor")
 
     # 4. Final project structure
     project = {
@@ -191,6 +192,10 @@ def load_project(path: str) -> Dict[str, Any]:
         "global_mask": global_mask,
         "texture_overlay": texture_overlay,
         "tile_overlay": tile_overlay,
+        "tile_paint_target": sculpt_data.get(
+            "tile_paint_target",
+            getattr(config, "custom_tile_paint_target", "floor"),
+        ),
         "texture_mapping": sculpt_data.get("texture_mapping", {}),
         "next_texture_id": sculpt_data.get("next_texture_id", 1)
     }

@@ -92,6 +92,7 @@ class TerrainSpec:
     custom_layout_nodes: Optional[List[LayoutNode]] = None
     custom_layout_connections: Optional[List[LayoutConnection]] = None
     custom_tile_materials: Optional[Dict[Tuple[int, int], str]] = None
+    custom_tile_paint_target: str = "floor"
     
     # Theme & Optimization
     current_theme: str = "Temperate"
@@ -221,6 +222,7 @@ class TerrainSpec:
             "transition_width": self.transition_width,
             "scenery_variation_noise": self.scenery_variation_noise,
             "hero_prop_density": self.hero_prop_density,
+            "custom_tile_paint_target": self.custom_tile_paint_target,
             # Note: custom_tile_materials intentionally omitted from to_dict as it's meant to be transient/project-level.
         }
 
