@@ -173,7 +173,7 @@ Available blend textures from `config/textures.json` include:
 Using non-existent textures will cause the map to crash on load.
 
 **Skyboxes (safe Empires whitelist):**
-- `empsky_day1`, `empsky_day2`, `empsky_day3`
+- `empsky_day1`, `empsky_day2`
 - `empsky_overcast1`, `empsky_overcast2`, `empsky_overcast3yellow`
 - `empsky_sunset1`, `empsky_sunset2`
 

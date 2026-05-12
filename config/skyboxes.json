@@ -2,8 +2,6 @@
   "skyboxes": [
     "empsky_day1",
     "empsky_day2",
-    "empsky_day3",
-    "empsky_day3_hdr",
     "empsky_glycen",
     "empsky_mvalley",
     "empsky_mvalley2",
@@ -17,5 +15,5 @@
     "sky20",
     "sky92"
   ],
-  "count": 16
+  "count": 14
 }

@@ -36,6 +36,8 @@ from PySide6.QtWidgets import (
     QStackedWidget,
 )
 
+from src.material_manager import is_blend_floor_material
+from src.qt_widgets import WidePopupComboBox
 from src.terrain_spec import ZoneType, LayoutNode, LayoutConnection
 
 
@@ -542,20 +544,12 @@ class MapPreviewWidget(QWidget):
 
         layout_t.addLayout(sliders_layout)
 
-        # Theme selector (visible only in texture mode)
-        self.combo_theme = QComboBox()
-        self.combo_theme.setObjectName("TileThemeCombo")
-        self.combo_theme.setFixedWidth(100)
-        self.combo_theme.setToolTip("Select material theme")
-        layout_t.addWidget(self.combo_theme)
-        self.combo_theme.setVisible(False)
-        self.combo_theme.currentIndexChanged.connect(self._on_theme_changed)
-
-        # Texture combobox (visible only in texture mode)
-        self.combo_texture = QComboBox()
-        self.combo_texture.setObjectName("TileMaterialCombo")
-        self.combo_texture.setFixedWidth(120)
-        self.combo_texture.setToolTip("Paint material")
+        # Paint material list follows the main window "Global Theme" (see set_material_theme).
+        self.combo_texture = WidePopupComboBox()
+        self.combo_texture.setObjectName("GroundTextureCombo")
+        self.combo_texture.setMaxVisibleItems(14)
+        self.combo_texture.setMinimumWidth(172)
+        self.combo_texture.setToolTip("Paint material (same theme as sidebar)")
         # Added to layout, but visibility handled by mode change
         layout_t.addWidget(self.combo_texture)
         self.combo_texture.setVisible(False)
@@ -2202,40 +2196,33 @@ class MapPreviewWidget(QWidget):
 
         self.view_3d.update()
 
-    def _on_theme_changed(self, index):
-        """Update material list when theme changes."""
-        theme_name = self.combo_theme.currentText()
+    def set_material_theme(self, theme_name: str) -> None:
+        """Fill paint-material combo from the active theme (mirrors sidebar Global Theme)."""
         if not theme_name or theme_name not in self._all_themes:
             return
-            
-        # Block signals to avoid triggering updates while rebuilding
         self.combo_texture.blockSignals(True)
         self.combo_texture.clear()
-        
         theme_obj = self._all_themes[theme_name]
         mats_list = theme_obj.get("materials", []) if isinstance(theme_obj, dict) else theme_obj
-        
-        import os
         for mat in mats_list:
-            name = mat.get("name", os.path.basename(mat["path"]))
             path = mat["path"]
+            if not is_blend_floor_material(path):
+                continue
+            name = mat.get("name", Path(path).name)
             self.combo_texture.addItem(name, path)
-            
+            idx = self.combo_texture.count() - 1
+            self.combo_texture.setItemData(idx, f"{name}\n{path}", Qt.ItemDataRole.ToolTipRole)
         self.combo_texture.blockSignals(False)
 
-    def set_themes(self, themes_data: dict):
-        """Initialize the theme and material dropdowns."""
+    def set_themes(self, themes_data: dict, active_theme: Optional[str] = None) -> None:
+        """Store theme definitions; paint list follows ``active_theme`` or first theme."""
         self._all_themes = themes_data
-        
-        self.combo_theme.blockSignals(True)
-        self.combo_theme.clear()
-        for theme_name in sorted(self._all_themes.keys()):
-            self.combo_theme.addItem(theme_name)
-        self.combo_theme.blockSignals(False)
-        
-        # Trigger initial populate
-        if self.combo_theme.count() > 0:
-            self._on_theme_changed(0)
+        names = sorted(self._all_themes.keys())
+        chosen = active_theme if active_theme and active_theme in self._all_themes else (
+            names[0] if names else ""
+        )
+        if chosen:
+            self.set_material_theme(chosen)
 
     def _on_tile_clicked(self, tx, ty, erase=False):
         self._begin_tile_paint()
@@ -2292,10 +2279,8 @@ class MapPreviewWidget(QWidget):
 
         if actual_mode in (12, 13):
             self.combo_texture.setVisible(True)
-            self.combo_theme.setVisible(True)
         else:
             self.combo_texture.setVisible(False)
-            self.combo_theme.setVisible(False)
         self.combo_paint_target.setVisible(actual_mode == 13)
 
         if actual_mode == 12:

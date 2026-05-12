@@ -16,8 +16,8 @@ THEME_BLEND_MATERIAL: dict[str, tuple[str, str]] = {
         "common/terrain/blend_snow01_rock01a",
     ),
     "Industrial": (
-        "common/stene/dirtyconcrete",
-        "common/stene/dirtyconcrete",
+        "common/terrain/blend_grass01a_dirt01a",
+        "common/terrain/blend_grass01a_dirt01a",
     ),
     "Wasteland": (
         "common/terrain/blend_red2_red3",
@@ -56,6 +56,53 @@ def choose_compile_safe_material(
     # Smart Detail system handles detail props dynamically
     # so we no longer need to restrict materials or issue warnings here.
     return requested_material, None
+
+
+def is_displacement_floor_material(material_path: str) -> bool:
+    """True for ground / horizontal terrain paints; excludes foliage, water shaders, walls."""
+    p = material_path.lower()
+    banned_substrings = (
+        "treebranch",
+        "treebark",
+        "treefoliage",
+        "trees_bark",
+        "trees_orex",
+        "trees_vetka",
+        "billboard",
+        "/water/",
+        "water_ocean",
+        "water_stranded",
+        "water_l01",
+        "water_l05",
+        "emp_water",
+        "emp_cleanwater",
+        "emp_lakewater",
+        "emp_murkywater",
+        "_warp",
+        "_beneath",
+        "_fog_color",
+        "glasspanel",
+        "icawall",
+        "flag_capmodel",
+        "assault_parking",
+        "tutorial/",
+        "concretewall",
+        "mountain_wall",
+        "cliffface",
+        "blend_snow_wall",
+    )
+    if any(s in p for s in banned_substrings):
+        return False
+    if p.startswith("nature/cliff/") or "/nature/cliff/" in p:
+        return False
+    return True
+
+
+def is_blend_floor_material(material_path: str) -> bool:
+    """Displacement-friendly blends only (slope-based alpha); excludes solids and junk."""
+    if not is_displacement_floor_material(material_path):
+        return False
+    return "blend" in material_path.lower()
 
 
 def get_texture_safety_status(textures_path: str | Path) -> dict[str, bool]:

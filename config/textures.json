@@ -518,7 +518,7 @@
           "nature/cliff/stone_cliff_colorado",
           "nature/cliffface001b"
         ],
-        "skybox": "empsky_day3",
+        "skybox": "empsky_day1",
         "scenery_props": [
           "models/props_wasteland/rockcliff01b.mdl",
           "models/props_wasteland/rockcliff01c.mdl",
@@ -852,11 +852,11 @@
     },
     "Industrial": {
       "defaults": {
-        "primary_floor": "common/stene/dirtyconcrete",
+        "primary_floor": "common/terrain/blend_grass01a_dirt01a",
         "primary_cliff": "common/nature/mountain_wall_000",
-        "cheap_floor": "common/stene/dirtyconcrete",
+        "cheap_floor": "common/terrain/blend_grass01a_dirt01a_nodetail",
         "cheap_cliff": "nature/cliffface001b",
-        "transition_floor": "nature/terrain/tarmac_01",
+        "transition_floor": "common/nature/blend_grass_mud_003",
         "scenery_floors": [
           "common/stene/dirtyconcrete",
           "common/concrete/pavingground01",
@@ -875,48 +875,36 @@
       },
       "materials": [
         {
-          "name": "Pavingground01",
-          "path": "common/concrete/pavingground01"
+          "name": "Grass / dirt",
+          "path": "common/terrain/blend_grass01a_dirt01a"
         },
         {
-          "name": "Pavingground01B",
-          "path": "common/concrete/pavingground01b"
+          "name": "Grass / dirt (no detail)",
+          "path": "common/terrain/blend_grass01a_dirt01a_nodetail"
         },
         {
-          "name": "Pavingground02A",
-          "path": "common/concrete/pavingground02a"
+          "name": "Grass / mud",
+          "path": "common/nature/blend_grass_mud_003"
         },
         {
-          "name": "Pavingground03A",
-          "path": "common/concrete/pavingground03a"
+          "name": "Grass / mountain wall",
+          "path": "common/nature/blend_grass_mountainwall_000"
         },
         {
-          "name": "Pavingground03B",
-          "path": "common/concrete/pavingground03b"
+          "name": "Grass / dirt (terrain)",
+          "path": "nature/terrain/blend_grass1_dirt1"
         },
         {
-          "name": "Dirtyconcrete",
-          "path": "common/stene/dirtyconcrete"
-        },
-        {
-          "name": "Tarmac 01",
-          "path": "nature/terrain/tarmac_01"
-        },
-        {
-          "name": "Tarmac 02",
-          "path": "nature/terrain/tarmac_02"
-        },
-        {
-          "name": "Silk Pavingground02A",
-          "path": "silk/silk_pavingground02a"
+          "name": "Grass / rock (terrain)",
+          "path": "nature/terrain/blend_grass1_rock1"
         }
       ]
     },
     "Wasteland": {
       "defaults": {
-        "primary_floor": "common/terrain/redground2",
+        "primary_floor": "common/terrain/blend_red2_red3",
         "primary_cliff": "nature/cliff/stone_cliff_colorado",
-        "cheap_floor": "common/terrain/redground2",
+        "cheap_floor": "common/terrain/blend_red2_red4",
         "cheap_cliff": "nature/cliffface001b",
         "transition_floor": "common/terrain/blend_red2_red3",
         "scenery_floors": [
@@ -1114,7 +1102,6 @@
   "skyboxes": [
     "empsky_day1",
     "empsky_day2",
-    "empsky_day3",
     "empsky_overcast1",
     "empsky_overcast2",
     "empsky_overcast3yellow",

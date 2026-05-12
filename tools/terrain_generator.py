@@ -13,6 +13,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import os
 from contextlib import contextmanager
+from typing import List, Optional, Tuple
 
 if not getattr(sys, "frozen", False):
     os.chdir(PROJECT_ROOT)
@@ -36,6 +37,7 @@ from PySide6.QtWidgets import (
     QSplitter,
     QScrollArea,
     QTabWidget,
+    QFrame,
 )
 from PySide6.QtCore import Qt, QThread, Signal, QTimer
 from PySide6.QtGui import (
@@ -123,6 +125,7 @@ from src.vmf_gen import (
 from src.steam_paths import validate_empires_path
 from config import Config
 from src import project_utils
+from src.qt_widgets import WidePopupComboBox
 
 # Ensure OUTPUT_DIR is writable. In bundled mode, avoid the executable's directory
 # as it may be installed in a protected location like Program Files.
@@ -438,7 +441,7 @@ class TerrainGeneratorGUI(QMainWindow):
         empires_path = self.config.get("empires_path", "")
         self._vpk_index = self._build_vpk_index(empires_path)
 
-        self.terrain_materials, self.skyboxes, self.texture_themes = self.load_textures()
+        self.skyboxes, self.texture_themes = self.load_textures()
 
         self.setup_ui()
         self.apply_dark_theme()
@@ -551,52 +554,81 @@ class TerrainGeneratorGUI(QMainWindow):
 
     def load_textures(self):
         textures_path = PROJECT_ROOT / "config" / "textures.json"
+
         if textures_path.exists():
             with open(textures_path, "r") as f:
                 data = json.load(f)
-                
-                themes = data.get("themes", {})
-                skyboxes = data.get("skyboxes", SAFE_EMPIRES_SKYBOXES) or SAFE_EMPIRES_SKYBOXES
-                
-                from src.material_manager import get_texture_safety_status
-                safety = get_texture_safety_status(textures_path)
-                
-                # We need to return TWO things for legacy compatibility:
-                # 1. Flattened list of (labeled_name, path) for the main Terrain Material dropdown
-                # 2. The full themes dictionary for the PreviewWidget (Tile Paint)
-                
-                flattened_labeled = []
-                all_materials = []
-                for theme_name, theme_obj in themes.items():
-                    # Check if it's the new object format or old list format
-                    if isinstance(theme_obj, dict):
-                        mats_list = theme_obj.get("materials", [])
-                    else:
-                        mats_list = theme_obj
-                        
-                    for mat_entry in mats_list:
-                        mat = mat_entry["path"]
-                        if mat not in all_materials:
-                            all_materials.append(mat)
-                            is_safe = safety.get(mat, True)
+            themes = data.get("themes", {})
+            skyboxes = data.get("skyboxes", SAFE_EMPIRES_SKYBOXES) or SAFE_EMPIRES_SKYBOXES
+            return skyboxes, themes
 
-                            is_available = self.is_texture_available(mat)
-                            avail_mark = "✓" if is_available else "✗"
-
-                            label = "SAFE" if is_safe else "CAUTION"
-                            flattened_labeled.append((f"{avail_mark} {mat}  [{label}]", mat))
-                
-                flattened_labeled.sort()
-                
-                return flattened_labeled, skyboxes, themes
-        
-        # Default fallback
         default_mat = "common/nature/blend_grass_mountainwall_000"
-        return (
-            [(f"{default_mat}  [✓ SAFE]", default_mat)],
-            [DEFAULT_SAFE_SKYBOX],
-            {"General": [{"name": "Grass", "path": default_mat}]}
-        )
+        return [DEFAULT_SAFE_SKYBOX], {
+            "General": {"defaults": {"primary_floor": default_mat}, "materials": [{"name": "Grass", "path": default_mat}]}
+        }
+
+    def _theme_default_floor(self, theme_name: str) -> Optional[str]:
+        theme_obj = self.texture_themes.get(theme_name)
+        if not isinstance(theme_obj, dict):
+            return None
+        defaults = theme_obj.get("defaults") or {}
+        return defaults.get("primary_floor")
+
+    def _material_entries_for_theme(self, theme_name: str) -> List[Tuple[str, str]]:
+        from src.material_manager import is_blend_floor_material
+
+        theme_obj = self.texture_themes.get(theme_name)
+        if isinstance(theme_obj, dict):
+            mats_list = theme_obj.get("materials", [])
+        elif isinstance(theme_obj, list):
+            mats_list = theme_obj
+        else:
+            mats_list = []
+        labeled: List[Tuple[str, str]] = []
+        for mat_entry in mats_list:
+            mat = mat_entry["path"]
+            if not is_blend_floor_material(mat):
+                continue
+            name = mat_entry.get("name") or Path(mat).name.replace("_", " ").title()
+            labeled.append((name, mat))
+        labeled.sort(key=lambda x: x[1].lower())
+        return labeled
+
+    def _fill_material_combo(self, theme_name: str, preserve_path: Optional[str] = None) -> None:
+        self.combo_material.blockSignals(True)
+        self.combo_material.clear()
+        for display_text, clean_path in self._material_entries_for_theme(theme_name):
+            self.combo_material.addItem(display_text, clean_path)
+            idx = self.combo_material.count() - 1
+            self.combo_material.setItemData(
+                idx, f"{display_text}\n{clean_path}", Qt.ItemDataRole.ToolTipRole
+            )
+            if not self.is_texture_available(clean_path):
+                self.combo_material.setItemData(idx, Qt.gray, Qt.ForegroundRole)
+        self.combo_material.blockSignals(False)
+
+        chosen_idx = -1
+        if preserve_path:
+            chosen_idx = self.combo_material.findData(preserve_path)
+        if chosen_idx < 0:
+            default_floor = self._theme_default_floor(theme_name)
+            if default_floor:
+                chosen_idx = self.combo_material.findData(default_floor)
+        if chosen_idx >= 0:
+            self.combo_material.setCurrentIndex(chosen_idx)
+        self._refresh_ground_texture_tooltip()
+
+    def _refresh_ground_texture_tooltip(self) -> None:
+        idx = self.combo_material.currentIndex()
+        if idx < 0:
+            self.combo_material.setToolTip("")
+            return
+        path = self.combo_material.itemData(idx)
+        name = self.combo_material.itemText(idx)
+        if path:
+            self.combo_material.setToolTip(f"{name}\n{path}")
+        else:
+            self.combo_material.setToolTip(name)
 
     def setup_ui(self):
         central_widget = QWidget()
@@ -615,7 +647,7 @@ class TerrainGeneratorGUI(QMainWindow):
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(12, 14, 12, 12)
         sidebar_layout.setSpacing(8)
-        sidebar.setMinimumWidth(190)
+        sidebar.setMinimumWidth(218)
         sidebar.setMaximumWidth(300)
 
         # Clean title
@@ -1333,97 +1365,96 @@ class TerrainGeneratorGUI(QMainWindow):
         self.slider_resource_clear.valueChanged.connect(self.update_node_clear_radii)
 
 
-        # ─── MATERIALS ───
-        lbl_sec_materials = QLabel("MATERIALS")
+        # ─── MATERIALS & THEME ───
+        lbl_sec_materials = QLabel("MATERIALS & THEME")
         lbl_sec_materials.setObjectName("ConfigSection")
         self.tab_shape_layout.addWidget(lbl_sec_materials)
 
-        sec_materials = QWidget()
-        sec_materials.content_layout = QVBoxLayout(sec_materials)
-        sec_materials.content_layout.setContentsMargins(0,0,0,0)
-        self.tab_shape_layout.addWidget(sec_materials)
+        materials_card = QFrame()
+        materials_card.setObjectName("MaterialsCard")
+        card_layout = QVBoxLayout(materials_card)
+        card_layout.setContentsMargins(9, 9, 9, 9)
+        card_layout.setSpacing(6)
+
+        cap_look = QLabel("Terrain appearance")
+        cap_look.setObjectName("MaterialsCardCaption")
+        card_layout.addWidget(cap_look)
+
+        theme_row = QHBoxLayout()
+        theme_row.setSpacing(6)
+        lbl_theme = QLabel("Theme")
+        lbl_theme.setObjectName("MaterialsFieldLabel")
+        lbl_theme.setToolTip(
+            "Skybox default, texture scale rules, and which materials appear in the list"
+        )
+        theme_row.addWidget(lbl_theme)
+        self.combo_theme = QComboBox()
+        self.combo_theme.setObjectName("ThemeCombo")
+        self.combo_theme.addItems(sorted(self.texture_themes.keys()))
+        if self.config_model.current_theme in self.texture_themes:
+            self.combo_theme.setCurrentText(self.config_model.current_theme)
+        theme_row.addWidget(self.combo_theme, 1)
+        card_layout.addLayout(theme_row)
+        self.combo_theme.currentIndexChanged.connect(self._on_theme_changed_sync)
 
         mat_row = QHBoxLayout()
-        mat_row.setSpacing(8)
-        lbl_mat = QLabel("Texture")
-        lbl_mat.setObjectName("FieldLabel")
-        lbl_mat.setToolTip("Ground surface blend material")
+        mat_row.setSpacing(6)
+        lbl_mat = QLabel("Ground texture")
+        lbl_mat.setObjectName("MaterialsFieldLabel")
+        lbl_mat.setToolTip(
+            "Default displacement blend for this theme (same pool as Texture paint)"
+        )
         mat_row.addWidget(lbl_mat)
-        self.combo_material = QComboBox()
-        for display_text, clean_path in self.terrain_materials:
-            self.combo_material.addItem(display_text, clean_path)
-
-            # Optionally gray out if not available
-            if "✗" in display_text:
-                idx = self.combo_material.count() - 1
-                self.combo_material.setItemData(idx, Qt.gray, Qt.ForegroundRole)
-
-        default_idx = self.combo_material.findData("common/nature/blend_grass_mountainwall_000")
-        if default_idx >= 0:
-            self.combo_material.setCurrentIndex(default_idx)
+        self.combo_material = WidePopupComboBox()
+        self.combo_material.setObjectName("GroundTextureCombo")
+        self.combo_material.setMaxVisibleItems(14)
+        self.combo_material.setMinimumWidth(222)
         mat_row.addWidget(self.combo_material, 1)
-        sec_materials.content_layout.addLayout(mat_row)
+        card_layout.addLayout(mat_row)
         self.combo_material.currentIndexChanged.connect(self.sync_to_model)
-
-
+        self.combo_material.currentIndexChanged.connect(self._refresh_ground_texture_tooltip)
 
         sky_row = QHBoxLayout()
-        sky_row.setSpacing(8)
+        sky_row.setSpacing(6)
         lbl_sky = QLabel("Skybox")
-        lbl_sky.setObjectName("FieldLabel")
+        lbl_sky.setObjectName("MaterialsFieldLabel")
         sky_row.addWidget(lbl_sky)
         self.combo_skybox = QComboBox()
+        self.combo_skybox.setObjectName("SkyboxCombo")
         self.combo_skybox.addItems(self.skyboxes)
         self.combo_skybox.setCurrentText("empsky_overcast3yellow")
         sky_row.addWidget(self.combo_skybox, 1)
-        sec_materials.content_layout.addLayout(sky_row)
+        card_layout.addLayout(sky_row)
         self.combo_skybox.currentIndexChanged.connect(self.sync_to_model)
 
-        # --- THEME & OPTIMIZATION ---
-        lbl_sec_theme = QLabel("THEME & OPTIMIZATION")
-        lbl_sec_theme.setObjectName("ConfigSection")
-        self.tab_shape_layout.addWidget(lbl_sec_theme)
+        divider = QFrame()
+        divider.setObjectName("MaterialsCardDivider")
+        divider.setFixedHeight(1)
+        card_layout.addWidget(divider)
 
-        sec_theme = QWidget()
-        sec_theme.content_layout = QVBoxLayout(sec_theme)
-        sec_theme.content_layout.setContentsMargins(0,0,0,0)
-        self.tab_shape_layout.addWidget(sec_theme)
-
-        # Theme Selector
-        theme_row = QHBoxLayout()
-        theme_row.setSpacing(8)
-        lbl_theme = QLabel("Global Theme")
-        lbl_theme.setObjectName("FieldLabel")
-        theme_row.addWidget(lbl_theme)
-        self.combo_theme = QComboBox()
-        self.combo_theme.addItems(sorted(self.texture_themes.keys()))
-        theme_row.addWidget(self.combo_theme, 1)
-        sec_theme.content_layout.addLayout(theme_row)
-        self.combo_theme.currentIndexChanged.connect(self._on_theme_changed_sync)
-
-        # Texture Scale — Auto by Theme
         ts_row = QHBoxLayout()
-        ts_row.setSpacing(8)
+        ts_row.setSpacing(6)
         self.chk_auto_texture_scale = QCheckBox("Auto-Scale by Theme")
         self.chk_auto_texture_scale.setChecked(True)
-        self.chk_auto_texture_scale.setToolTip("When checked, texture scale adapts to the active theme automatically")
+        self.chk_auto_texture_scale.setToolTip(
+            "When checked, texture scale adapts to the active theme automatically"
+        )
         ts_row.addWidget(self.chk_auto_texture_scale)
         self.slider_texture_scale = QSlider(Qt.Horizontal)
-        self.slider_texture_scale.setRange(10, 200)  # 0.1 to 2.0
+        self.slider_texture_scale.setRange(10, 200)
         self.slider_texture_scale.setEnabled(False)
         self.lbl_texture_scale_val = QLabel("Auto")
         ts_row.addWidget(self.slider_texture_scale, 1)
         ts_row.addWidget(self.lbl_texture_scale_val)
-        sec_theme.content_layout.addLayout(ts_row)
+        card_layout.addLayout(ts_row)
         self.chk_auto_texture_scale.toggled.connect(self._on_auto_scale_toggled)
         self.slider_texture_scale.valueChanged.connect(
             lambda v: self.lbl_texture_scale_val.setText(f"{v / 100:.1f}")
         )
         self.slider_texture_scale.valueChanged.connect(self.sync_to_model)
 
-        # Corridor Detail Width
         cdw_row = QHBoxLayout()
-        cdw_row.setSpacing(8)
+        cdw_row.setSpacing(6)
         lbl_cdw = QLabel("Detail Width")
         lbl_cdw.setObjectName("FieldLabel")
         lbl_cdw.setToolTip("How far from lanes to keep high-detail (props/alphas)")
@@ -1434,11 +1465,10 @@ class TerrainGeneratorGUI(QMainWindow):
         cdw_row.addWidget(
             make_slider_row(self.slider_corridor_width, self.lbl_corridor_width_val), 1
         )
-        sec_theme.content_layout.addLayout(cdw_row)
+        card_layout.addLayout(cdw_row)
 
-        # Transition Width
         tw_row = QHBoxLayout()
-        tw_row.setSpacing(8)
+        tw_row.setSpacing(6)
         lbl_tw = QLabel("Transition Width")
         lbl_tw.setObjectName("FieldLabel")
         lbl_tw.setToolTip("Width of the blended belt between Action and Scenery zones")
@@ -1449,11 +1479,10 @@ class TerrainGeneratorGUI(QMainWindow):
         tw_row.addWidget(
             make_slider_row(self.slider_transition_width, self.lbl_transition_width_val), 1
         )
-        sec_theme.content_layout.addLayout(tw_row)
+        card_layout.addLayout(tw_row)
 
-        # Hero Prop Density
         hpd_row = QHBoxLayout()
-        hpd_row.setSpacing(8)
+        hpd_row.setSpacing(6)
         lbl_hpd = QLabel("Scenery Props")
         lbl_hpd.setObjectName("FieldLabel")
         lbl_hpd.setToolTip("Density of large hero prop clusters in the background")
@@ -1464,14 +1493,15 @@ class TerrainGeneratorGUI(QMainWindow):
         hpd_row.addWidget(
             make_slider_row(self.slider_hero_prop, self.lbl_hero_prop_val, "%"), 1
         )
-        sec_theme.content_layout.addLayout(hpd_row)
+        card_layout.addLayout(hpd_row)
 
         self.slider_corridor_width.valueChanged.connect(self.sync_to_model)
         self.slider_transition_width.valueChanged.connect(self.sync_to_model)
         self.slider_hero_prop.valueChanged.connect(self.sync_to_model)
-        self.combo_skybox.currentIndexChanged.connect(self.sync_to_model)
 
+        self._fill_material_combo(self.combo_theme.currentText())
 
+        self.tab_shape_layout.addWidget(materials_card)
         # ─── SETTINGS ───
         lbl_sec_settings = QLabel("SETTINGS")
         lbl_sec_settings.setObjectName("ConfigSection")
@@ -1566,7 +1596,7 @@ class TerrainGeneratorGUI(QMainWindow):
         # ── Data & Tools Setup ──
 
         self.preview_widget = MapPreviewWidget()
-        self.preview_widget.set_themes(self.texture_themes)
+        self.preview_widget.set_themes(self.texture_themes, self.config_model.current_theme)
         self.preview_widget.set_tile_paint_target(
             getattr(self.config_model, "custom_tile_paint_target", "floor")
         )
@@ -1594,7 +1624,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self._root_splitter.addWidget(main_area)
         self._root_splitter.setStretchFactor(0, 0)
         self._root_splitter.setStretchFactor(1, 1)
-        self._root_splitter.setSizes([220, 930])
+        self._root_splitter.setSizes([226, 924])
 
         self._update_maze_visibility()
 
@@ -2243,6 +2273,46 @@ class TerrainGeneratorGUI(QMainWindow):
             letter-spacing: 1.5px;
             padding: 6px 0 2px 0;
         }}
+        QWidget#MaterialsCard {{
+            background-color: #161822;
+            border: 1px solid #2a3045;
+            border-radius: 7px;
+        }}
+        QLabel#MaterialsCardCaption {{
+            font-size: 8px;
+            font-weight: 700;
+            color: #636b86;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            padding: 0 1px 2px 1px;
+        }}
+        QLabel#MaterialsFieldLabel {{
+            font-size: 11px;
+            font-weight: 600;
+            color: {TEXT_SEC};
+            min-width: 88px;
+            max-width: 88px;
+        }}
+        QFrame#MaterialsCardDivider {{
+            background-color: #2a3048;
+            border: none;
+            margin-top: 2px;
+            margin-bottom: 2px;
+        }}
+        QComboBox#GroundTextureCombo, QComboBox#ThemeCombo, QComboBox#SkyboxCombo {{
+            min-height: 24px;
+            max-height: 26px;
+            padding: 3px 8px;
+            font-size: 11px;
+        }}
+        QComboBox#ThemeCombo {{
+            font-weight: 600;
+        }}
+        QComboBox#GroundTextureCombo QAbstractItemView::item {{
+            padding: 5px 10px;
+            min-height: 20px;
+            border-radius: 3px;
+        }}
         QLabel#SliderValue {{
             font-size: 11px;
             font-weight: bold;
@@ -2477,35 +2547,23 @@ class TerrainGeneratorGUI(QMainWindow):
                 )
 
     def _on_theme_changed_sync(self, index):
-        """Handle global theme changes and sync to preview widget."""
+        """Handle global theme changes: ground texture list, preview paint list, skybox default."""
         theme_name = self.combo_theme.currentText()
+        prev_mat = self.combo_material.currentData()
+        self._fill_material_combo(theme_name, preserve_path=prev_mat)
         if hasattr(self, "preview_widget"):
-            # Update the theme selector in the 3D preview
-            idx = self.preview_widget.combo_theme.findText(theme_name)
-            if idx >= 0:
-                self.preview_widget.combo_theme.setCurrentIndex(idx)
-        
-        # Suggest skybox and material based on theme
+            self.preview_widget.set_material_theme(theme_name)
+
         textures_path = PROJECT_ROOT / "config" / "textures.json"
         if textures_path.exists():
             with open(textures_path, "r") as f:
                 data = json.load(f)
                 theme_data = data.get("themes", {}).get(theme_name, {})
                 defaults = theme_data.get("defaults", {})
-                
-                # Update Skybox
                 new_sky = defaults.get("skybox")
                 if new_sky:
                     self.combo_skybox.setCurrentText(new_sky)
-                
-                # Update Primary Material (only if user hasn't painted much? Or always?)
-                # We suggest it, but user can still change it
-                new_mat = defaults.get("primary_floor")
-                if new_mat:
-                    idx = self.combo_material.findData(new_mat)
-                    if idx >= 0:
-                        self.combo_material.setCurrentIndex(idx)
-        
+
         self.sync_to_model()
 
     def _on_auto_scale_toggled(self, checked: bool):
@@ -2547,33 +2605,9 @@ class TerrainGeneratorGUI(QMainWindow):
         self._refresh_material_combobox()
 
     def _refresh_material_combobox(self):
+        theme_name = self.combo_theme.currentText()
         current_data = self.combo_material.currentData()
-        self.combo_material.clear()
-
-        # Keep track of available mats to restore selection if possible
-        for display_text, clean_path in self.terrain_materials:
-            # We re-evaluate availability when we refresh
-            is_available = self.is_texture_available(clean_path)
-            if is_available:
-                new_display = display_text.replace("✗ ", "✓ ").replace("⚠ ", "✓ ")
-                if "✓" not in new_display:
-                    new_display = f"✓ {new_display}"
-            else:
-                new_display = display_text.replace("✓ ", "✗ ").replace("⚠ ", "✗ ")
-                if "✗" not in new_display:
-                    new_display = f"✗ {new_display}"
-
-            self.combo_material.addItem(new_display, clean_path)
-
-            # Optionally gray out if not available
-            idx = self.combo_material.count() - 1
-            if not is_available:
-                self.combo_material.setItemData(idx, Qt.gray, Qt.ForegroundRole)
-
-        # Restore previous selection if it's still there
-        idx = self.combo_material.findData(current_data)
-        if idx >= 0:
-            self.combo_material.setCurrentIndex(idx)
+        self._fill_material_combo(theme_name, preserve_path=current_data)
 
     def sync_to_ui(self):
         """Updates UI components to match the config model."""
@@ -2604,6 +2638,7 @@ class TerrainGeneratorGUI(QMainWindow):
             self.combo_power,
             self.combo_material,
             self.combo_skybox,
+            self.combo_theme,
             self.chk_disable_commander,
             self.chk_disable_buildings,
             self.chk_disable_resources,
@@ -2702,9 +2737,11 @@ class TerrainGeneratorGUI(QMainWindow):
             elif p == 3:
                 self.combo_power.setCurrentIndex(1)
 
-            idx = self.combo_material.findData(self.config_model.terrain_material)
-            if idx >= 0:
-                self.combo_material.setCurrentIndex(idx)
+            self.combo_theme.setCurrentText(self.config_model.current_theme)
+            self._fill_material_combo(
+                self.config_model.current_theme,
+                preserve_path=self.config_model.terrain_material,
+            )
             self.combo_skybox.setCurrentText(self.config_model.skybox)
 
             self.chk_disable_commander.setChecked(self.config_model.disable_commander)
@@ -2722,7 +2759,6 @@ class TerrainGeneratorGUI(QMainWindow):
                 self.config_model.preview_with_pipeline
             )
         
-        self.combo_theme.setCurrentText(self.config_model.current_theme)
         self.chk_auto_texture_scale.setChecked(self.config_model.auto_texture_scale)
         self.slider_texture_scale.setEnabled(not self.config_model.auto_texture_scale)
         if self.config_model.auto_texture_scale or self.config_model.terrain_texture_scale is None:
@@ -2742,6 +2778,7 @@ class TerrainGeneratorGUI(QMainWindow):
             self.preview_widget.set_tile_paint_target(
                 getattr(self.config_model, "custom_tile_paint_target", "floor")
             )
+            self.preview_widget.set_material_theme(self.config_model.current_theme)
 
         if self.config_model.custom_image_path:
             self.chk_custom_image.setChecked(True)

@@ -14,7 +14,6 @@ from vmflib import vmf as vmf_lib
 SAFE_EMPIRES_SKYBOXES = [
     "empsky_day1",
     "empsky_day2",
-    "empsky_day3",
     "empsky_overcast1",
     "empsky_overcast2",
     "empsky_overcast3yellow",
