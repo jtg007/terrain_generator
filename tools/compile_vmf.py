@@ -22,6 +22,29 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.steam_paths import is_windows, find_empires_path, find_empires_bin
 
+def deploy_vmt_patches(project_root: Path, empires_path: str) -> None:
+    """Copy VMT patches to the game's materials dir so VBSP/Hammer can find them."""
+    assets_src = project_root / "materials" / "vmf_generator_assets"
+    if not assets_src.exists():
+        return
+
+    assets_dst = os.path.join(empires_path, "materials", "vmf_generator_assets")
+    os.makedirs(assets_dst, exist_ok=True)
+
+    for asset in assets_src.rglob("*"):
+        if asset.is_file():
+            shutil.copy2(str(asset), os.path.join(assets_dst, asset.name))
+    print(f"VMT patches deployed to: {assets_dst}")
+
+    # Also deploy to download dir for consistency
+    assets_dl = os.path.join(empires_path, "download", "materials", "vmf_generator_assets")
+    os.makedirs(assets_dl, exist_ok=True)
+    for asset in assets_src.rglob("*"):
+        if asset.is_file():
+            shutil.copy2(str(asset), os.path.join(assets_dl, asset.name))
+    print(f"VMT patches deployed to download: {assets_dl}")
+
+
 def compile_vmf(
     vmf_path: str,
     sdk_path: str = "",
@@ -79,6 +102,10 @@ def compile_vmf(
     print(f"Compiling: {vmf_path.name}")
     print(f"VBSP: {vbsp_exe}")
     print("-" * 60)
+
+    # Deploy VMT patches to game materials dir before VBSP runs
+    if empires_path:
+        deploy_vmt_patches(project_root, empires_path)
 
     temp_vmf = os.path.join(sdk_path, vmf_name)
     shutil.copy2(str(vmf_path), temp_vmf)
