@@ -1,0 +1,20 @@
+detail
+{
+	auto_grass_profile
+	{
+		density 600.00
+		Group1
+		{
+			alpha 1.0
+			Model1
+			{
+				sprite "0 0 128 128 512"
+				spritesize "0.5 0.0 24 24"
+				spriterandomscale 0.2
+				amount 1.0
+				detailOrientation 2
+				upright 1
+			}
+		}
+	}
+}
