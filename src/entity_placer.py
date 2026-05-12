@@ -647,6 +647,9 @@ def spawn_required_entities_enhanced(
     info_overview.origin = f"{center_x:.1f} {center_y:.1f} {overview_z:.1f}"
     info_overview.properties["angles"] = "90 0 0"
 
+    valve_map.children.append(info_params)
+    valve_map.children.append(info_overview)
+
 
 def spawn_player_spawn_points(
     valve_map: vmf.ValveMap,

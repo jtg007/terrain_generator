@@ -331,8 +331,8 @@ def spawn_lighting(
     sun_ent.properties["rendercolor"] = sun_color
 
     # 1. Add Light and Sun to the map
-    valve_map.world.children.append(light_ent)
-    valve_map.world.children.append(sun_ent)
+    valve_map.children.append(light_ent)
+    valve_map.children.append(sun_ent)
 
     # ---------------------------------------------------------
     # NEW: TONEMAP CONTROLLER & LOGIC AUTO (To prevent snow blindness)
@@ -342,7 +342,7 @@ def spawn_lighting(
     tonemap_ent = vmf_lib.Entity("env_tonemap_controller")
     tonemap_ent.origin = "0.0 0.0 0.0"
     tonemap_ent.properties["targetname"] = "tonemap_global"
-    valve_map.world.children.append(tonemap_ent)
+    valve_map.children.append(tonemap_ent)
 
     # Check if we are currently generating a snow map or overcast map
     is_snow_map = "snow" in target_sky or "overcast" in target_sky
@@ -371,4 +371,4 @@ def spawn_lighting(
             f"tonemap_global,SetAutoExposureMin,{exposure_min},0,-1"
         ]
 
-    valve_map.world.children.append(logic_auto)
+    valve_map.children.append(logic_auto)
