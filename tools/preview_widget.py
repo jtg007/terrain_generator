@@ -618,7 +618,6 @@ class MapPreviewWidget(QWidget):
         self.btn_move_lay = add_tool(layout_l, "🖱️\nMove", 300)
         self.btn_remove_lay = add_tool(layout_l, "❌\nRemove", 301)
         layout_l.addWidget(create_divider())
-        self.btn_link = add_tool(layout_l, "🔗\nLink", 4)
         self.btn_lane = add_tool(layout_l, "🛣️\nLane", 6)
 
         layout_l.addWidget(create_divider())
@@ -898,8 +897,6 @@ class MapPreviewWidget(QWidget):
         self.grid_items = []
         self._show_2d_grid = False
         self.draw_grid()
-
-        self.link_start_node = None
 
         self.panning = False
         self.pan_start_pos = QPointF()
@@ -2271,7 +2268,6 @@ class MapPreviewWidget(QWidget):
 
         actual_mode = mode_mapping.get(tid, tid)
         self.current_mode = actual_mode
-        self.link_start_node = None
 
         if actual_mode != 10:
             self._flatten_target_height = None
@@ -2393,7 +2389,6 @@ class MapPreviewWidget(QWidget):
                 self.scene.removeItem(item)
 
         # 2. Reset internal state
-        self.link_start_node = None
         self.drawing_lane = False
         self.current_freehand_path = []
         self.current_freehand_item = None
@@ -2769,34 +2764,6 @@ class MapPreviewWidget(QWidget):
                 self.current_freehand_path, self.current_base_width
             )
             self.scene.addItem(self.current_freehand_item)
-
-        elif self.current_mode == 4:
-            item = self.scene.itemAt(scene_pos, self.view.transform())
-            if isinstance(item, VisualNode):
-                if not self.link_start_node:
-                    self.link_start_node = item
-                else:
-                    if item != self.link_start_node:
-                        existing = any(
-                            (
-                                e.start_node == self.link_start_node
-                                and e.end_node == item
-                            )
-                            or (
-                                e.start_node == item
-                                and e.end_node == self.link_start_node
-                            )
-                            for e in self.link_start_node.edges
-                        )
-                        if not existing:
-                            edge = VisualEdge(self.link_start_node, item)
-                            edge.base_width = self.current_base_width
-                            edge._update_pen()
-                            self.scene.addItem(edge)
-                            self.link_start_node.edges.append(edge)
-                            item.edges.append(edge)
-                            self.record_action("add", edge)
-                    self.link_start_node = None
 
         # Do not block standard view events
         pass
