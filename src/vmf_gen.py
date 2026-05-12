@@ -788,13 +788,12 @@ class DisplacementVMF:
                 top_face = floor_block.top()
                 top_face.lightmapscale = 32
 
-                # Compensate for Z-projection stretching on slopes
-                # stretching_factor = sqrt(1 + slope^2)
-                stretching_factor = math.sqrt(1.0 + slope**2)
-                # Clamp compensation to avoid extreme tiling/seams (as requested: max 2.5)
-                stretching_factor = min(2.5, stretching_factor)
-
-                tex_scale = theme_tex_scale / stretching_factor
+                # Use a uniform texture scale to prevent mismatched grass resolutions
+                # between adjacent tiles. We intentionally do not use a stretching_factor
+                # because the Source Engine restricts texture scale per-tile, and dynamic
+                # scaling based on slope causes flat grass on mixed tiles to scale down,
+                # creating visible seams.
+                tex_scale = theme_tex_scale
 
                 top_face.uaxis = f"[1 0 0 0] {tex_scale:.4f}"
                 top_face.vaxis = f"[0 -1 0 0] {tex_scale:.4f}"
