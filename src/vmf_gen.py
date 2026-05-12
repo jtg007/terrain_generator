@@ -343,6 +343,7 @@ class DisplacementVMF:
 
         # Scenery Hero Prop Budget
         self.prop_count = 0
+        self.placed_prop_origins = []
         max_hero_props = 256
         hero_prop_density = getattr(self.spec, "hero_prop_density", 0.5)
 
@@ -877,6 +878,40 @@ class DisplacementVMF:
 
                                 prop_model = theme_props[sub_hash % len(theme_props)]
 
+                                # Proximity check
+                                too_close = False
+                                for old_px, old_py in self.placed_prop_origins:
+                                    if math.sqrt((px - old_px)**2 + (py - old_py)**2) < 256:
+                                        too_close = True
+                                        break
+                                if too_close:
+                                    continue
+
+                                # Slope check
+                                hm_x = (px - origin_x) / map_width * (img_width - 1)
+                                hm_y = (py - origin_y) / map_height * (img_height - 1)
+                                ix, iy = int(round(hm_x)), int(round(hm_y))
+                                ix_m, ix_p = max(0, ix - 1), min(img_width - 1, ix + 1)
+                                iy_m, iy_p = max(0, iy - 1), min(img_height - 1, iy + 1)
+                                h_xm = working_heightmap[iy, ix_m] * height_scale
+                                h_xp = working_heightmap[iy, ix_p] * height_scale
+                                h_ym = working_heightmap[iy_m, ix] * height_scale
+                                h_yp = working_heightmap[iy_p, ix] * height_scale
+                                vertex_spacing_hm = map_width / (img_width - 1)
+                                dz_dx = (h_xp - h_xm) / (2.0 * vertex_spacing_hm)
+                                dz_dy = (h_yp - h_ym) / (2.0 * vertex_spacing_hm)
+                                point_slope = math.sqrt(dz_dx**2 + dz_dy**2)
+
+                                is_tree = "tree" in prop_model.lower()
+                                is_rock = "rock" in prop_model.lower() or "stone" in prop_model.lower()
+
+                                if is_tree and point_slope > 0.35:
+                                    continue
+                                if is_rock and point_slope > 0.6:
+                                    continue
+                                if not is_tree and not is_rock and point_slope > 0.5:
+                                    continue
+
                                 # Skip unavailable models
                                 if getattr(self.spec, "vpk_index", None) is not None:
                                     if self.spec.vpk_index and prop_model.lower() not in self.spec.vpk_index:
@@ -892,6 +927,7 @@ class DisplacementVMF:
                                 prop.properties["solid"] = "0" # Non-solid background props for performance
                                 valve_map.world.children.append(prop)
                                 self.prop_count += 1
+                                self.placed_prop_origins.append((px, py))
 
         max_terrain_height = (
             int(self.spec.terrain_actual_max)
