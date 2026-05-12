@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.11] - 2026-05-12
+### Pipeline & Refactoring
+- **Smart Detail System:** Implemented a new, intelligent detail system to handle scenery and prop placement safely, preventing compile-limit crashes and eliminating floating/clipping props.
+- **Modular Pipeline Architecture:** Completely refactored the VMF generation core. Extracted responsibilities into dedicated modules (`displacement_builder.py`, `entity_placer.py`, `skybox_manager.py`), entirely removing the `worldengine` dependency and obsolete legacy tools for a much cleaner, streamlined pipeline.
+
+### Terrain & Rendering
+- **Texture Rendering Fixes:** Resolved texture stretching on sheer cliff walls and fixed mismatched grass texture resolutions between adjacent tiles for a cohesive, seamless landscape.
+- **Lighting & Entities:** Corrected an issue where global lighting (`light_environment`) and game info entities were improperly nested inside the map's `worldspawn`, ensuring lighting compiles correctly in-game.
+- **Scenery Placement:** Fixed scenery prop spawning rules to respect strict slope and proximity thresholds.
+
+### Editor Features
+- **Tile Painting System (WIP):** Introduced a new tile paint mode, allowing precise material assignments to individual 16x16 displacement tiles on the grid. Replaced the old "Texture" brush mode with this more powerful tool.
+- **UI Improvements:** Improved the sidebar layout so the shape config sliders now dynamically expand to fill the available vertical space, eliminating unnecessary scrolling.
+
 ## [0.9.10] - 2026-04-25
 ### Terrain & Pipeline
 - Integrated entirely new Canyon Heightmap Generator replacing old FBM ridge noise.
@@ -18,6 +32,7 @@ All notable changes to this project will be documented in this file.
 - Decoupled skybox ceiling height from terrain max height to improve compiler optimization (VVIS).
 - Automatically generate bounding `toolsclip` brushes against skybox walls to seal map when terrain is outside bounds.
 - Added a Lane Elevation slider to control the base height of paths and lanes.
+
 ## [0.9.8] - 2026-04-24
 ### Highlights
 - Universal Masking (Stencil): New global selection mask system to protect/specific areas
@@ -34,20 +49,24 @@ All notable changes to this project will be documented in this file.
 - Global actions (Undo, Redo, 3D View, Clear Map) permanently visible
 - Contextual tools appear dynamically based on selected tab
 - Mask actions contextual: Reset and Clear only in Mask mode
+
 ### Project Persistence
 - New `.terrain` file format for full project serialization
 - Preserves all config settings, custom nodes, lanes, and manual sculpting
 - Optimized storage: Sculpting overlays are compressed using zlib/base64
 - Robust loading: Implemented signal blocking and versioning for stability
+
 ### Preview & Sculpting Fixes
 - Mask brush and flatten brush now work correctly
 - Sculpt edits are highlighted, mask tint only shown when actively using
 - Fixed toolbar layout on small windows
 - Mask overlay no longer disappears when switching tools
+
 ### Terrain Masking, Sculpting & Shaping
 - Universal Masking: Left-click to draw mask, right-click to remove mask
 - Lane-Aware Terrain: Flatter terrain near lanes, increased variation in distant areas
 - Ridged Multifractal: New algorithm for sharp ridges and roughness
+
 ## [0.9.5] - 2026-04-23
 ### Editor Features & Fixes
 - Added a new "Flatten ▬" sculpt tool for easier base building

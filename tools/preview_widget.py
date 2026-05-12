@@ -498,8 +498,7 @@ class MapPreviewWidget(QWidget):
         self.btn_lower = add_tool(layout_t, "▼\nLower", 9)
         self.btn_flatten = add_tool(layout_t, "▬\nFlatten", 10)
         self.btn_mask = add_tool(layout_t, "🎭\nMask", 11)
-        self.btn_texture = add_tool(layout_t, "🎨\nTexture", 12)
-        self.btn_tile_paint = add_tool(layout_t, "🧱\nTile Paint", 13)
+        self.btn_tile_paint = add_tool(layout_t, "🧱\nTile Paint\n(WIP)", 13)
 
         layout_t.addWidget(create_divider())
 
@@ -2277,16 +2276,14 @@ class MapPreviewWidget(QWidget):
         if actual_mode != 10:
             self._flatten_target_height = None
 
-        if actual_mode in (12, 13):
+        if actual_mode == 13:
             self.combo_texture.setVisible(True)
         else:
             self.combo_texture.setVisible(False)
         self.combo_paint_target.setVisible(actual_mode == 13)
 
-        if actual_mode == 12:
-            self.lbl_mode_info.setText("TEXTURE MODE – painting coarse regions")
-        elif actual_mode == 13:
-            self.lbl_mode_info.setText("TILE PAINT – target floor/walls/all, right erase")
+        if actual_mode == 13:
+            self.lbl_mode_info.setText("TILE PAINT (WIP) – painting materials on 16x16 grid")
         else:
             self.lbl_mode_info.setText("")
 
@@ -3038,9 +3035,9 @@ class MapPreviewWidget(QWidget):
             self._update_3d_view(camera_override=self._camera_from_2d_view())
         else:
             if self.current_mode == 13:
-                if hasattr(self, "btn_texture") and self.btn_texture is not None:
-                    self.btn_texture.setChecked(True)
-                self.on_tool_changed(12)
+                if hasattr(self, "btn_tile_paint") and self.btn_tile_paint is not None:
+                    self.btn_tile_paint.setChecked(True)
+                self.on_tool_changed(13)
             self.view_stack.setCurrentIndex(0)
             self.btn_toggle_3d.setText("3D View")
 
