@@ -796,13 +796,9 @@ class TerrainGeneratorGUI(QMainWindow):
         self.tab_main_layout.setAlignment(Qt.AlignTop)
         self.tab_main.setWidget(self.tab_main_content)
 
-        self.tab_shape = QScrollArea()
-        self.tab_shape.setWidgetResizable(True)
-        self.tab_shape.setFrameShape(QScrollArea.NoFrame)
         self.tab_shape_content = QWidget()
         self.tab_shape_layout = QVBoxLayout(self.tab_shape_content)
         self.tab_shape_layout.setAlignment(Qt.AlignTop)
-        self.tab_shape.setWidget(self.tab_shape_content)
 
         self.tab_gameplay = QScrollArea()
         self.tab_gameplay.setWidgetResizable(True)
@@ -813,7 +809,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.tab_gameplay.setWidget(self.tab_gameplay_content)
 
         self.tab_widget.addTab(self.tab_main, "Main")
-        self.tab_widget.addTab(self.tab_shape, "Shape")
+        self.tab_widget.addTab(self.tab_shape_content, "Shape")
         self.tab_widget.addTab(self.tab_gameplay, "Gameplay")
 
         # ─── GENERAL ───

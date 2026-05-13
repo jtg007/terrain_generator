@@ -498,8 +498,7 @@ class MapPreviewWidget(QWidget):
         self.btn_lower = add_tool(layout_t, "▼\nLower", 9)
         self.btn_flatten = add_tool(layout_t, "▬\nFlatten", 10)
         self.btn_mask = add_tool(layout_t, "🎭\nMask", 11)
-        self.btn_texture = add_tool(layout_t, "🎨\nTexture", 12)
-        self.btn_tile_paint = add_tool(layout_t, "🧱\nTile Paint", 13)
+        self.btn_tile_paint = add_tool(layout_t, "🧱\nTile Paint\n(WIP)", 13)
 
         layout_t.addWidget(create_divider())
 
@@ -619,7 +618,6 @@ class MapPreviewWidget(QWidget):
         self.btn_move_lay = add_tool(layout_l, "🖱️\nMove", 300)
         self.btn_remove_lay = add_tool(layout_l, "❌\nRemove", 301)
         layout_l.addWidget(create_divider())
-        self.btn_link = add_tool(layout_l, "🔗\nLink", 4)
         self.btn_lane = add_tool(layout_l, "🛣️\nLane", 6)
 
         layout_l.addWidget(create_divider())
@@ -899,8 +897,6 @@ class MapPreviewWidget(QWidget):
         self.grid_items = []
         self._show_2d_grid = False
         self.draw_grid()
-
-        self.link_start_node = None
 
         self.panning = False
         self.pan_start_pos = QPointF()
@@ -2272,21 +2268,18 @@ class MapPreviewWidget(QWidget):
 
         actual_mode = mode_mapping.get(tid, tid)
         self.current_mode = actual_mode
-        self.link_start_node = None
 
         if actual_mode != 10:
             self._flatten_target_height = None
 
-        if actual_mode in (12, 13):
+        if actual_mode == 13:
             self.combo_texture.setVisible(True)
         else:
             self.combo_texture.setVisible(False)
         self.combo_paint_target.setVisible(actual_mode == 13)
 
-        if actual_mode == 12:
-            self.lbl_mode_info.setText("TEXTURE MODE – painting coarse regions")
-        elif actual_mode == 13:
-            self.lbl_mode_info.setText("TILE PAINT – target floor/walls/all, right erase")
+        if actual_mode == 13:
+            self.lbl_mode_info.setText("TILE PAINT (WIP) – painting materials on 16x16 grid")
         else:
             self.lbl_mode_info.setText("")
 
@@ -2396,7 +2389,6 @@ class MapPreviewWidget(QWidget):
                 self.scene.removeItem(item)
 
         # 2. Reset internal state
-        self.link_start_node = None
         self.drawing_lane = False
         self.current_freehand_path = []
         self.current_freehand_item = None
@@ -2773,34 +2765,6 @@ class MapPreviewWidget(QWidget):
             )
             self.scene.addItem(self.current_freehand_item)
 
-        elif self.current_mode == 4:
-            item = self.scene.itemAt(scene_pos, self.view.transform())
-            if isinstance(item, VisualNode):
-                if not self.link_start_node:
-                    self.link_start_node = item
-                else:
-                    if item != self.link_start_node:
-                        existing = any(
-                            (
-                                e.start_node == self.link_start_node
-                                and e.end_node == item
-                            )
-                            or (
-                                e.start_node == item
-                                and e.end_node == self.link_start_node
-                            )
-                            for e in self.link_start_node.edges
-                        )
-                        if not existing:
-                            edge = VisualEdge(self.link_start_node, item)
-                            edge.base_width = self.current_base_width
-                            edge._update_pen()
-                            self.scene.addItem(edge)
-                            self.link_start_node.edges.append(edge)
-                            item.edges.append(edge)
-                            self.record_action("add", edge)
-                    self.link_start_node = None
-
         # Do not block standard view events
         pass
 
@@ -3038,9 +3002,9 @@ class MapPreviewWidget(QWidget):
             self._update_3d_view(camera_override=self._camera_from_2d_view())
         else:
             if self.current_mode == 13:
-                if hasattr(self, "btn_texture") and self.btn_texture is not None:
-                    self.btn_texture.setChecked(True)
-                self.on_tool_changed(12)
+                if hasattr(self, "btn_tile_paint") and self.btn_tile_paint is not None:
+                    self.btn_tile_paint.setChecked(True)
+                self.on_tool_changed(13)
             self.view_stack.setCurrentIndex(0)
             self.btn_toggle_3d.setText("3D View")
 

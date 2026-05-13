@@ -26,7 +26,12 @@ else:
         PROJECT_ROOT = Path.cwd()
 
 # We explicitly let PyInstaller auto-detect PySide6 modules
-hiddenimports = []
+hiddenimports = [
+    'src.displacement_builder',
+    'src.entity_placer',
+    'src.skybox_manager',
+    'src.material_manager',
+]
 
 # Collect data files from packages
 datas = []
