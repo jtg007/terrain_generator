@@ -2,9 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.12] - 2026-05-13
+### Pipeline & Stability
+- **Non-Fatal Validation:** Heightmap playability checks (connectivity and minimum width) are now non-fatal, allowing users to compile maps even if the generator detects potential lane issues.
+- **Single-Attempt Generation:** Disabled the 5-attempt retry loop for procedural canyon generation to speed up the workflow and ensure user-selected seeds are strictly followed.
+
 ## [0.9.11] - 2026-05-12
 ### Pipeline & Refactoring
-- **Smart Detail System:** Implemented a new, intelligent detail system to handle scenery and prop placement safely, preventing compile-limit crashes and eliminating floating/clipping props.
+- **Smart Detail System (WIP):** Implemented an intelligent detail system for automatic texture-based grass emissions. Prop-based safe placement is still under development.
 - **Modular Pipeline Architecture:** Completely refactored the VMF generation core. Extracted responsibilities into dedicated modules (`displacement_builder.py`, `entity_placer.py`, `skybox_manager.py`), entirely removing the `worldengine` dependency and obsolete legacy tools for a much cleaner, streamlined pipeline.
 
 ### Terrain & Rendering
