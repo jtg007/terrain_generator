@@ -1005,7 +1005,6 @@ class TerrainGeneratorGUI(QMainWindow):
         self.combo_topology.addItems(
             [
                 "Canyon Maze",
-                "Canyon Natural",
             ]
         )
         self.combo_topology.setCurrentIndex(0)
@@ -1530,7 +1529,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.chk_minimal_map.toggled.connect(self.sync_to_model)
         self.chk_terrain_only.toggled.connect(self.sync_to_model)
         self.chk_smart_details.toggled.connect(self.on_smart_details_changed)
-        self.chk_manual_terrain.toggled.connect(self.sync_to_model)
+        self.chk_manual_terrain.toggled.connect(self.on_manual_terrain_toggled)
         self.chk_invert_lanes.toggled.connect(self.sync_to_model)
         self.chk_preview_pipeline.toggled.connect(self.sync_to_model)
 
@@ -2462,6 +2461,11 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config.set("smart_details", enabled)
         self.config_model.use_smart_details = enabled
 
+    def on_manual_terrain_toggled(self, checked):
+        if checked and hasattr(self, "preview_widget"):
+            self.preview_widget.clear_lanes()
+        self.sync_to_model()
+
     def show_map_size_help(self):
         """Show compile-safe size guidance for current map settings."""
         tile_size = self.spin_tile_size.value()
@@ -2658,13 +2662,8 @@ class TerrainGeneratorGUI(QMainWindow):
             )
             self.spin_height.setValue(self.config_model.height_scale)
             self.spin_skybox_ceiling.setValue(self.config_model.skybox_ceiling)
-            topology_map = {
-                "canyon": 0,
-                "canyon_natural": 1,
-            }
-            self.combo_topology.setCurrentIndex(
-                topology_map.get(self.config_model.topology, 0)
-            )
+            # We currently only have Canyon Maze (index 0 -> "canyon")
+            self.combo_topology.setCurrentIndex(0)
             self.slider_lane_node_radius.setValue(self.config_model.lane_node_radius)
             self.lbl_lane_node_radius_val.setText(
                 str(self.config_model.lane_node_radius)
@@ -2799,17 +2798,9 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.height_scale = self.spin_height.value()
         self.config_model.skybox_ceiling = self.spin_skybox_ceiling.value()
 
-        topology_reverse_map = {
-            0: "canyon",
-            1: "canyon_natural",
-        }
-        topo = topology_reverse_map.get(self.combo_topology.currentIndex(), "canyon")
-        if topo == "canyon_natural":
-            self.config_model.topology = "canyon"
-            self.config_model.canyon_natural = True
-        else:
-            self.config_model.topology = "canyon"
-            self.config_model.canyon_natural = False
+        # We currently only have Canyon Maze (index 0 -> "canyon")
+        self.config_model.topology = "canyon"
+        self.config_model.canyon_natural = False
         self.config_model.lane_node_radius = self.slider_lane_node_radius.value()
         
         self.config_model.current_theme = self.combo_theme.currentText()
