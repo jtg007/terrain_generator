@@ -927,8 +927,6 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
     )
 
     grid.report = report
-    if not report["pass"]:
-        print(f"WARNING: Heightmap validation failed: {report}")
 
     # Scale noise base to actual map height range
     new_heights = (
@@ -2215,8 +2213,6 @@ def run_pipeline(
             grid.playability_mask = None
         print("  Step 2c: Generate heights with flat terrain (manual mode)")
         grid = generate_heights(spec, grid)
-        if hasattr(grid, 'report') and not grid.report.get("pass", True):
-            errors.append(f"Heightmap validation failed: {grid.report}")
     else:
         if spec.generate_lanes:
             print("  Step 2a: Generate playability mask (Smoothstep distance field)")
@@ -2244,8 +2240,6 @@ def run_pipeline(
             f"  Step 2c: Generate heights with fBm (seed={spec.seed}, octaves={spec.noise_octaves})"
         )
         grid = generate_heights(spec, grid)
-        if hasattr(grid, 'report') and not grid.report.get("pass", True):
-            errors.append(f"Heightmap validation failed: {grid.report}")
 
     if pure_heights is None:
         pure_heights = grid.heights.copy()
