@@ -2964,7 +2964,14 @@ class MapPreviewWidget(QWidget):
         self.nf_base = nf_base if nf_base else (None, None)
         self.resources = resources if resources else []
         
-        # Ensure arrays are correct
+        # Keep project arrays as-is, but clear stale base_heights if shape mismatch
+        if self._base_heights is not None:
+            for arr in (height_overlay, global_mask, texture_overlay):
+                if arr is not None and arr.shape != self._base_heights.shape:
+                    self._base_heights = None
+                    self.map_image = None
+                    break
+
         if height_overlay is not None:
             self._height_overlay = height_overlay
         if global_mask is not None:
