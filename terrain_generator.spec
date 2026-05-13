@@ -2,21 +2,20 @@
 """
 PyInstaller spec file for Terrain Generator GUI
 
-Build with:
-    pyinstaller terrain_generator.spec --onefile --windowed
+Standard build:  pyinstaller terrain_generator.spec
+Fast build:      BUILD_FAST=1 pyinstaller terrain_generator.spec
+Debug build:     BUILD_DEBUG=1 pyinstaller terrain_generator.spec
 
-Or install PyInstaller first:
-    pip install pyinstaller
+Note: PyInstaller cannot cross-compile. The Windows EXE must be built on Windows,
+and the Linux binary must be built on Linux.
 """
 
 import sys
 import os
 from pathlib import Path
-from PyInstaller.utils.hooks import collect_submodules
 
 block_cipher = None
 
-# Project root directory - use sys._MEIPASS when bundled, otherwise use script location
 if getattr(sys, 'frozen', False):
     PROJECT_ROOT = Path(sys._MEIPASS)
 else:
@@ -25,41 +24,52 @@ else:
     except NameError:
         PROJECT_ROOT = Path.cwd()
 
-# We explicitly let PyInstaller auto-detect PySide6 modules
 hiddenimports = [
     'src.displacement_builder',
     'src.entity_placer',
     'src.skybox_manager',
     'src.material_manager',
+    'src.terrain_pipeline',
+    'src.canyon_generator',
+    'src.noise',
+    'src.vmf_gen',
+    'src.config_model',
+    'src.layout_validator',
+    'scipy.ndimage',
+    'scipy._lib',
+    'scipy.sparse'
 ]
 
-# Collect data files from packages
+build_mode = os.environ.get('BUILD_MODE', 'onefile')
+build_fast = os.environ.get('BUILD_FAST', '0') == '1'
+build_debug = os.environ.get('BUILD_DEBUG', '0') == '1'
+
+if build_fast:
+    hiddenimports.extend([
+        'numba', 'numba.core', 'numba.typed', 'numba.np', 'numba.np.ufunc',
+        'llvmlite', 'llvmlite.binding'
+    ])
+
 datas = []
 
-# Config directory - bundle data files only, not python code
 config_dir = PROJECT_ROOT / 'config'
 if config_dir.exists():
-    # Bundle only actual config data files
     for f in ['presets.json', 'textures.json', 'skyboxes.json']:
         fp = config_dir / f
         if fp.exists():
             datas.append((str(fp), 'config'))
 
-# map_rules.json if exists
 rules_file = PROJECT_ROOT / 'map_rules.json'
 if rules_file.exists():
     datas.append((str(rules_file), '.'))
 
-# Include icons folder
 icons_dir = PROJECT_ROOT / 'icons'
 if icons_dir.exists():
     datas.append((str(icons_dir), 'icons'))
 
-# Include models folder
 models_dir = PROJECT_ROOT / 'models'
 if models_dir.exists():
     datas.append((str(models_dir), 'models'))
-
 
 a = Analysis(
     [str(PROJECT_ROOT / 'tools' / 'terrain_generator.py')],
@@ -69,12 +79,11 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['hooks/rth_numba.py'],
     excludes=[
         'matplotlib',
         'numpy._core.tests',
         'pandas',
-        'scipy',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -83,8 +92,6 @@ a = Analysis(
 )
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-
-build_mode = os.environ.get('BUILD_MODE', 'onefile')
 
 if build_mode == 'onedir':
     exe = EXE(
@@ -97,19 +104,18 @@ if build_mode == 'onedir':
         bootloader_ignore_signals=False,
         strip=False,
         upx=True,
-        console=False,  # Windowed mode - no console
+        console=build_debug,
         disable_windowed_traceback=False,
         argv_emulation=False,
         target_arch=None,
         codesign_identity=None,
         entitlements_file=None,
-        icon=None,  # Add icon.ico here if you have one
+        icon=None,
     )
 
     coll = COLLECT(
         exe,
         a.binaries,
-        a.zipfiles,
         a.datas,
         strip=False,
         upx=True,
@@ -121,7 +127,6 @@ else:
         pyz,
         a.scripts,
         a.binaries,
-        a.zipfiles,
         a.datas,
         [],
         name='TerrainGenerator',
@@ -131,11 +136,11 @@ else:
         upx=True,
         upx_exclude=[],
         runtime_tmpdir=None,
-        console=False,  # Windowed mode - no console
+        console=build_debug,
         disable_windowed_traceback=False,
         argv_emulation=False,
         target_arch=None,
         codesign_identity=None,
         entitlements_file=None,
-        icon=None,  # Add icon.ico here if you have one
+        icon=None,
     )

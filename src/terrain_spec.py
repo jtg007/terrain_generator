@@ -57,6 +57,7 @@ class TerrainSpec:
     noise_octaves: int = 4
     erosion_iterations: int = 50000
     erosion_droplet_lifetime: int = 30
+    erosion_lane_skip_threshold: float = 256.0
     terrain_max_height: int = 2048
     skybox_ceiling: int = 4096
     vpk_index: Optional[List[str]] = None
@@ -209,6 +210,7 @@ class TerrainSpec:
             "noise_octaves": self.noise_octaves,
             "erosion_iterations": self.erosion_iterations,
             "erosion_droplet_lifetime": self.erosion_droplet_lifetime,
+            "erosion_lane_skip_threshold": self.erosion_lane_skip_threshold,
             "topology": self.topology,
             "lane_width_scale": self.lane_width_scale,
             "mountain_height_scale": self.mountain_height_scale,

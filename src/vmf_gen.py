@@ -275,7 +275,136 @@ class DisplacementVMF:
         self.heightmap_height, self.heightmap_width = arr.shape
         return arr
 
+    def _spawn_entities(self, spec, heightmap: np.ndarray, vmf_map, enhanced: bool):
+        rules: Dict[str, Any] = {}
+        rules_path = Path(spec.rules_file)
+        if rules_path.exists():
+            import json
+            with open(rules_path, "r") as f:
+                rules = json.load(f)
+        rules["base_clear_radius"] = spec.base_clear_radius
+
+        skip_commander = spec.disable_commander or spec.minimal_map or spec.terrain_only
+        skip_buildings = spec.disable_buildings or spec.minimal_map or spec.terrain_only
+        skip_resources = spec.disable_resource_nodes or spec.minimal_map or spec.terrain_only
+        skip_misc = spec.disable_capture_points or spec.minimal_map or spec.terrain_only
+        skip_player_spawns = spec.terrain_only
+
+        tiles_x = spec.terrain_tiles_x
+        tiles_y = spec.terrain_tiles_y
+        power = spec.terrain_power
+        tile_size = spec.terrain_tile_size
+        height_scale = spec.terrain_max_height
+
+        map_width = tiles_x * tile_size
+        map_height = tiles_y * tile_size
+
+        origin_x = int(-map_width / 2)
+        origin_y = int(-map_height / 2)
+        map_center_x = 0.0
+        map_center_y = 0.0
+
+        imp_base_x = int(spec.custom_imp_base_x) if spec.custom_imp_base_x is not None else None
+        imp_base_y = int(spec.custom_imp_base_y) if spec.custom_imp_base_y is not None else None
+        nf_base_x = int(spec.custom_nf_base_x) if spec.custom_nf_base_x is not None else None
+        nf_base_y = int(spec.custom_nf_base_y) if spec.custom_nf_base_y is not None else None
+
+        max_terrain_height = int(spec.terrain_actual_max) if spec.terrain_actual_max else int(np.max(heightmap) * height_scale)
+
+        if enhanced:
+            if not skip_commander or not skip_buildings:
+                spawn_base_entities_enhanced(
+                    vmf_map, "imp", imp_base_x, imp_base_y, 0, map_center_x, map_center_y, rules,
+                    heightmap=heightmap, origin_x_world=origin_x, origin_y_world=origin_y,
+                    map_width=map_width, map_height=map_height, max_height=height_scale,
+                    tiles_x=tiles_x, tiles_y=tiles_y, power=power,
+                    skip_commander=skip_commander, skip_buildings=skip_buildings,
+                )
+            if not skip_commander or not skip_buildings:
+                spawn_base_entities_enhanced(
+                    vmf_map, "nf", nf_base_x, nf_base_y, 0, map_center_x, map_center_y, rules,
+                    heightmap=heightmap, origin_x_world=origin_x, origin_y_world=origin_y,
+                    map_width=map_width, map_height=map_height, max_height=height_scale,
+                    tiles_x=tiles_x, tiles_y=tiles_y, power=power,
+                    skip_commander=skip_commander, skip_buildings=skip_buildings,
+                )
+
+            if spec.custom_resources is not None:
+                spawn_custom_resources(
+                    vmf_map, spec.custom_resources, heightmap=heightmap,
+                    origin_x=origin_x, origin_y=origin_y, map_width=map_width, map_height=map_height,
+                    max_height=height_scale, tiles_x=tiles_x, tiles_y=tiles_y, power=power,
+                )
+            elif not skip_resources:
+                spawn_resource_nodes_enhanced(
+                    vmf_map, "imp", imp_base_x, imp_base_y, int(max_terrain_height),
+                    map_center_x, map_center_y, rules, heightmap=heightmap, origin_x=origin_x, origin_y=origin_y,
+                    map_width=map_width, map_height=map_height, max_height=height_scale,
+                    tiles_x=tiles_x, tiles_y=tiles_y, power=power,
+                )
+                spawn_resource_nodes_enhanced(
+                    vmf_map, "nf", nf_base_x, nf_base_y, int(max_terrain_height),
+                    map_center_x, map_center_y, rules, heightmap=heightmap, origin_x=origin_x, origin_y=origin_y,
+                    map_width=map_width, map_height=map_height, max_height=height_scale,
+                    tiles_x=tiles_x, tiles_y=tiles_y, power=power,
+                )
+
+            if not skip_player_spawns:
+                spawn_player_spawn_points(
+                    vmf_map, imp_base_x, imp_base_y, nf_base_x, nf_base_y, int(max_terrain_height), rules,
+                )
+
+            if not skip_misc:
+                spawn_capture_points(
+                    vmf_map, imp_base_x, imp_base_y, nf_base_x, nf_base_y,
+                    map_center_x, map_center_y, int(max_terrain_height), rules,
+                )
+        else:
+            if not skip_commander or not skip_buildings:
+                spawn_base_entities_enhanced(
+                    vmf_map, "imp", imp_base_x, imp_base_y, 0, map_center_x, map_center_y, rules,
+                    heightmap=heightmap, origin_x_world=origin_x, origin_y_world=origin_y,
+                    map_width=map_width, map_height=map_height, max_height=height_scale,
+                    tiles_x=tiles_x, tiles_y=tiles_y, power=power,
+                    skip_commander=skip_commander, skip_buildings=skip_buildings,
+                )
+            if not skip_commander or not skip_buildings:
+                spawn_base_entities_enhanced(
+                    vmf_map, "nf", nf_base_x, nf_base_y, 0, map_center_x, map_center_y, rules,
+                    heightmap=heightmap, origin_x_world=origin_x, origin_y_world=origin_y,
+                    map_width=map_width, map_height=map_height, max_height=height_scale,
+                    tiles_x=tiles_x, tiles_y=tiles_y, power=power,
+                    skip_commander=skip_commander, skip_buildings=skip_buildings,
+                )
+            if spec.custom_resources is not None:
+                spawn_custom_resources(
+                    vmf_map, spec.custom_resources, heightmap=heightmap,
+                    origin_x=origin_x, origin_y=origin_y, map_width=map_width, map_height=map_height,
+                    max_height=height_scale, tiles_x=tiles_x, tiles_y=tiles_y, power=power,
+                )
+            elif not skip_resources:
+                spawn_resource_nodes_enhanced(
+                    vmf_map, "imp", imp_base_x, imp_base_y, int(max_terrain_height),
+                    map_center_x, map_center_y, rules, heightmap=heightmap, origin_x=origin_x, origin_y=origin_y,
+                    map_width=map_width, map_height=map_height, max_height=height_scale,
+                    tiles_x=tiles_x, tiles_y=tiles_y, power=power,
+                )
+                spawn_resource_nodes_enhanced(
+                    vmf_map, "nf", nf_base_x, nf_base_y, int(max_terrain_height),
+                    map_center_x, map_center_y, rules, heightmap=heightmap, origin_x=origin_x, origin_y=origin_y,
+                    map_width=map_width, map_height=map_height, max_height=height_scale,
+                    tiles_x=tiles_x, tiles_y=tiles_y, power=power,
+                )
+
+        if not skip_misc:
+            spawn_info_nodes(
+                vmf_map, imp_base_x, imp_base_y, nf_base_x, nf_base_y,
+                map_width, map_height, int(max_terrain_height), rules,
+                origin_x=origin_x, origin_y=origin_y,
+            )
+
     def generate_vmf(self, output_path: str) -> str:
+
         """Generate complete VMF file with displacement terrain using vmflib."""
         if self.heightmap is None:
             raise ValueError("Heightmap not loaded")
@@ -952,266 +1081,7 @@ class DisplacementVMF:
 
         spawn_lighting(valve_map, rules, skyname)
 
-        skip_commander = (
-            self.spec.disable_commander
-            or self.spec.minimal_map
-            or self.spec.terrain_only
-        )
-        skip_buildings = (
-            self.spec.disable_buildings
-            or self.spec.minimal_map
-            or self.spec.terrain_only
-        )
-        skip_resources = (
-            self.spec.disable_resource_nodes
-            or self.spec.minimal_map
-            or self.spec.terrain_only
-        )
-        skip_misc = (
-            self.spec.disable_capture_points
-            or self.spec.minimal_map
-            or self.spec.terrain_only
-        )
-        skip_player_spawns = self.spec.terrain_only
-
-
-        if self.spec.use_enhanced_spawning:
-            if not skip_commander or not skip_buildings:
-                spawn_base_entities_enhanced(
-                    valve_map,
-                    "imp",
-                    imp_base_x,
-                    imp_base_y,
-                    0,
-                    map_center_x,
-                    map_center_y,
-                    rules,
-                    heightmap=height_array,
-                    origin_x_world=origin_x,
-                    origin_y_world=origin_y,
-                    map_width=map_width,
-                    map_height=map_height,
-                    max_height=height_scale,
-                    tiles_x=tiles_x,
-                    tiles_y=tiles_y,
-                    power=power,
-                    skip_commander=skip_commander,
-                    skip_buildings=skip_buildings,
-                )
-
-            if not skip_commander or not skip_buildings:
-                spawn_base_entities_enhanced(
-                    valve_map,
-                    "nf",
-                    nf_base_x,
-                    nf_base_y,
-                    0,
-                    map_center_x,
-                    map_center_y,
-                    rules,
-                    heightmap=height_array,
-                    origin_x_world=origin_x,
-                    origin_y_world=origin_y,
-                    map_width=map_width,
-                    map_height=map_height,
-                    max_height=height_scale,
-                    tiles_x=tiles_x,
-                    tiles_y=tiles_y,
-                    power=power,
-                    skip_commander=skip_commander,
-                    skip_buildings=skip_buildings,
-                )
-
-            if self.spec.custom_resources is not None:
-                spawn_custom_resources(
-                    valve_map,
-                    self.spec.custom_resources,
-                    heightmap=height_array,
-                    origin_x=origin_x,
-                    origin_y=origin_y,
-                    map_width=map_width,
-                    map_height=map_height,
-                    max_height=height_scale,
-                    tiles_x=tiles_x,
-                    tiles_y=tiles_y,
-                    power=power,
-                )
-            elif not skip_resources:
-                spawn_resource_nodes_enhanced(
-                    valve_map,
-                    "imp",
-                    imp_base_x,
-                    imp_base_y,
-                    int(max_terrain_height),
-                    map_center_x,
-                    map_center_y,
-                    rules,
-                    heightmap=height_array,
-                    origin_x=origin_x,
-                    origin_y=origin_y,
-                    map_width=map_width,
-                    map_height=map_height,
-                    max_height=height_scale,
-                    tiles_x=tiles_x,
-                    tiles_y=tiles_y,
-                    power=power,
-                )
-                spawn_resource_nodes_enhanced(
-                    valve_map,
-                    "nf",
-                    nf_base_x,
-                    nf_base_y,
-                    int(max_terrain_height),
-                    map_center_x,
-                    map_center_y,
-                    rules,
-                    heightmap=height_array,
-                    origin_x=origin_x,
-                    origin_y=origin_y,
-                    map_width=map_width,
-                    map_height=map_height,
-                    max_height=height_scale,
-                    tiles_x=tiles_x,
-                    tiles_y=tiles_y,
-                    power=power,
-                )
-
-            if not skip_player_spawns:
-                spawn_player_spawn_points(
-                    valve_map,
-                    imp_base_x,
-                    imp_base_y,
-                    nf_base_x,
-                    nf_base_y,
-                    int(max_terrain_height),
-                    rules,
-                )
-
-            if not skip_misc:
-                spawn_capture_points(
-                    valve_map,
-                    imp_base_x,
-                    imp_base_y,
-                    nf_base_x,
-                    nf_base_y,
-                    map_center_x,
-                    map_center_y,
-                    int(max_terrain_height),
-                    rules,
-                )
-        else:
-            if not skip_commander or not skip_buildings:
-                spawn_base_entities_enhanced(
-                    valve_map,
-                    "imp",
-                    imp_base_x,
-                    imp_base_y,
-                    0,
-                    map_center_x,
-                    map_center_y,
-                    rules,
-                    heightmap=height_array,
-                    origin_x_world=origin_x,
-                    origin_y_world=origin_y,
-                    map_width=map_width,
-                    map_height=map_height,
-                    max_height=height_scale,
-                    tiles_x=tiles_x,
-                    tiles_y=tiles_y,
-                    power=power,
-                    skip_commander=skip_commander,
-                    skip_buildings=skip_buildings,
-                )
-            if not skip_commander or not skip_buildings:
-                spawn_base_entities_enhanced(
-                    valve_map,
-                    "nf",
-                    nf_base_x,
-                    nf_base_y,
-                    0,
-                    map_center_x,
-                    map_center_y,
-                    rules,
-                    heightmap=height_array,
-                    origin_x_world=origin_x,
-                    origin_y_world=origin_y,
-                    map_width=map_width,
-                    map_height=map_height,
-                    max_height=height_scale,
-                    tiles_x=tiles_x,
-                    tiles_y=tiles_y,
-                    power=power,
-                    skip_commander=skip_commander,
-                    skip_buildings=skip_buildings,
-                )
-            if self.spec.custom_resources is not None:
-                spawn_custom_resources(
-                    valve_map,
-                    self.spec.custom_resources,
-                    heightmap=height_array,
-                    origin_x=origin_x,
-                    origin_y=origin_y,
-                    map_width=map_width,
-                    map_height=map_height,
-                    max_height=height_scale,
-                    tiles_x=tiles_x,
-                    tiles_y=tiles_y,
-                    power=power,
-                )
-            elif not skip_resources:
-                spawn_resource_nodes_enhanced(
-                    valve_map,
-                    "imp",
-                    imp_base_x,
-                    imp_base_y,
-                    int(max_terrain_height),
-                    map_center_x,
-                    map_center_y,
-                    rules,
-                    heightmap=height_array,
-                    origin_x=origin_x,
-                    origin_y=origin_y,
-                    map_width=map_width,
-                    map_height=map_height,
-                    max_height=height_scale,
-                    tiles_x=tiles_x,
-                    tiles_y=tiles_y,
-                    power=power,
-                )
-                spawn_resource_nodes_enhanced(
-                    valve_map,
-                    "nf",
-                    nf_base_x,
-                    nf_base_y,
-                    int(max_terrain_height),
-                    map_center_x,
-                    map_center_y,
-                    rules,
-                    heightmap=height_array,
-                    origin_x=origin_x,
-                    origin_y=origin_y,
-                    map_width=map_width,
-                    map_height=map_height,
-                    max_height=height_scale,
-                    tiles_x=tiles_x,
-                    tiles_y=tiles_y,
-                    power=power,
-                )
-
-        if not skip_misc:
-            spawn_info_nodes(
-                valve_map,
-                imp_base_x,
-                imp_base_y,
-                nf_base_x,
-                nf_base_y,
-                map_width,
-                map_height,
-                int(max_terrain_height),
-                rules,
-                origin_x=origin_x,
-                origin_y=origin_y,
-            )
+        self._spawn_entities(self.spec, height_array, valve_map, enhanced=self.spec.use_enhanced_spawning)
 
         # Spawn func_detail_blocker for bases
         if getattr(self.spec, "use_smart_details", False):
