@@ -4,33 +4,51 @@ Guidelines for agentic coding agents working in this repository.
 
 ## Project Overview
 
-Terrain generator for Source Engine (Valve games). Generates compile-safe displacement terrain VMF files from noise-based heightmaps using fractal Brownian motion (fBm) and hydraulic erosion. Python 3.14+ with numpy, Pillow, and vmflib.
+Terrain generator for Source Engine (Valve games). Generates compile-safe displacement terrain VMF files from noise-based heightmaps using fractal Brownian motion (fBm), hydraulic erosion, and strategic lane generation. Python 3.14+ with numpy, Pillow, vmflib, PySide6, pyqtgraph, and PyOpenGL.
 
 ## Directory Structure
 
 ```
 src/
-  vmf_gen.py          # VMF generation (DisplacementVMF, PipelineSpec)
-  noise.py            # Seeded Perlin noise generator
-  terrain_spec.py     # Data models (TerrainSpec, HeightGrid, TerrainCell)
-  terrain_pipeline.py # 10-step terrain pipeline (fBm + erosion + VMF prep)
-  config_model.py     # GUIConfigModel (GUI config dataclass)
-  ValveVMF.py        # VMF writing with alpha blend support
-  vmf_writer.py      # ValveVMFWriter with slope-to-alpha conversion
+  terrain_spec.py         # Data models (TerrainSpec, HeightGrid, TerrainCell, LayoutNode)
+  terrain_pipeline.py     # Terrain pipeline (fBm + erosion + lanes + VMF prep)
+  noise.py                # Seeded Perlin noise generator
+  vmf_gen.py              # VMF generation (DisplacementVMF, PipelineSpec)
+  ValveVMF.py             # Legacy VMF writing (manual serialization, mostly unused)
+  config_model.py         # GUIConfigModel (GUI config dataclass with slider mapping)
+  compat_utils.py         # scipy_zoom_equivalent (pure numpy bilinear upsampling)
+  canyon_generator.py     # Gameplay-first canyon terrain (morphological ops, distance fields)
+  detail_manager.py       # Smart detail density, auto_detail.vbsp generation
+  displacement_builder.py # Displacement quantize, nodraw, terrain height sampling
+  entity_placer.py        # Empires entity spawning (bases, resources, spawns, commanders)
+  export_utils.py         # HeightGrid → PNG/VMF export, resource .txt generation
+  layout_validator.py     # Entity placement validation (distances, bounds)
+  material_manager.py     # Theme-based blend material selection (6 themes)
+  project_utils.py        # Project file save/load (.terrain format, base64+zlib)
+  qt_widgets.py           # WidePopupComboBox custom widget
+  skybox_manager.py       # Skybox creation, safe skybox filtering, lighting entities
+  steam_paths.py          # Cross-platform Steam/Empires path detection
 tools/
-  generate_vmf.py           # CLI from heightmap PNG → VMF
-  generate_organic_vmf.py   # CLI with full pipeline (fBm + erosion)
-  compile_vmf.py           # Compile VMF to BSP using wine
-  terrain_gen.py            # Heightmap generator using WorldEngine
-  terrain_generator.py      # GUI application (PySide6)
-  vmflib/                  # VMF library (third-party, patched)
-map_dataset/                # Reference VMF files for analysis
+  generate_vmf.py         # CLI from heightmap PNG → VMF
+  generate_organic_vmf.py # CLI with full pipeline (fBm + erosion + lanes)
+  compile_vmf.py          # Compile VMF to BSP using wine/VBSP
+  terrain_generator.py    # GUI application (PySide6, 3391 lines)
+  preview_widget.py       # 2D/3D heightmap preview with sculpting tools (3066 lines)
+  editor_widget.py        # Layout/map editor widget (node/edge placement)
+  verify_heightmap.py     # Heightmap verification utility
 config/
-  requirements.txt    # Python dependencies
-  textures.json       # Texture references
-output/              # Generated VMF, BSP, and resource files
-docs/                # Reference VMFs
-legacy/              # Old/outdated code
+  requirements.txt        # Python dependencies
+  textures.json           # Theme-based texture definitions (6 themes, 1111 lines)
+  skyboxes.json           # Skybox definitions
+  config.json             # Default configuration
+  config.py               # Config management module
+  __init__.py             # Config package init
+output/                   # Generated VMF, BSP, and resource files
+docs/
+  screenshots/            # GUI screenshots
+materials/
+  vmf_generator_assets/   # auto_detail.vbsp, blend .vmt files
+map_rules.json            # Statistical rules from 28 Empires maps analyzed (104k lines)
 ```
 
 ## Commands
@@ -63,17 +81,29 @@ venv/bin/ruff check src/ tools/
 venv/bin/python -m mypy src/ tools/
 ```
 
-### Run Pipeline Validation
+### Run Pipeline Validation (default spec)
 ```bash
 venv/bin/python -c "from src.terrain_spec import create_default_spec; from src.terrain_pipeline import run_pipeline; print(run_pipeline(create_default_spec()))"
 ```
 
-### Generate Organic Terrain (fBm + erosion + VMF)
+### Verify Heightmaps (all presets)
+```bash
+venv/bin/python tools/verify_heightmap.py
+```
+
+### Generate Organic Terrain (fBm + erosion + lanes + VMF)
 ```bash
 venv/bin/python tools/generate_organic_vmf.py  # defaults: ~32x32 tiles, 512 size, seed=12345
 venv/bin/python tools/generate_organic_vmf.py --seed 42 --tiles-x 14 --tiles-y 14
-venv/bin/python tools/generate_organic_vmf.py --tiles-x 20 --tiles-y 20 --seed 99  # Large map (max practical)
+venv/bin/python tools/generate_organic_vmf.py --tiles-x 20 --tiles-y 20 --seed 99
 venv/bin/python tools/generate_organic_vmf.py --skip-erosion  # fast, no erosion
+venv/bin/python tools/generate_organic_vmf.py --theme Desert --skybox empsky_sunset1
+```
+
+### Generate VMF from Heightmap PNG
+```bash
+venv/bin/python tools/generate_vmf.py path/to/heightmap.png
+venv/bin/python tools/generate_vmf.py --test  # generates test heightmap
 ```
 
 ### Compile VMF to BSP
@@ -87,9 +117,12 @@ venv/bin/python tools/compile_vmf.py output/terrain.vmf
 venv/bin/python tools/terrain_generator.py
 ```
 Features:
-- Interactive PySide6 GUI for real-time terrain configuration
-- Real-time heightmap preview with seed, scale, and erosion controls
-- Generate VMF files saved to `output/` directory
+- Interactive PySide6 GUI with 3-tab config (Main, Shape, Gameplay)
+- Real-time 2D/3D heightmap preview with pyqtgraph
+- Terrain sculpting (raise/lower/flatten/mask/texture paint/tile paint)
+- Entity placement (bases, resource nodes, lane connections)
+- Full pipeline generation (fBm + erosion + strategic lanes)
+- Project save/load (.terrain format)
 - Compile button to run VBSP and deploy to Empires directories
 
 ### Linux/macOS Launcher (terrain.sh)
@@ -140,6 +173,8 @@ map_center_x = 0.0
 map_center_y = 0.0
 ```
 
+This centering is applied in `config_model.py:make_spec()` and `export_utils.py:export_vmf()`.
+
 ### Base Placement
 Bases are placed in opposite quadrants relative to (0,0):
 ```python
@@ -151,59 +186,30 @@ nf_base_y = int(origin_y + (map_height * 0.75))
 
 ## Code Style
 
-### Terrain Textures (CRITICAL)
-Empires Mod requires specific texture paths. **Never use Source Engine default textures** like `nature/grass_hires` - they don't exist in Empires.
-
-**Correct texture paths (from extracted materials):**
-```
-common/nature/blend_grass_mountainwall_000
-common/nature/blend_grass_mud_003
-common/terrain/blend_grass01a_dirt01a
-nature/terrain/blend_grass1_dirt1
-```
-
-Available blend textures from `config/textures.json` include:
-- `common/nature/blend_grass_mountainwall_000` - Grass/mountain blend
-- `common/nature/blend_grass_mud_003` - Grass/mud blend
-- `common/terrain/blend_grass01a_dirt01a` - Grass/dirt blend
-- `common/terrain/blend_grass01a_dirt01a_nodetail` - Grass/dirt (no detail)
-- `nature/terrain/blend_grass1_dirt1` - Grass/dirt terrain
-- `nature/terrain/blend_grass1_rock1` - Grass/rock terrain
-
-Using non-existent textures will cause the map to crash on load.
-
-**Skyboxes (safe Empires whitelist):**
-- `empsky_day1`, `empsky_day2`
-- `empsky_overcast1`, `empsky_overcast2`, `empsky_overcast3yellow`
-- `empsky_sunset1`, `empsky_sunset2`
-
-**CRITICAL skybox rule:**
-- Do **not** select random skyboxes from `map_rules.json` (`lighting_environment.typical_skyboxes` contains non-Empires entries).
-- Use only the safe whitelist above; fallback should be deterministic (`empsky_overcast2`).
-- GUI and CLI generation must pass an explicit skybox into `PipelineSpec`.
-
 ### General
 - Python 3.14+ compatible
 - No comments unless explaining complex logic
 - 100 character line limit
 - 4 space indentation (no tabs)
+- Use `typing` module: `List`, `Tuple`, `Dict`, `Any`, `Optional` (not builtins)
 
 ### Imports (standard library → third-party → local)
 ```python
 import math
 import random
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import numpy as np
 from PIL import Image
 
-from terrain_spec import TerrainSpec, HeightGrid
-from terrain_pipeline import run_pipeline
+from src.terrain_spec import TerrainSpec, HeightGrid, ZoneType
+from src.terrain_pipeline import run_pipeline
 ```
 
 ### Type Hints
-- Use `List`, `Tuple`, `Dict`, `Any`, `Optional` from `typing` (not builtins)
-- Use `np.float32`/`np.float64` for numpy arrays — prefer `np.float64` for erosion math to avoid overflow
+- Use `List`, `Tuple`, `Dict`, `Any`, `Optional` from `typing`
+- Use `str | Path` union syntax (Python 3.10+) for simple unions
+- Use `np.float32`/`np.float64` for numpy arrays — prefer `np.float64` for erosion math
 - Annotate all function parameters and return types
 - dataclasses automatically provide types
 
@@ -238,15 +244,69 @@ class TerrainSpec:
 ### Numeric Precision
 - Use `np.float64` for hydraulic erosion calculations (prevents overflow)
 - **STRICT INTEGER MATH** for all displacement coordinates to prevent vmflib rotation bugs
-- Quantization step as parameter, not hardcoded
+- Quantization step as parameter, not hardcoded (default: 4)
 
 ### Grid Coordinate Convention
 - `heights[r][c]` — row 0 = origin_y (min Y), col 0 = origin_x (min X)
 - Grid iteration: `for r in range(rows): for c in range(cols):`
 
+## terrian Textures (CRITICAL)
+
+Empires Mod requires specific texture paths. **Never use Source Engine default textures** like `nature/grass_hires` - they don't exist in Empires.
+
+The game uses a **theme-based material system** with 6 themes in `material_manager.py`:
+
+| Theme | Primary Blend | Primary Cliff |
+|---|---|---|
+| Temperate | `common/nature/blend_grass_mountainwall_000` | `common/nature/mountain_wall_000` |
+| Desert | `nature/desert/blend_sand_rock_002` | `nature/desert/desert_rock_001` |
+| Snow | `nature/snow/blend_snow_rock_001` | `nature/snow/snow_mountain_wall_001` |
+| Industrial | `common/nature/blend_grass_mud_003` | `common/nature/mountain_wall_000` |
+| Wasteland | `nature/wasteland/blend_dirt_rock_001` | `nature/wasteland/wasteland_rock_001` |
+| Generic | `common/terrain/blend_grass01a_dirt01a` | `common/nature/mountain_wall_000` |
+
+**Skyboxes (safe Empires whitelist):**
+- `empsky_day1`, `empsky_day2`
+- `empsky_overcast1`, `empsky_overcast2`, `empsky_overcast3yellow`
+- `empsky_sunset1`, `empsky_sunset2`
+
+**CRITICAL skybox rule:**
+- Use only the safe whitelist above; fallback should be deterministic (`empsky_overcast2`).
+- GUI and CLI generation must pass an explicit skybox into `PipelineSpec`.
+
+## Strategic Lane Generation (CRITICAL ARCHITECTURE)
+
+The terrain generator uses a **gameplay-first lane system** rather than purely organic terrain. This ensures generated maps are playable for Empires Mod's RTS/FPS hybrid gameplay.
+
+### Topologies (defined in `terrain_pipeline.py`)
+- `central_gorge` — single lane through center canyon
+- `valley` — two lanes flanking a central valley
+- `two_lane` — classic two-lane with base at each end
+- `island` — bases on separate landmasses with water between
+- `classic_cross` — 4-way cross with base in each quadrant
+- `peninsula` — one base on peninsula, one on mainland
+- `archipelago` — multiple small landmasses
+- `delta` — branching river delta layout
+- `canyon` — deep canyon with sheer walls (bypasses erosion/smoothing)
+- fallback — random if no topology matches
+
+### Pipeline Flow (when `generate_lanes=True`)
+1. `generate_strategic_layout()` creates `LayoutNode`s and `LayoutConnection`s based on topology
+2. `generate_playability_mask()` creates a smoothstep distance field from lane paths
+3. Heights are generated with fBm, then blended with the playability mask
+4. Canyon topology uses `canyon_generator.generate_canyon_base()` instead
+
+### Canyon Generator (`canyon_generator.py`)
+- Gameplay-first: enforces minimum lane width via morphological closing
+- Uses domain-warped noise + distance fields for organic canyon walls
+- Validates lane connectivity via BFS
+- Falls back to pure-noise canyons when morphological pass fails
+
 ## Displacement Generation Rules
 
 **vmflib has bugs with negative coordinates and displacement data:** When creating Blocks with origins in negative world coordinates, vmflib guesses the displacement startposition incorrectly, causing the heightmap to rotate and tear seams. Additionally, the Normals class outputs integers instead of floats.
+
+vmflib is installed via pip (`venv/lib/python*/site-packages/vmflib/`). The code still attempts `sys.path.insert(0, "tools/vmflib")` for backward compatibility but falls back to the installed package.
 
 ### Required Fixes
 
@@ -277,11 +337,10 @@ class TerrainSpec:
        disp_info.allowed_verts.properties[f"row{i}"] = "-1"
    ```
 
-5. **Float normals (CRITICAL - was causing "Cannot convert" errors):**
+5. **Float normals (CRITICAL):**
    - vmflib's Normals class uses `%d` format (integers) but Source Engine requires floats
-   - Working reference VMs have normals like `"0.0 0.0 -0.99999994"`
-   - Fix in `vmflib/brush.py`: Change `%d %d %d` to `%s %s %s` in Normals.__init__
-   - Current code uses vertical normals `(0.0, 0.0, 1.0)` for all vertices (no sideways pulling):
+   - Fix in installed `vmflib/brush.py`: Change `%d %d %d` to `%s %s %s` in Normals.__init__
+   - Current code uses vertical normals `(0.0, 0.0, 1.0)` for all vertices:
    ```python
    vertex_normals = []
    for iy in range(sample_size):
@@ -295,7 +354,6 @@ class TerrainSpec:
    - Use `startposition = f"[{offset_x} {offset_y} 0]"` (tile min X/min Y corner).
    - Fill `distances` rows in increasing Y order (`iy = 0..N-1` maps to min→max world Y).
    - Do **not** force a custom `top().vaxis`; keep vmflib/Hammer default face axes.
-   - This combination fixed broken/rotated displacement tiles and checkerboard seam artifacts.
 
 ## Coordinate System & Mapping (CRITICAL)
 
@@ -309,7 +367,7 @@ All Python array indices map 1:1 to the 3D world coordinates. There is NO "Hamme
 - **Row 0, Col N-1** (`Data_SE`) -> Maps to **South-East** in the 3D World `(+X, -Y)`
 
 **CRITICAL RULE: DO NOT INVERT COORDINATES**
-Never invert `X` or `Y` when placing entities (e.g. `imp_base_x = -custom_x`). 
+Never invert `X` or `Y` when placing entities (e.g. `imp_base_x = -custom_x`).
 Because the procedural terrain (fBm noise + erosion) matches the Cartesian world exactly, inverting coordinates will cause entities to spawn on mountains instead of their flattened valley patches.
 
 ### Minimap Orientation
@@ -319,30 +377,37 @@ To ensure the minimap is oriented correctly (North = Up), the bounds must be swa
 "min_bounds_y"  "{origin_y + map_height}"  // Top of image = North (+max)
 "max_bounds_y"  "{origin_y}"               // Bottom of image = South (-max)
 ```
-Do NOT use `np.flipud` when generating the heightmap PNG, but DO use `Image.FLIP_TOP_BOTTOM` when exporting the VTF. This ensures the visual minimap correctly aligns with the 3D world geometry.
+Do NOT use `np.flipud` when generating the heightmap PNG, but DO use `Image.FLIP_TOP_BOTTOM` when exporting the VTF.
 
 ## Pipeline Steps
 
-Pipeline steps return modified objects (functional style):
-1. Generate vertex grid → `HeightGrid`
-2. Generate heights (fBm with base, ridge, detail layers + falloff)
-3. Simulate hydraulic erosion (droplet-based)
-4. Calculate slopes (central differences, stored in `grid.slopes`)
-5. Smooth heights (3x3 averaging kernel)
-6. Clamp slope (adjacent vertex max difference)
-7. Quantize heights (round to step multiples — required for VBSP)
-8. Build cells (shared vertex grid)
-9. Validate seams
-10. Build underlay
+Pipeline steps return modified objects (functional style). The actual steps vary by topology:
+
+1. **Generate vertex grid** → `HeightGrid`
+2a. **Generate strategic layout** (if `generate_lanes=True`): nodes + connections per topology
+2b. **Generate playability mask**: smoothstep distance field from lane paths
+2c. **Generate heights**: fBm (base + ridge + detail layers) blended with playability mask, or flat for manual mode. Canyon topology uses `canyon_generator.generate_canyon_base()`.
+2d. **Pre-stamp base areas**: flatten base zones with soft blending
+3. **Simulate hydraulic erosion** (BYPASSED for Canyon topology; optional skip with `--skip-erosion`)
+4. **Calculate slopes** (central differences, stored in `grid.slopes`)
+5. **Smooth heights** (BYPASSED for Canyon topology; 3x3 averaging kernel for others)
+6. **Clamp slope** (adjacent vertex max difference; canyon uses `max_slope_step=99999`)
+7. **Quantize heights** (round to step multiples — required for VBSP)
+7.5. **Feather mask edges** (if `global_selection_mask` present)
+7.6. **Final global slope clamp** (without mask, for seam safety)
+8. **Build cells** (shared vertex grid from tiles)
+9. **Validate seams** (check adjacency match)
+10. **Build underlay** (single brush below terrain)
+11. **Export minimap** (if `map_name` and `output_dir` provided)
 
 ## Key Constraints
 
-- **displacement_power**: Must be 2, 3, or 4 (5×5, 9×9, 17×17 vertices per tile)
+- **displacement_power**: Must be **2 or 3** (power 4 crashes server physics)
 - **cell_size**: Must divide `size_x`/`size_y` evenly
-- **height quantization**: 1 = finest; higher = coarser steps
-- **max_slope_step**: Max height difference between adjacent vertices (recommended: 64)
-- **Map centering**: Always center around (0,0), not origin (0,0)
-
+- **height quantization**: 1 = finest; higher = coarser steps (default: 4)
+- **max_slope_step**: Max height difference between adjacent vertices (recommended: 64; canyon: 99999)
+- **Map centering**: Always center around (0,0), not origin at (0,0)
+- **Topology-specific**: Canyon bypasses erosion and smoothing; other topologies use full pipeline
 
 ## VBSP Compiler Rules
 
@@ -351,9 +416,7 @@ Pipeline steps return modified objects (functional style):
 ### Compiling with wine
 VBSP requires specific argument ordering and directory structure:
 ```python
-# Run from Empires bin directory
 cmd = ["wine", "vbsp.exe", "-game", "../empires", vmf_name]
-# Note: -game must come BEFORE the VMF filename
 ```
 
 ### Geometry & Format
@@ -364,8 +427,8 @@ cmd = ["wine", "vbsp.exe", "-game", "../empires", vmf_name]
 - **Vertices**: Space-separated `"X Y Z"`.
 
 ### Displacements (dispinfo)
-- Vertex count: $(2^p + 1)^2$. Power must be 2, 3, or 4.
-- `allowed_verts` must always be `"−1"` for all rows.
+- Vertex count: $(2^p + 1)^2$. Power must be 2 or 3.
+- `allowed_verts` must always be `"-1"` for all rows.
 - Seam edges must be vertex-snapped exactly (prevents black lightmaps).
 - **startposition**: Must be explicitly set to `[X Y 0]` to override vmflib bugs.
 - **flags**: Must be set to `0`.
@@ -380,11 +443,8 @@ cmd = ["wine", "vbsp.exe", "-game", "../empires", vmf_name]
 - **Must use origin-centered coordinates** so walls stay within ±16384 Hammer limits.
 - Side wall sections must span the same XY extent as floor/ceiling (`origin - thickness` to `end + thickness`) to avoid corner leaks.
 - Use integer-aligned wall Z bounds/centers (no `.5` offsets) to avoid micro seams.
-- Floor at z=-16 to -80. Ceiling at least 1087 units above max terrain.
-- Example centered 16384×16384 map:
-  - Floor: X: -8224 to 8192, Y: -8224 to 8192, Z: -80 to -16
-  - West Wall: X: -8224 to -8160, Y: -8192 to 8192, Z: -16 to 1300
-  - East Wall: X: 8160 to 8224, Y: -8192 to 8192, Z: -16 to 1300
+- Floor at z=-16 to -80. Ceiling at least 1087 units above max terrain (default: 4096).
+- Skybox walls/floor/ceiling are split into max 2048-unit sections to avoid giant brushes (see `skybox_manager.py`).
 
 ## Compiling & Deployment
 
@@ -396,10 +456,11 @@ The compile script handles:
    - **BSP (primary)**: `.../Empires/empires/maps/<mapname>.bsp`
    - **BSP (download mirror)**: `.../Empires/empires/download/maps/<mapname>.bsp`
    - **VMF**: `.../Empires/empires/maps/prefabs/<mapname>.vmf`
+   - **Resource .txt**: `.../Empires/empires/resource/maps/<mapname>.txt`
+   - **Minimap VMT/VTF**: `.../Empires/empires/materials/maps/`
 
 **CRITICAL deployment rule:**
 - Always update BSP in both `empires/maps/` and `empires/download/maps/`.
-- If only `download/maps` is updated, the game may still load an older BSP from `empires/maps` and appear to "still crash".
 
 ### Empires File Paths
 ```
@@ -415,80 +476,110 @@ SteamLibrary/steamapps/common/Empires/
     └── materials/          # Game materials
 ```
 
-## map_rules.json Structure
+## Architecture: Key Modules
 
-Learned rules from analyzing Empires Mod maps (28 maps analyzed):
+### `terrain_spec.py` — Data Models
+- `ZoneType`: Enum-like constants (`BASE`, `MAIN_LANE`, `SIDE_ROUTE`, etc.)
+- `LayoutNode`: Position, radius, type for strategic lane generation
+- `LayoutConnection`: Edge between nodes with width and path_points
+- `TerrainSpec`: Full generation spec (40+ fields including topology, canyon params, theme, custom resources/layout)
+- `HeightGrid`: Grid with heights, slopes, normals, playability_mask, global_selection_mask
+- `TerrainCell`: Individual displacement tile with position, size, power, distances
+- `UnderlayBrush`: Single brush below all terrain
+- `create_default_spec()` factory function
 
-```json
-{
-  "meta": { "maps_analyzed": 28 },
-  "map_dimensions": {
-    "map_bbox": { ... },        // Full technical VMF extent
-    "playfield_bbox": { ... }   // Gameplay-anchored area with padding
-  },
-  "base_layout": {
-    "separation": { "avg": 24195.47 },  // Base-to-base distance
-    "nf_offset_from_center": { "dist_2d": { "avg": 12476 } },
-    "imp_offset_from_center": { "dist_2d": { "avg": 12444 } }
-  },
-  "entity_orientations": {
-    "nf_commander": { "circular_mean": 1.8 },
-    "imp_commander": { "circular_mean": 359.8 }
-  },
-  "spawn_system": {
-    "spawn_point_frequency_by_type": {
-      "emp_info_player_Imp": 97,
-      "emp_info_player_NF": 98
-    },
-    "capture_point_frequency_by_type": {
-      "emp_cap_point": 53
-    }
-  },
-  "lighting_environment": {
-    "typical_skyboxes": ["empsky_overcast2", "sky_day01_01", ...]
-  }
-}
-```
+### `terrain_pipeline.py` — Pipeline Orchestrator (2357 lines)
+Main orchestrator with topology-aware branching. Key functions:
+- `generate_vertex_grid()` / `generate_heights()` / `load_custom_heights()`
+- `generate_strategic_layout()` (10+ topology generators)
+- `generate_playability_mask()` (smoothstep distance field)
+- `simulate_hydraulic_erosion()` (droplet-based, uses `np.float64`)
+- `calculate_slopes()` / `smooth_heights()` / `clamp_slope()` / `quantize_heights()`
+- `flatten_base_areas()` / `feather_mask_edges()`
+- `build_cells()` / `validate_seams()` / `build_underlay()`
+- `export_minimap()` / `slope_to_alpha()` / `get_cell_alphas()`
+- `apply_pipeline_for_preview()` (lightweight version for GUI preview)
+- `run_pipeline()` (full orchestrator with all 11+ steps)
+
+### `vmf_gen.py` — VMF Output (1390 lines)
+- `PipelineSpec` dataclass (35+ fields: map_name, theme, entity flags, custom positions, etc.)
+- `DisplacementVMF` class: loads heightmap PNG, generates tile-based VMF with alpha blending, per-tile zone scoring, hero prop spawning, smart details
+- Uses vmflib for VMF construction with all displacement fixes applied
+- Imports from `entity_placer`, `skybox_manager`, `material_manager`, `displacement_builder`
+
+### `entity_placer.py` — Empires Entity Spawning (731 lines)
+Data-driven entity placement using map_rules.json statistics:
+- `spawn_base_entities_enhanced()`: Bases, buildings, commander, vehicle spawns
+- `spawn_resource_nodes_enhanced()`: Resource points + prop pairs with smoke stacks
+- `spawn_player_spawn_points()`: 4 points around each base
+- `spawn_capture_points()`: Capture points with cap_model entites
+- `spawn_info_nodes()`: Navigation mesh nodes (required to prevent player timeout)
+- `spawn_required_entities_enhanced()`: `emp_info_params`, `emp_info_map_overview`
+- All entities clamped to map bounds with 64-unit margin
+
+### `skybox_manager.py` — Skybox & Lighting (373 lines)
+- `choose_safe_skybox()`: Filters against SAFE_EMPIRES_SKYBOXES whitelist
+- `generate_skybox()`: Creates skybox walls/floor/ceiling split into max 2048-unit sections
+- `spawn_lighting()`: light_environment, env_sun, env_tonemap_controller, logic_auto
+
+### `canyon_generator.py` — Canyon Terrain (474 lines)
+- `max_filter_2d()` / `min_filter_2d()`: Morphological operations via sliding_window_view
+- `enforce_minimum_width()`: Ensures minimum lane width for gameplay
+- `validate_connectivity()`: BFS-based lane connectivity check
+- `generate_canyon_base()`: Main entry point with domain-warped noise
+
+### `steam_paths.py` — Path Detection (246 lines)
+Cross-platform Steam library detection:
+- Windows: registry + VDF parsing
+- Linux: common Steam library paths
+- `find_empires_path()`, `find_empires_bin()`, `find_vbsp()`
+
+### `material_manager.py` — Theme Materials (119 lines)
+- `THEME_BLEND_MATERIAL` dict mapping 6 themes to their materials
+- `choose_compile_safe_material()`: Filters unsafe materials (tree, water, wall, etc.)
+- `is_displacement_floor_material()` / `is_blend_floor_material()`: Safety checks
+
+### `project_utils.py` — Project Files (201 lines)
+- Save/load `.terrain` files: JSON with zlib-compressed base64 numpy arrays
+- Stores: nodes, connections, resources, base positions, sculpting data
+- Current version: 1
+
+### `config_model.py` — GUI Config (289 lines)
+- `GUIConfigModel`: Bridges GUI slider values (0-1) to physical TerrainSpec ranges
+- Constants: `MAX_MAP_WORLD_SIZE = 32640`, `MAX_MAP_DISPINFO = 2048`
+- `validate()`: Checks tile counts, power, map size, dispinfo count
+- `make_spec()`: Creates centered TerrainSpec from GUI settings
 
 ## Empires Mod Specific
 
 - **Displacement power**: Max **3** (power 4 crashes server physics with multi-wheeled vehicles)
-- **Commander camera ceiling**: At least 1087 units above max terrain height
+- **Skybox ceiling**: At least 1087 units above max terrain height (default: 4096)
 - **Required entities**: `emp_info_params`, `emp_info_map_overview`, `info_node` (without this, players timeout)
 - Required entities must be spawned even when `--no-enhanced` mode is used.
-- **Playable spawn system**: For playable maps, use enhanced spawning (or manually place spawn/cap entities). `--no-enhanced` is primarily for compile/debug maps.
-- **Player spawn classname (CRITICAL)**: Use `emp_info_player_Imp` and `emp_info_player_NF` (mixed case). Lowercase versions will cause players to join teams but not be able to spawn.
-- **Capture model entity (CRITICAL)**: `emp_cap_model` must include a valid `model` key (for example `models/common/emp_snow/flag_capmodel1a.mdl`) and `angles`.
-- **Restriction zones**: `emp_eng_restrict` / `emp_comm_restrict` are optional and currently disabled by default (`include_restriction_zones=False`) for stability.
+- **Playable spawn system**: For playable maps, use enhanced spawning. `--no-enhanced` is primarily for compile/debug maps.
+- **Player spawn classname (CRITICAL)**: Use `emp_info_player_Imp` and `emp_info_player_NF` (mixed case). Lowercase versions cause players to join teams but not be able to spawn.
+- **Capture model entity (CRITICAL)**: `emp_cap_model` must include a valid `model` key and `angles`.
 - **Resource nodes**: Spawn as pairs (`emp_resource_point` + `emp_resource_point_prop`). Required keyvalues: `ResourcesSecond` (e.g., "3"), `MaxResources` (e.g., "-1" for infinite).
-- **Resource script** (`<map_name>.txt`): Bounds use origin-centered coordinates (e.g., `"-8192"` to `"8192"`)
+- **Resource script** (`<map_name>.txt`): Bounds use origin-centered coordinates with swapped Y bounds for correct minimap orientation.
 - **Weather**: Never one huge `func_precipitation` brush — split into small boxes or it crashes the engine
 - **AI Blocker**: Place `func_nav_blocker` on steep terrain, otherwise AI hangs
 - **VMF order**: `versioninfo` → `visgroups` → `viewsettings` → `world` → `entity` → `hidden` → `cameras` → `cordon`
 - **Entity bounds**: All entities must be within map bounds (clamp positions with 64-unit margin)
 
-## Reference Files
-
-- `empires_entity_index.md` — Empires Mod entity reference
-- `empires_textures.md` — Empires Mod texture reference
-- `mapping.md` — Empires Wiki mapping guide
-- `map_rules.json` — Statistical rules from map analysis
-- `map_dataset/` — Reference VMF files (emp_arid_d, emp_homeland_b12, etc.)
-
 ## Implementation Notes
 
 ### Heightmap Resolution
-The terrain pipeline generates a grid (e.g., 257x257 for 32x32 tiles with power=3), but entity spawning (resource nodes) requires heightmap sampling. Always upsample the grid to displacement resolution using `src.compat_utils.scipy_zoom_equivalent` before passing to VMF generation.
+The terrain pipeline generates a grid at spec resolution, but entity spawning requires heightmap sampling at displacement resolution. Always upsample using `src.compat_utils.scipy_zoom_equivalent` before passing to VMF generation.
 
 ### Base Terrain Clearing
-Bases should NOT be deeply flattened — real Empires maps have natural terrain variation near bases. Use a small gentle clearing radius (128-384 units based on map scale) with soft blending toward average terrain height, not zero.
+Bases should NOT be deeply flattened — real Empires maps have natural terrain variation near bases. Use a small gentle clearing radius (128-384 units) with soft blending toward average terrain height, not zero.
 
 ### Terrain Height Sampling for Entities
 When placing entities that need terrain height (resource nodes, spawn points, commanders):
 1. Pass `terrain_actual_max` from the pipeline (`grid.max_height()`) to `PipelineSpec`
 2. Use `heightmap[py, px] / 255.0 * terrain_actual_max` to get world height
 3. Do NOT multiply by `height_scale` twice — the max is already in world units
-4. **Commander height**: Sample terrain at the actual commander position, not the barracks origin. Commanders placed at wrong height will spawn stuck in ground.
+4. **Commander height**: Sample terrain at the actual commander position, not the barracks origin.
 
 ### Entity Position Clamping
 Resource nodes and props can spawn outside map bounds. Always clamp positions:
@@ -517,33 +608,31 @@ eng_restrict_Imp = 0
 AutoResearch = 0
 ```
 
-**IMPORTANT**: The `NFRes`, `NFReinf`, `ImpRes`, `ImpReinf` keys are case-sensitive and must use this exact casing.
-
-Important:
-- Avoid forcing `AllowedTeams` unless intentionally restricting team joining.
+**IMPORTANT**: The `NFRes`, `NFReinf`, `ImpRes`, `ImpReinf` keys are case-sensitive.
 
 ### "Cannot convert" Errors
-This error occurs when displacement normals are in integer format instead of float. The Source Engine expects normals like `"0.0 0.0 1.0"` not `"0 0 1"`. Ensure:
+This error occurs when displacement normals are in integer format instead of float. Ensure:
 1. Normals are formatted as floats (even if using vertical normals `(0.0, 0.0, 1.0)`)
-2. vmflib's Normals class uses `%s` format instead of `%d`
+2. vmflib's Normals class uses `%s` format instead of `%d` (patch installed vmflib if needed)
 3. Vertex objects contain float values
 
-Additional note from current pipeline validation:
-- A small number of `make_triangles:calc_triangle_representation: Cannot convert` warnings can still appear even with correct float normals.
-- If VBSP finishes, BSP is produced, and displacements look correct in Hammer/in-game, treat these as non-fatal warnings.
-- If warnings are widespread and visuals break, re-check the displacement orientation contract above (`startposition`, row order, no custom `vaxis` override).
+A small number of `make_triangles:calc_triangle_representation: Cannot convert` warnings can still appear even with correct float normals — treat as non-fatal if VBSP finishes and displacements look correct.
+
+### Project Files (.terrain format)
+Project files are JSON with base64+zlib-encoded numpy arrays:
+- `height_overlay`: terrain sculpting overlay
+- `global_selection_mask`: selected region mask
+- `texture_overlay`: per-tile texture assignments
+- `tile_overlay`: tile painting data
+Save with `project_utils.save_project()`, load with `project_utils.load_project()`.
 
 ### GUI Output Files
-The GUI generates the following files in `output/`:
-- `gui_terrain.vmf` - VMF source file
-- `gui_terrain.txt` - Resource script with map bounds
-- `gui_terrain_temp.png` - Temporary heightmap (deleted after VMF generation)
-
-The compile button also copies:
-- `.bsp` to both `Empires/empires/maps/` and `Empires/empires/download/maps/`
-- `.vmf` to `Empires/empires/maps/prefabs/`
-- `.txt` to `Empires/empires/resource/maps/`
-- `.vmt` minimap material to `Empires/empires/materials/maps/`
+The GUI generates the following in a versioned output subdirectory:
+- `mapsrc/<name>.vmf` - VMF source file
+- `mapsrc/<name>_temp.png` - Temporary heightmap (deleted after VMF generation)
+- `resource/maps/<name>.txt` - Resource script with map bounds
+- `materials/maps/<name>.vmt` / `<name>.vtf` - Minimap material
+- `materials/vmf_generator_assets/` - Detail VMT/VBSP files
 
 ## Building Windows Executable
 
@@ -552,17 +641,13 @@ The compile button also copies:
 - Windows with Empires Mod installed via Steam
 
 ### Build Steps
-1. Install dependencies:
 ```bash
 pip install -r config/requirements.txt
+python build_exe.py            # onefile mode (default)
+python build_exe.py --onedir   # directory mode
 ```
 
-2. Run the build script:
-```bash
-python build_exe.py
-```
-
-3. The executable will be in `dist/TerrainGenerator.exe`
+The executable will be in `dist/TerrainGenerator.exe`.
 
 ### Manual PyInstaller Build
 ```bash
@@ -571,21 +656,11 @@ pyinstaller terrain_generator.spec --onefile --windowed
 ```
 
 ### Cross-Platform Notes
-- The code automatically detects Windows vs Linux
+- The code automatically detects Windows vs Linux via `steam_paths.is_windows()`
 - On Windows: VBSP runs directly
-- On Linux: VBSP runs via Wine
-- Steam Library paths are detected for both platforms
+- On Linux: VBSP runs via Wine (with interactive Proton selector in terrain.sh)
+- Steam Library paths are detected for both platforms via registry/VDF parsing
 
-### Files for Distribution
-When distributing:
+### Distribution
 - `dist/TerrainGenerator.exe` - Main executable
 - Include Empires VBSP.exe alongside if users need to compile
-
-## graphify
-
-This project has a graphify knowledge graph at graphify-out/.
-
-Rules:
-- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
-- If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
-- After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)
