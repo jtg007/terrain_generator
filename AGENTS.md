@@ -493,7 +493,7 @@ Main orchestrator with topology-aware branching. Key functions:
 - `generate_vertex_grid()` / `generate_heights()` / `load_custom_heights()`
 - `generate_strategic_layout()` (10+ topology generators)
 - `generate_playability_mask()` (smoothstep distance field)
-- `simulate_hydraulic_erosion()` (droplet-based, uses `np.float64`)
+- `simulate_hydraulic_erosion()` (droplet-based, optionally uses `Numba` JIT compilation via `_erosion_kernel`)
 - `calculate_slopes()` / `smooth_heights()` / `clamp_slope()` / `quantize_heights()`
 - `flatten_base_areas()` / `feather_mask_edges()`
 - `build_cells()` / `validate_seams()` / `build_underlay()`

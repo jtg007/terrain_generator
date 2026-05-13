@@ -22,8 +22,16 @@ import math
 import random
 import sys
 from typing import List, Tuple, Optional
+import logging
 
 import numpy as np
+
+try:
+    from numba import njit
+    NUMBA_AVAILABLE = True
+except ImportError:
+    def njit(*args, **kwargs): return lambda f: f
+    NUMBA_AVAILABLE = False
 
 from src.terrain_spec import (
     TerrainSpec,
@@ -984,26 +992,20 @@ def smooth_heights(grid: HeightGrid, iterations: int = 1) -> HeightGrid:
     Each vertex becomes the average of itself and 8 neighbors.
     Border vertices remain unchanged (no neighbors outside grid).
     """
-    rows = grid.rows
-    cols = grid.cols
-    original_heights = grid.heights.copy()
+    from scipy.ndimage import uniform_filter
 
+    original_heights = grid.heights.copy()
     current_heights = grid.heights.copy()
 
     for _ in range(iterations):
-        new_heights = np.zeros_like(current_heights)
-        for r in range(rows):
-            for c in range(cols):
-                if r == 0 or r == rows - 1 or c == 0 or c == cols - 1:
-                    new_heights[r, c] = current_heights[r, c]
-                else:
-                    total = 0.0
-                    count = 0
-                    for dr in (-1, 0, 1):
-                        for dc in (-1, 0, 1):
-                            total += current_heights[r + dr, c + dc]
-                            count += 1
-                    new_heights[r, c] = total / count
+        new_heights = uniform_filter(current_heights, size=3, mode='reflect')
+
+        # Explicitly overwrite 1-pixel border to remain unchanged
+        new_heights[0, :] = current_heights[0, :]
+        new_heights[-1, :] = current_heights[-1, :]
+        new_heights[:, 0] = current_heights[:, 0]
+        new_heights[:, -1] = current_heights[:, -1]
+
         current_heights = new_heights
 
     grid.heights = np.where(
@@ -1208,7 +1210,43 @@ def clamp_slope(grid: HeightGrid, max_step: int, use_mask: bool = True) -> Heigh
                         new_heights[r, c + 1] = new_adj
 
     if passes >= max_passes:
-        print(f"Warning: slope clamping reached max passes ({max_passes})")
+        # Check if any vertex still violates max_slope_step
+        rows, cols = grid.rows, grid.cols
+        violations = 0
+        max_violation = 0.0
+
+        for r in range(rows):
+            for c in range(cols):
+                current = new_heights[r, c]
+                if r > 0:
+                    diff = abs(new_heights[r - 1, c] - current)
+                    if diff > max_step:
+                        violations += 1
+                        max_violation = max(max_violation, diff)
+                if r < rows - 1:
+                    diff = abs(new_heights[r + 1, c] - current)
+                    if diff > max_step:
+                        violations += 1
+                        max_violation = max(max_violation, diff)
+                if c > 0:
+                    diff = abs(new_heights[r, c - 1] - current)
+                    if diff > max_step:
+                        violations += 1
+                        max_violation = max(max_violation, diff)
+                if c < cols - 1:
+                    diff = abs(new_heights[r, c + 1] - current)
+                    if diff > max_step:
+                        violations += 1
+                        max_violation = max(max_violation, diff)
+
+        if violations > 0:
+            logging.getLogger(__name__).warning(
+                f"slope clamping reached max passes ({max_passes}). "
+                f"{violations} adjacent pairs still violate max_slope_step. "
+                f"Maximum remaining slope difference: {max_violation:.2f}"
+            )
+        else:
+            print(f"Warning: slope clamping reached max passes ({max_passes}) but all vertices are within limits.")
 
     if use_mask:
         grid.heights = np.where(
@@ -1242,56 +1280,30 @@ def quantize_heights(grid: HeightGrid, step: int, use_mask: bool = True) -> Heig
     return grid
 
 
-def simulate_hydraulic_erosion(grid: HeightGrid, spec: TerrainSpec) -> HeightGrid:
-    """
-    Step 3: Simulate hydraulic erosion using droplet-based algorithm.
-
-    Droplets spawn randomly on the terrain, move downhill following the gradient,
-    erode terrain where moving fast, and deposit sediment where moving slow.
-    Uses numpy for terrain storage with float64 precision to prevent overflow.
-
-    Args:
-        grid: HeightGrid to erode (modified in place)
-        spec: TerrainSpec containing erosion parameters
-
-    Returns:
-        Modified HeightGrid with eroded terrain
-    """
-    import numpy as np
-
-    rows = grid.rows
-    cols = grid.cols
-    iterations = spec.erosion_iterations
-    lifetime = spec.erosion_droplet_lifetime
-
-    original_heights = grid.heights.copy()
-
-    terrain = np.array(grid.heights, dtype=np.float64)
-
-    initial_min = float(np.min(terrain))
-    initial_max = float(np.max(terrain))
-    height_range = initial_max - initial_min
-
-    sediment_capacity = 0.01
-    erosion_rate = 0.005
-    deposition_rate = 0.01
-    evaporation_rate = 0.01
-    max_erosion_per_step = height_range * 0.001
-    max_deposition_per_step = height_range * 0.001
-
-    rng = random.Random(spec.seed + 1000)
-
-    # Fetch mask safely
-    playability_mask = getattr(grid, "playability_mask", None)
+@njit(cache=True)
+def _erosion_kernel(
+    terrain: np.ndarray,
+    playability_mask: np.ndarray,
+    rows: int,
+    cols: int,
+    iterations: int,
+    lifetime: int,
+    sediment_capacity: float,
+    erosion_rate: float,
+    deposition_rate: float,
+    evaporation_rate: float,
+    max_erosion_per_step: float,
+    max_deposition_per_step: float,
+    lane_skip_threshold: float,
+    seed: int
+):
+    np.random.seed(seed)
 
     for _ in range(iterations):
-        start_r = rng.randint(1, rows - 2)
-        start_c = rng.randint(1, cols - 2)
+        start_r = np.random.randint(1, rows - 2)
+        start_c = np.random.randint(1, cols - 2)
 
-        # Protect playable lanes: DO NOT spawn droplets on paths or bases
-        # distance_field is negative inside the lane, positive outside.
-        # We want to avoid spawning droplets near the lane (e.g. distance < 256.0).
-        if playability_mask is not None and playability_mask[start_r, start_c] < 256.0:
+        if playability_mask[start_r, start_c] < lane_skip_threshold:
             continue
 
         pos_r = float(start_r)
@@ -1306,17 +1318,16 @@ def simulate_hydraulic_erosion(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
             if ir <= 0 or ir >= rows - 1 or ic <= 0 or ic >= cols - 1:
                 break
 
-            # Protect playable lanes: droplets instantly evaporate when hitting a lane
-            if playability_mask is not None and playability_mask[ir, ic] < 256.0:
+            if playability_mask[ir, ic] < lane_skip_threshold:
                 break
 
             fx = pos_c - ic
             fy = pos_r - ir
 
-            h00 = float(terrain[ir][ic])
-            h01 = float(terrain[ir][ic + 1])
-            h10 = float(terrain[ir + 1][ic])
-            h11 = float(terrain[ir + 1][ic + 1])
+            h00 = float(terrain[ir, ic])
+            h01 = float(terrain[ir, ic + 1])
+            h10 = float(terrain[ir + 1, ic])
+            h11 = float(terrain[ir + 1, ic + 1])
 
             h_top = h00 * (1.0 - fx) + h01 * fx
             h_bot = h10 * (1.0 - fx) + h11 * fx
@@ -1344,10 +1355,10 @@ def simulate_hydraulic_erosion(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
             new_fx = pos_c - new_ic
             new_fy = pos_r - new_ir
 
-            new_h00 = float(terrain[new_ir][new_ic])
-            new_h01 = float(terrain[new_ir][new_ic + 1])
-            new_h10 = float(terrain[new_ir + 1][new_ic])
-            new_h11 = float(terrain[new_ir + 1][new_ic + 1])
+            new_h00 = float(terrain[new_ir, new_ic])
+            new_h01 = float(terrain[new_ir, new_ic + 1])
+            new_h10 = float(terrain[new_ir + 1, new_ic])
+            new_h11 = float(terrain[new_ir + 1, new_ic + 1])
 
             new_h_top = new_h00 * (1.0 - new_fx) + new_h01 * new_fx
             new_h_bot = new_h10 * (1.0 - new_fx) + new_h11 * new_fx
@@ -1360,16 +1371,16 @@ def simulate_hydraulic_erosion(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
                 deposit_amount = min(sediment * deposition_rate, delta_h * 0.3)
                 deposit_amount = min(deposit_amount, max_deposition_per_step)
                 if deposit_amount > 0:
-                    terrain[new_ir][new_ic] += (
+                    terrain[new_ir, new_ic] += (
                         deposit_amount * (1.0 - new_fx) * (1.0 - new_fy)
                     )
-                    terrain[new_ir][new_ic + 1] += (
+                    terrain[new_ir, new_ic + 1] += (
                         deposit_amount * new_fx * (1.0 - new_fy)
                     )
-                    terrain[new_ir + 1][new_ic] += (
+                    terrain[new_ir + 1, new_ic] += (
                         deposit_amount * (1.0 - new_fx) * new_fy
                     )
-                    terrain[new_ir + 1][new_ic + 1] += deposit_amount * new_fx * new_fy
+                    terrain[new_ir + 1, new_ic + 1] += deposit_amount * new_fx * new_fy
                     sediment -= deposit_amount
             else:
                 max_sediment = sediment_capacity * speed * abs(delta_h)
@@ -1380,16 +1391,16 @@ def simulate_hydraulic_erosion(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
                     )
                     erode_amount = min(erode_amount, max_erosion_per_step)
                     if erode_amount > 0:
-                        terrain[new_ir][new_ic] -= (
+                        terrain[new_ir, new_ic] -= (
                             erode_amount * (1.0 - new_fx) * (1.0 - new_fy)
                         )
-                        terrain[new_ir][new_ic + 1] -= (
+                        terrain[new_ir, new_ic + 1] -= (
                             erode_amount * new_fx * (1.0 - new_fy)
                         )
-                        terrain[new_ir + 1][new_ic] -= (
+                        terrain[new_ir + 1, new_ic] -= (
                             erode_amount * (1.0 - new_fx) * new_fy
                         )
-                        terrain[new_ir + 1][new_ic + 1] -= (
+                        terrain[new_ir + 1, new_ic + 1] -= (
                             erode_amount * new_fx * new_fy
                         )
                         sediment += erode_amount
@@ -1398,6 +1409,66 @@ def simulate_hydraulic_erosion(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
 
             if sediment < 1e-6 and speed < 1e-6:
                 break
+
+
+def simulate_hydraulic_erosion(grid: HeightGrid, spec: TerrainSpec) -> HeightGrid:
+    """
+    Step 3: Simulate hydraulic erosion using droplet-based algorithm.
+
+    Droplets spawn randomly on the terrain, move downhill following the gradient,
+    erode terrain where moving fast, and deposit sediment where moving slow.
+    Uses numpy for terrain storage with float64 precision to prevent overflow.
+
+    Args:
+        grid: HeightGrid to erode (modified in place)
+        spec: TerrainSpec containing erosion parameters
+
+    Returns:
+        Modified HeightGrid with eroded terrain
+    """
+    import numpy as np
+
+    rows = grid.rows
+    cols = grid.cols
+    iterations = spec.erosion_iterations
+    lifetime = spec.erosion_droplet_lifetime
+    lane_skip_threshold = getattr(spec, "erosion_lane_skip_threshold", 256.0)
+
+    original_heights = grid.heights.copy()
+
+    terrain = np.array(grid.heights, dtype=np.float64)
+
+    initial_min = float(np.min(terrain))
+    initial_max = float(np.max(terrain))
+    height_range = initial_max - initial_min
+
+    sediment_capacity = 0.01
+    erosion_rate = 0.005
+    deposition_rate = 0.01
+    evaporation_rate = 0.01
+    max_erosion_per_step = height_range * 0.001
+    max_deposition_per_step = height_range * 0.001
+
+    playability_mask = getattr(grid, "playability_mask", None)
+    if playability_mask is None:
+        playability_mask = np.full((rows, cols), 9999.0, dtype=np.float32)
+
+    _erosion_kernel(
+        terrain,
+        playability_mask,
+        rows,
+        cols,
+        iterations,
+        lifetime,
+        sediment_capacity,
+        erosion_rate,
+        deposition_rate,
+        evaporation_rate,
+        max_erosion_per_step,
+        max_deposition_per_step,
+        lane_skip_threshold,
+        spec.seed + 1000
+    )
 
     new_heights = terrain.astype(np.float32)
     grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
@@ -1421,33 +1492,12 @@ def calculate_slopes(grid: HeightGrid) -> HeightGrid:
     Returns:
         HeightGrid with slopes populated
     """
-    rows = grid.rows
-    cols = grid.cols
-    cell_size = grid.cell_size
+    dz_dr, dz_dc = np.gradient(grid.heights)
 
-    slopes = [[0.0 for _ in range(cols)] for _ in range(rows)]
+    slope_r = dz_dr / grid.cell_size
+    slope_c = dz_dc / grid.cell_size
 
-    for r in range(rows):
-        for c in range(cols):
-            if r == 0:
-                dz_dr = grid.heights[r + 1, c] - grid.heights[r, c]
-            elif r == rows - 1:
-                dz_dr = grid.heights[r, c] - grid.heights[r - 1, c]
-            else:
-                dz_dr = (grid.heights[r + 1, c] - grid.heights[r - 1, c]) / 2.0
-
-            if c == 0:
-                dz_dc = grid.heights[r, c + 1] - grid.heights[r, c]
-            elif c == cols - 1:
-                dz_dc = grid.heights[r, c] - grid.heights[r, c - 1]
-            else:
-                dz_dc = (grid.heights[r, c + 1] - grid.heights[r, c - 1]) / 2.0
-
-            slope_r = dz_dr / cell_size
-            slope_c = dz_dc / cell_size
-            slopes[r][c] = math.sqrt(slope_r * slope_r + slope_c * slope_c)
-
-    grid.slopes = slopes
+    grid.slopes = np.sqrt(slope_r**2 + slope_c**2)
     return grid
 
 

@@ -116,6 +116,7 @@ from src.terrain_pipeline import (
     calculate_slopes,
     export_minimap,
     apply_pipeline_for_preview,
+    NUMBA_AVAILABLE,
 )
 from src.export_utils import export_vmf, get_versioned_path
 from src.vmf_gen import (
@@ -431,6 +432,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.resize(1200, 780)
         self.setMinimumSize(820, 560)
 
+        self._numba_first_run = True
         self._vpk_index = set()
         self.config_model = GUIConfigModel()
         self._is_dirty = False
@@ -3090,6 +3092,11 @@ class TerrainGeneratorGUI(QMainWindow):
             tile_paint_target=tile_paint_target,
         )
         self.worker.finished.connect(self.on_generation_finished)
+
+        if NUMBA_AVAILABLE and self._numba_first_run:
+            self.statusBar().showMessage("First run: compiling erosion kernel, this may take 10-30 seconds...")
+            self._numba_first_run = False
+
         self.worker.start()
 
     def on_save_project(self):
