@@ -2340,6 +2340,29 @@ class MapPreviewWidget(QWidget):
             self._update_3d_tile_overlay()
         self.layout_changed.emit()
 
+    def clear_lanes(self):
+        """Removes all lane-related items (nodes and edges) from the scene."""
+        items_to_remove = []
+        for item in self.scene.items():
+            if isinstance(item, (VisualEdge, VisualFreehandEdge)):
+                items_to_remove.append(item)
+            elif isinstance(item, VisualNode):
+                if item.node_type not in (ZoneType.BASE, ZoneType.RESOURCE):
+                    items_to_remove.append(item)
+
+        if items_to_remove:
+            self.record_action("remove_multiple", list(items_to_remove))
+            for item in items_to_remove:
+                if isinstance(item, VisualNode):
+                    item.edges.clear()
+                self.scene.removeItem(item)
+
+            self.drawing_lane = False
+            self.current_freehand_path = []
+            self.current_freehand_item = None
+            self.lanes_changed.emit()
+            self.layout_changed.emit()
+
     def clear_scene_nodes(self):
         # 1. Collect all layout items (Nodes, Edges, Paths)
         items_to_remove = []
