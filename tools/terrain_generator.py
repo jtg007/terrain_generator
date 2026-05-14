@@ -400,6 +400,8 @@ class GenerationWorker(QThread):
             )
 
             final_warning = ""
+            if getattr(grid, "report", None) and grid.report.get("fallback_used"):
+                final_warning += "Warning: Canyon generator failed to find a fully connected path. Generated a pure noise canyon instead.\n\n"
             if sculpt_warning:
                 final_warning += sculpt_warning + "\n"
             if export_warning:
@@ -2551,8 +2553,7 @@ class TerrainGeneratorGUI(QMainWindow):
     def _on_theme_changed_sync(self, index):
         """Handle global theme changes: ground texture list, preview paint list, skybox default."""
         theme_name = self.combo_theme.currentText()
-        prev_mat = self.combo_material.currentData()
-        self._fill_material_combo(theme_name, preserve_path=prev_mat)
+        self._fill_material_combo(theme_name)
         if hasattr(self, "preview_widget"):
             self.preview_widget.set_material_theme(theme_name)
 
