@@ -17,11 +17,13 @@ Terrain Generation Pipeline
 All coordinate calculations use integer grid positions to prevent T-junctions.
 """
 
+import copy
+import logging
 import math
 import random
-import sys
+import struct
+from pathlib import Path
 from typing import List, Tuple, Optional
-import logging
 
 import numpy as np
 
@@ -72,8 +74,6 @@ def create_connection_path(
     conn_type: str,
     spec: TerrainSpec,
 ) -> LayoutConnection:
-    import math
-
     dx = end_node.x - start_node.x
     dy = end_node.y - start_node.y
     length = math.sqrt(dx * dx + dy * dy)
@@ -122,9 +122,6 @@ def generate_strategic_layout(
     spec: TerrainSpec,
 ) -> Tuple[List[LayoutNode], List[LayoutConnection]]:
     """Generates an explicit layout of nodes and connections based on the terrain spec."""
-    import random
-    import math
-
     rng = random.Random(spec.seed)
     archetypes = [
         "central_gorge",
@@ -171,7 +168,6 @@ def generate_strategic_layout(
         offset_x = spec.origin_x + (spec.size_x - maze_dim_x) / 2
         offset_y = spec.origin_y + (spec.size_y - maze_dim_y) / 2
 
-        import random
         maze_cells = {}
         visited = set()
 
@@ -1033,6 +1029,96 @@ def flatten_base_areas(
     if spec.base_clear_radius <= 0 and spec.resource_clear_radius <= 0:
         return grid
 
+    import numpy as np
+
+    rows = grid.rows
+    cols = grid.cols
+
+    original_heights = grid.heights.copy()
+    new_heights = grid.heights.copy()
+
+    # Pre-calculate WX and WY grids like in playability mask
+    x_coords = np.linspace(spec.origin_x, spec.origin_x + spec.size_x, cols)
+    y_coords = np.linspace(spec.origin_y, spec.origin_y + spec.size_y, rows)
+    WX, WY = np.meshgrid(x_coords, y_coords)
+
+    base_radius = spec.base_clear_radius
+    flatness = spec.base_flatness
+
+    imp_base_x = spec.custom_imp_base_x
+    imp_base_y = spec.custom_imp_base_y
+    nf_base_x = spec.custom_nf_base_x
+    nf_base_y = spec.custom_nf_base_y
+
+    def get_local_avg(bx: float, by: float, r_area: float) -> float:
+        if bx is None or by is None:
+            return 0.0
+        dist_sq = (WX - bx)**2 + (WY - by)**2
+        mask = dist_sq <= r_area**2
+        if np.any(mask):
+            return float(np.mean(new_heights[mask]))
+        return spec.terrain_max_height * 0.15
+
+    imp_avg_height = get_local_avg(imp_base_x, imp_base_y, base_radius)
+    nf_avg_height = get_local_avg(nf_base_x, nf_base_y, base_radius)
+
+    if base_radius > 0:
+        plateau_radius = base_radius * 0.6
+        falloff_dist = base_radius - plateau_radius
+
+        # Calculate imp base mask and heights
+        if imp_base_x is not None and imp_base_y is not None:
+            dist_imp = np.sqrt((WX - imp_base_x)**2 + (WY - imp_base_y)**2)
+            mask_imp = dist_imp < base_radius
+
+            t_imp = np.ones_like(dist_imp)
+            falloff_mask = mask_imp & (dist_imp > plateau_radius)
+            t_imp[falloff_mask] = 1.0 - ((dist_imp[falloff_mask] - plateau_radius) / falloff_dist)
+            t_imp[falloff_mask] = t_imp[falloff_mask] * t_imp[falloff_mask] * (3 - 2 * t_imp[falloff_mask])
+            t_imp = t_imp * flatness
+
+            new_heights[mask_imp] = new_heights[mask_imp] * (1.0 - t_imp[mask_imp]) + imp_avg_height * t_imp[mask_imp]
+
+        # Calculate nf base mask and heights
+        if nf_base_x is not None and nf_base_y is not None:
+            dist_nf = np.sqrt((WX - nf_base_x)**2 + (WY - nf_base_y)**2)
+            mask_nf = dist_nf < base_radius
+
+            # Create a combined mask to not override imp heights if they overlap
+            if imp_base_x is not None and imp_base_y is not None:
+                mask_nf = mask_nf & ~mask_imp
+
+            t_nf = np.ones_like(dist_nf)
+            falloff_mask = mask_nf & (dist_nf > plateau_radius)
+            t_nf[falloff_mask] = 1.0 - ((dist_nf[falloff_mask] - plateau_radius) / falloff_dist)
+            t_nf[falloff_mask] = t_nf[falloff_mask] * t_nf[falloff_mask] * (3 - 2 * t_nf[falloff_mask])
+            t_nf = t_nf * flatness
+
+            new_heights[mask_nf] = new_heights[mask_nf] * (1.0 - t_nf[mask_nf]) + nf_avg_height * t_nf[mask_nf]
+
+    avg_height = spec.terrain_max_height * 0.15  # Fallback for resource nodes
+    # Flatten resource nodes
+    if spec.resource_clear_radius > 0 and spec.custom_resources:
+        res_radius = spec.resource_clear_radius
+        res_flatness = spec.base_flatness * 0.6
+
+        for res_x, res_y in spec.custom_resources:
+            local_avg_height = get_local_avg(res_x, res_y, res_radius)
+
+            dist_res = np.sqrt((WX - res_x)**2 + (WY - res_y)**2)
+            mask_res = dist_res < res_radius
+
+            t_res = 1.0 - (dist_res[mask_res] / res_radius)
+            t_res = t_res * t_res * (3 - 2 * t_res)
+            t_res = t_res * res_flatness
+
+            new_heights[mask_res] = new_heights[mask_res] * (1.0 - t_res) + local_avg_height * t_res
+
+    grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
+
+    return grid
+
+
     rows = grid.rows
     cols = grid.cols
 
@@ -1160,19 +1246,10 @@ def flatten_base_areas(
     return grid
 
 
-def clamp_slope(grid: HeightGrid, max_step: int, use_mask: bool = True) -> HeightGrid:
-    """
-    Step 4: Clamp height differences between adjacent vertices.
 
-    Ensures no adjacent vertices differ by more than max_step.
-    Iterates until all differences are within limits.
-    """
-    rows = grid.rows
-    cols = grid.cols
-
-    original_heights = grid.heights.copy()
-    new_heights = grid.heights.copy()
-
+@njit(cache=True)
+def _clamp_slope_kernel(heights: np.ndarray, rows: int, cols: int, max_step: float) -> np.ndarray:
+    new_heights = heights.copy()
     changed = True
     passes = 0
     max_passes = 100
@@ -1217,9 +1294,25 @@ def clamp_slope(grid: HeightGrid, max_step: int, use_mask: bool = True) -> Heigh
                             changed = True
                         new_heights[r, c + 1] = new_adj
 
-    if passes >= max_passes:
+    return new_heights, passes
+
+def clamp_slope(grid: HeightGrid, max_step: int, use_mask: bool = True) -> HeightGrid:
+    """
+    Step 4: Clamp height differences between adjacent vertices.
+
+    Ensures no adjacent vertices differ by more than max_step.
+    Iterates until all differences are within limits.
+    """
+    rows = grid.rows
+    cols = grid.cols
+
+    original_heights = grid.heights.copy()
+
+    # Run the optimized numba kernel
+    new_heights, passes = _clamp_slope_kernel(original_heights, rows, cols, float(max_step))
+
+    if passes >= 100:
         # Check if any vertex still violates max_slope_step
-        rows, cols = grid.rows, grid.cols
         violations = 0
         max_violation = 0.0
 
@@ -1249,12 +1342,12 @@ def clamp_slope(grid: HeightGrid, max_step: int, use_mask: bool = True) -> Heigh
 
         if violations > 0:
             logging.getLogger(__name__).warning(
-                f"slope clamping reached max passes ({max_passes}). "
+                f"slope clamping reached max passes (100). "
                 f"{violations} adjacent pairs still violate max_slope_step. "
                 f"Maximum remaining slope difference: {max_violation:.2f}"
             )
         else:
-            print(f"Warning: slope clamping reached max passes ({max_passes}) but all vertices are within limits.")
+            print("Warning: slope clamping reached max passes (100) but all vertices are within limits.")
 
     if use_mask:
         grid.heights = np.where(
@@ -1264,6 +1357,7 @@ def clamp_slope(grid: HeightGrid, max_step: int, use_mask: bool = True) -> Heigh
         grid.heights = new_heights
 
     return grid
+
 
 
 def quantize_heights(grid: HeightGrid, step: int, use_mask: bool = True) -> HeightGrid:
@@ -1847,9 +1941,7 @@ def apply_pipeline_for_preview(grid: HeightGrid, spec: TerrainSpec) -> HeightGri
         terrain_copy.global_selection_mask = grid.global_selection_mask.copy()
 
     if spec.erosion_iterations > 0:
-        import random as rng_module
-
-        rng = rng_module.Random(spec.seed + 1000)
+        rng = random.Random(spec.seed + 1000)
         iterations = min(spec.erosion_iterations, 5000)
         lifetime = spec.erosion_droplet_lifetime
 
@@ -2096,11 +2188,6 @@ def export_minimap(
     Exports a minimap texture combining heights (grayscale) and playability mask.
     Saves as 1024x1024 .vtf and creates corresponding .vmt file.
     """
-    import struct
-    import numpy as np
-    from PIL import Image
-    from pathlib import Path
-
     if grid.rows <= 0 or grid.cols <= 0:
         return
 
@@ -2316,6 +2403,8 @@ def run_pipeline(
     else:
         # Canyon generator applies its own blur_radius pass internally.
         # Bypass hydraulic erosion and standard 3x3 smoothing which ruins canyon structures.
+        # TODO: Re-enable simulate_hydraulic_erosion() for non-canyon topologies (hills, flat, etc.)
+        # to add natural-looking detail.
         print("  Step 3: Simulate hydraulic erosion (BYPASSED for Canyon Generator)")
         print("  Step 4: Calculate slopes")
         grid = calculate_slopes(grid)
@@ -2323,7 +2412,6 @@ def run_pipeline(
 
         if (spec.base_clear_radius > 0 or spec.resource_clear_radius > 0) and spec.base_flatness > 0.5:
             print("  Step 5b: Light touch-up for base areas")
-            import copy
 
             spec_light = copy.copy(spec)
             spec_light.base_flatness = spec.base_flatness * 0.3

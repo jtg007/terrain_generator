@@ -111,22 +111,22 @@ def parse_vpk_dir(vpk_dir_path: str) -> set[str]:
     except Exception as e:
         print(f"[VPK] Failed to parse {vpk_dir_path}: {e}")
     return paths
-from src.terrain_pipeline import (
+from src.terrain_pipeline import (  # noqa: E402
     run_pipeline,
     calculate_slopes,
     export_minimap,
     apply_pipeline_for_preview,
     NUMBA_AVAILABLE,
 )
-from src.export_utils import export_vmf, get_versioned_path
-from src.vmf_gen import (
+from src.export_utils import export_vmf, get_versioned_path  # noqa: E402
+from src.vmf_gen import (  # noqa: E402
     SAFE_EMPIRES_SKYBOXES,
     DEFAULT_SAFE_SKYBOX,
 )
-from src.steam_paths import validate_empires_path
-from config import Config
-from src import project_utils
-from src.qt_widgets import WidePopupComboBox
+from src.steam_paths import validate_empires_path  # noqa: E402
+from config import Config  # noqa: E402
+from src import project_utils  # noqa: E402
+from src.qt_widgets import WidePopupComboBox  # noqa: E402
 
 # Ensure OUTPUT_DIR is writable. In bundled mode, avoid the executable's directory
 # as it may be installed in a protected location like Program Files.
@@ -1665,7 +1665,7 @@ class TerrainGeneratorGUI(QMainWindow):
             [],
             invalid_entities=invalid_entities,
         )
-        self.preview_timer.start(500)
+        self.preview_timer.start(150)
         self._is_dirty = True
 
     def on_tool_changed(self, id):
@@ -1688,7 +1688,7 @@ class TerrainGeneratorGUI(QMainWindow):
         # which creates a feedback loop with base_moved / layout_changed
         self.preview_widget.invalid_entities = invalid_entities
         self.preview_widget.redraw_fixed_entities()
-        self.preview_timer.start(500)
+        self.preview_timer.start(150)
         self._is_dirty = True
 
     def on_resource_moved(self, index, x, y):
@@ -1702,7 +1702,7 @@ class TerrainGeneratorGUI(QMainWindow):
         # Resource positions do not affect the terrain heightmap itself,
         # so we don't necessarily need to re-run the pipeline on move,
         # but we can do it if desired.
-        self.preview_timer.start(500)
+        self.preview_timer.start(150)
         self._is_dirty = True
 
     def on_layout_changed(self):
@@ -1743,7 +1743,7 @@ class TerrainGeneratorGUI(QMainWindow):
         """
         self._is_dirty = True
         self._force_full_regen = False
-        self.preview_timer.start(500)
+        self.preview_timer.start(150)
 
     def on_resource_added(self, x, y):
         if self.config_model.custom_resources is None:
@@ -1758,7 +1758,7 @@ class TerrainGeneratorGUI(QMainWindow):
         invalid_entities, _ = self.validate_current_layout()
         self.preview_widget.invalid_entities = invalid_entities
         self.preview_widget.redraw_fixed_entities()
-        self.preview_timer.start(500)
+        self.preview_timer.start(150)
         self._is_dirty = True
 
     def run_preview(self):
@@ -1766,7 +1766,7 @@ class TerrainGeneratorGUI(QMainWindow):
             # If a preview is still generating, skip starting a new one
             # and reschedule another attempt shortly to prevent garbage
             # collection of a running QThread which causes PySide6 crashes.
-            self.preview_timer.start(500)
+            self.preview_timer.start(150)
             return
 
         try:
@@ -2875,7 +2875,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.update_validation_status()
         if hasattr(self, "preview_timer"):
             self._force_full_regen = True
-            self.preview_timer.start(500)
+            self.preview_timer.start(150)
         self._is_dirty = True
 
     def update_validation_status(self):
