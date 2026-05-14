@@ -8,7 +8,6 @@ Terrain Generation Pipeline
 3. Simulate hydraulic erosion
 4. Calculate slopes
 5. Smooth heights
-from src.terrain_spec import TerrainSpec, ZoneType, ZoneType, ZoneType
 6. Clamp slope
 7. Quantize heights
 8. Build cells from shared vertices
@@ -673,6 +672,24 @@ def generate_strategic_layout(
                 )
             )
 
+            # Add side vehicle areas on branches
+            angle_side = branch_angle + i * (2 * math.pi / 3) + math.pi / 6
+            side_x = center_x + math.cos(angle_side) * map_min_dim * 0.25
+            side_y = center_y + math.sin(angle_side) * map_min_dim * 0.25
+            side_veh = LayoutNode(
+                side_x, side_y, veh_radius * 0.6, ZoneType.VEHICLE_OPEN
+            )
+            nodes.append(side_veh)
+            connections.append(
+                create_connection_path(
+                    branch_choke,
+                    side_veh,
+                    lane_width * 0.7,
+                    ZoneType.SIDE_ROUTE,
+                    spec,
+                )
+            )
+
         # Connect bases to nearest branches
         if (center_x - imp_x) ** 2 + (center_y - imp_y) ** 2 < (
             center_x - nf_x
@@ -698,16 +715,6 @@ def generate_strategic_layout(
                     center_node, imp_base, lane_width, ZoneType.MAIN_LANE, spec
                 )
             )
-
-        # Add side vehicle areas on branches
-        for i in range(3):
-            angle = branch_angle + i * (2 * math.pi / 3) + math.pi / 6
-            side_x = center_x + math.cos(angle) * map_min_dim * 0.25
-            side_y = center_y + math.sin(angle) * map_min_dim * 0.25
-            side_veh = LayoutNode(
-                side_x, side_y, veh_radius * 0.6, ZoneType.VEHICLE_OPEN
-            )
-            nodes.append(side_veh)
 
     else:
         # Default fallback (same as classic_cross)
@@ -932,6 +939,7 @@ def generate_heights(spec: TerrainSpec, grid: HeightGrid) -> HeightGrid:
         octaves=spec.noise_octaves,
         base_terrain=base_t,
         is_pure_noise=is_noise_canyon,
+        max_attempts=getattr(spec, "max_attempts", 1),
     )
 
     grid.report = report

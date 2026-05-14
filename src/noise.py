@@ -24,7 +24,7 @@ class SeededRandom:
 
     def randint(self, a: int, b: int) -> int:
         """Return integer in [a, b]."""
-        return a + int(self.next() * (b - a))
+        return a + int(self.next() * (b - a + 1))
 
 
 def _fade(t: float) -> float:

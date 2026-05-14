@@ -333,10 +333,12 @@ def generate_canyon_base(
     octaves:           int   = 4,
     base_terrain:      np.ndarray = None,
     is_pure_noise:     bool  = False,
+    max_attempts:      int   = 1,
 ) -> tuple[np.ndarray, dict]:
     """
     Gameplay-first canyon generator.
     """
+    import logging
 
     # 1. Derive scaling parameters
     units_per_px_x = map_world_size_x / cols
@@ -347,7 +349,6 @@ def generate_canyon_base(
     ref_px = float(max(rows, cols))
 
     # Validation loop
-    max_attempts = 1
     best_heightmap = None
     best_report = None
 
@@ -455,20 +456,66 @@ def generate_canyon_base(
         slope_ok = True
 
         min_width_ok = np.any(d_norm_clean <= -safe_margin)
+        is_pass = conn_info["connected"] and min_width_ok and slope_ok
 
         report = {
-            "pass": True,
+            "pass": is_pass,
             "connectivity": conn_info["connected"],
             "min_width_ok": min_width_ok,
             "slope_ok": slope_ok,
             "attempts": attempt + 1,
-            "spawn_candidates": conn_info["candidates"]
+            "spawn_candidates": conn_info["candidates"],
+            "fallback_used": False
         }
 
         best_heightmap = heightmap
         best_report = report
 
-        if report["pass"]:
+        if is_pass:
             break
+
+    if not best_report["pass"]:
+        logging.getLogger(__name__).warning("Canyon generation failed connectivity check. Falling back to pure noise canyon.")
+
+        # Fall back to pure noise canyon
+        is_pure_noise = True
+
+        # Create an organic mask for the fallback
+        fallback_df = generate_noise_canyon_mask(
+            rows=rows,
+            cols=cols,
+            seed=seed,
+            warp_strength=warp_strength * 150.0,
+            threshold=1.0 - lane_depth,
+            feature_scale=feature_scale
+        )
+
+        # Recalculate using pure noise mask
+        best_heightmap, new_report = generate_canyon_base(
+            rows=rows,
+            cols=cols,
+            distance_field=fallback_df,
+            map_world_size_x=map_world_size_x,
+            map_world_size_y=map_world_size_y,
+            height_world_units=height_world_units,
+            min_clearance_units=min_clearance_units,
+            seed=seed,
+            feature_scale=feature_scale,
+            warp_strength=warp_strength,
+            lane_width=lane_width,
+            lane_depth=lane_depth,
+            wall_slope=wall_slope,
+            plateau_noise=plateau_noise,
+            roughness=roughness,
+            blur_radius=blur_radius,
+            octaves=octaves,
+            base_terrain=base_terrain,
+            is_pure_noise=True,
+            max_attempts=1  # Prevent infinite recursion
+        )
+
+        best_report["fallback_used"] = True
+        # Keep original failure info but update the map
+        best_report["spawn_candidates"] = new_report["spawn_candidates"]
 
     return best_heightmap.astype(np.float32), best_report

@@ -400,6 +400,8 @@ class GenerationWorker(QThread):
             )
 
             final_warning = ""
+            if getattr(grid, "report", None) and grid.report.get("fallback_used"):
+                final_warning += "Warning: Canyon generator failed to find a fully connected path. Generated a pure noise canyon instead.\n\n"
             if sculpt_warning:
                 final_warning += sculpt_warning + "\n"
             if export_warning:
