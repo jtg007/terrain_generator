@@ -641,7 +641,7 @@ def spawn_required_entities_enhanced(
     elif minimap_z_avg is not None:
         overview_z = max(1087, minimap_z_avg)
     else:
-        overview_z = max(1087, max_terrain_height + 512)
+        overview_z = max(1087, max(map_width, map_height) // 4)
 
     info_overview = vmf_lib.Entity("emp_info_map_overview")
     info_overview.origin = f"{center_x:.1f} {center_y:.1f} {overview_z:.1f}"

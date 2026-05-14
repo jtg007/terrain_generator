@@ -8,8 +8,8 @@ THEME_BLEND_MATERIAL: dict[str, tuple[str, str]] = {
         "common/nature/blend_grass_mountainwall_000",
     ),
     "Desert": (
-        "common/nature/blend_grass_sandfloor009a_000",
-        "common/nature/blend_grass_sandfloor009a_000",
+        "common/terrain/blend_sand02a_rock01a",
+        "common/terrain/blend_sand02a_rock01a",
     ),
     "Snow": (
         "common/terrain/blend_snow01_rock01a",

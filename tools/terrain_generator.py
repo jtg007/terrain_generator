@@ -2553,8 +2553,7 @@ class TerrainGeneratorGUI(QMainWindow):
     def _on_theme_changed_sync(self, index):
         """Handle global theme changes: ground texture list, preview paint list, skybox default."""
         theme_name = self.combo_theme.currentText()
-        prev_mat = self.combo_material.currentData()
-        self._fill_material_combo(theme_name, preserve_path=prev_mat)
+        self._fill_material_combo(theme_name)
         if hasattr(self, "preview_widget"):
             self.preview_widget.set_material_theme(theme_name)
 

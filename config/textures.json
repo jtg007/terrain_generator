@@ -504,7 +504,7 @@
     },
     "Desert": {
       "defaults": {
-        "primary_floor": "common/nature/blend_grass_sandfloor009a_000",
+        "primary_floor": "common/terrain/blend_sand02a_rock01a",
         "primary_cliff": "nature/cliff/stone_cliff_colorado",
         "cheap_floor": "maps/emp_arid/blenddirtdirt_silk",
         "cheap_cliff": "nature/cliffface001b",

@@ -441,7 +441,6 @@ class DisplacementVMF:
 
         # Apply Smart Details if enabled
         terrain_material = self.spec.terrain_material
-        base_terrain_material = terrain_material
         patched_material = None
         if getattr(self.spec, "use_smart_details", False):
             from src.detail_manager import (
@@ -615,9 +614,7 @@ class DisplacementVMF:
             theme_name,
             THEME_BLEND_MATERIAL["Generic"],
         )
-        global_blend_material = patched_material if patched_material else base_terrain_material
-        if "blend" not in global_blend_material.lower():
-            global_blend_material = theme_blend_mat
+        global_blend_material = patched_material if patched_material else theme_blend_mat
 
         if getattr(self.spec, "vpk_index", None) is not None:
             vpk_idx = self.spec.vpk_index

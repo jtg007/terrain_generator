@@ -24,6 +24,7 @@ from vmf_gen import (
     DEFAULT_SAFE_SKYBOX,
     MAX_MAP_DISPINFO,
 )
+from material_manager import THEME_BLEND_MATERIAL
 
 
 def choose_compile_safe_material(
@@ -106,8 +107,8 @@ def main():
     parser.add_argument(
         "-m",
         "--material",
-        default="common/nature/blend_grass_mountainwall_000",
-        help="Terrain material",
+        default=None,
+        help="Terrain material (default: auto-derived from --theme)",
     )
     parser.add_argument("--seed", type=int, default=12345, help="Noise seed")
     parser.add_argument("--octaves", type=int, default=4, help="fBm octaves")
@@ -191,6 +192,10 @@ def main():
     )
     map_width = tiles_x * tile_size
     map_height = tiles_y * tile_size
+    if args.material is None:
+        args.material, _ = THEME_BLEND_MATERIAL.get(
+            args.theme, THEME_BLEND_MATERIAL["Generic"]
+        )
     compile_safe_material = choose_compile_safe_material(
         args.material, map_width, map_height
     )
