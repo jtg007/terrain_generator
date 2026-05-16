@@ -119,7 +119,8 @@ from src.terrain_pipeline import (  # noqa: E402
     NUMBA_AVAILABLE,
 )
 from src.export_utils import export_vmf, get_versioned_path  # noqa: E402
-from src.vmf_gen import (  # noqa: E402
+
+from src.skybox_manager import (  # noqa: E402
     SAFE_EMPIRES_SKYBOXES,
     DEFAULT_SAFE_SKYBOX,
 )
@@ -1006,11 +1007,10 @@ class TerrainGeneratorGUI(QMainWindow):
         lbl_topo.setToolTip("Select the fundamental layout structure")
         topo_row.addWidget(lbl_topo)
         self.combo_topology = QComboBox()
-        self.combo_topology.addItems(
-            [
+        self.combo_topology.addItems([
                 "Canyon Maze",
-            ]
-        )
+                "Urban",
+            ])
         self.combo_topology.setCurrentIndex(0)
         topo_row.addWidget(self.combo_topology, 1)
         sec_terrain_shape.content_layout.addLayout(topo_row)
@@ -2665,8 +2665,10 @@ class TerrainGeneratorGUI(QMainWindow):
             )
             self.spin_height.setValue(self.config_model.height_scale)
             self.spin_skybox_ceiling.setValue(self.config_model.skybox_ceiling)
-            # We currently only have Canyon Maze (index 0 -> "canyon")
-            self.combo_topology.setCurrentIndex(0)
+            if self.config_model.topology.lower() == "urban":
+                self.combo_topology.setCurrentIndex(1)
+            else:
+                self.combo_topology.setCurrentIndex(0)
             self.slider_lane_node_radius.setValue(self.config_model.lane_node_radius)
             self.lbl_lane_node_radius_val.setText(
                 str(self.config_model.lane_node_radius)
@@ -2801,8 +2803,10 @@ class TerrainGeneratorGUI(QMainWindow):
         self.config_model.height_scale = self.spin_height.value()
         self.config_model.skybox_ceiling = self.spin_skybox_ceiling.value()
 
-        # We currently only have Canyon Maze (index 0 -> "canyon")
-        self.config_model.topology = "canyon"
+        if self.combo_topology.currentText() == "Urban":
+            self.config_model.topology = "urban"
+        else:
+            self.config_model.topology = "canyon"
         self.config_model.canyon_natural = False
         self.config_model.lane_node_radius = self.slider_lane_node_radius.value()
         
