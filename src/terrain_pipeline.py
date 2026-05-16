@@ -2359,32 +2359,69 @@ def run_pipeline(
         print("  Step 2c: Generate heights with flat terrain (manual mode)")
         grid = generate_heights(spec, grid)
     else:
-        if spec.generate_lanes:
-            print("  Step 2a: Generate playability mask (Smoothstep distance field)")
-            # Generate procedural layout base
-            nodes, connections = generate_strategic_layout(spec)
-            
-            if spec.custom_layout_nodes or spec.custom_layout_connections:
-                print("    Merging custom drawn layout items with procedural layout.")
-                if spec.custom_layout_nodes:
-                    nodes.extend(spec.custom_layout_nodes)
-                if spec.custom_layout_connections:
-                    connections.extend(spec.custom_layout_connections)
+        if getattr(spec, "topology", "").lower() == "urban":
+            print("  Step 2a: Generate urban layout (Districts and Streets)")
+            from src.urban_generator import plan_districts, generate_urban_street_network, place_blocks, generate_urban_heightmap, validate_vehicle_paths, validate_los, tune_cover
+            districts = plan_districts(spec)
+            nodes, connections = generate_urban_street_network(spec, districts)
 
+            print("  Step 2a(1): Place Blocks")
+            blocks = place_blocks(spec, districts, connections)
+
+            print("  Step 2a(2): Validate Vehicle Paths")
+            validation_result = validate_vehicle_paths(spec, nodes, connections, blocks)
+            
+            for warning in validation_result["warnings"]:
+                logging.getLogger(__name__).warning(warning)
+
+            if not validation_result["valid"] and validation_result["errors"]:
+                raise ValueError("Invalid vehicle paths:\n" + "\n".join(validation_result["errors"]))
+
+            connections = validation_result["adjusted_connections"]
+
+            print("  Step 2a(3): Validate LOS")
+            los_result = validate_los(spec, blocks, connections)
+            for warning in los_result["warnings"]:
+                logging.getLogger(__name__).warning(warning)
+
+            print("  Step 2a(4): Tune Cover")
+            blocks = tune_cover(spec, blocks, los_result["cover_suggestions"])
+
+            print("  Step 2a(5): Generate urban playability mask")
             hard_mask = generate_playability_mask(
                 spec, grid.rows, grid.cols, nodes, connections
             )
             grid.playability_mask = hard_mask
-        else:
-            print(
-                "  Step 2a: Skipping strategic lane generation (generate_lanes=False)"
-            )
-            grid.playability_mask = None
 
-        print(
-            f"  Step 2c: Generate heights with fBm (seed={spec.seed}, octaves={spec.noise_octaves})"
-        )
-        grid = generate_heights(spec, grid)
+            print("  Step 2c: Generate urban heightmap")
+            grid = generate_urban_heightmap(spec, grid, blocks)
+        else:
+            if spec.generate_lanes:
+                print("  Step 2a: Generate playability mask (Smoothstep distance field)")
+                # Generate procedural layout base
+                nodes, connections = generate_strategic_layout(spec)
+
+                if spec.custom_layout_nodes or spec.custom_layout_connections:
+                    print("    Merging custom drawn layout items with procedural layout.")
+                    if spec.custom_layout_nodes:
+                        nodes.extend(spec.custom_layout_nodes)
+                    if spec.custom_layout_connections:
+                        connections.extend(spec.custom_layout_connections)
+
+                hard_mask = generate_playability_mask(
+                    spec, grid.rows, grid.cols, nodes, connections
+                )
+                grid.playability_mask = hard_mask
+            else:
+                print(
+                    "  Step 2a: Skipping strategic lane generation (generate_lanes=False)"
+                )
+                grid.playability_mask = None
+
+            print(
+                f"  Step 2c: Generate heights with fBm (seed={spec.seed}, octaves={spec.noise_octaves})"
+            )
+            grid = generate_heights(spec, grid)
 
     if pure_heights is None:
         pure_heights = grid.heights.copy()

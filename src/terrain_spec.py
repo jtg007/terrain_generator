@@ -20,7 +20,7 @@ class ZoneType:
     RESOURCE = "resource_zone"
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class LayoutNode:
     x: float
     y: float
