@@ -90,7 +90,6 @@ def export_vmf(
     hm_path = mapsrc_dir / f"{output_filename}_temp.png"
     hm_img.save(hm_path)
 
-    calculated_max_height = config_model.height_scale
 
     vmf_spec = PipelineSpec(
         map_name=output_filename,
@@ -132,6 +131,11 @@ def export_vmf(
         hero_prop_density=getattr(config_model, "hero_prop_density", 0.5),
         custom_tile_materials=spec.custom_tile_materials,
         custom_tile_paint_target=getattr(spec, "custom_tile_paint_target", "floor"),
+        topology=getattr(spec, "topology", "canyon"),
+        urban_blocks=getattr(grid, "urban_blocks", None),
+        street_cover_points=getattr(spec, "street_cover_points", None),
+        compile_budget=getattr(spec, "compile_budget", None),
+        resource_elevation=getattr(spec, "resource_elevation", None),
     )
 
     vmf_gen = DisplacementVMF(vmf_spec)
@@ -139,6 +143,28 @@ def export_vmf(
 
     vmf_path = mapsrc_dir / f"{output_filename}.vmf"
     vmf_gen.generate_vmf(str(vmf_path))
+
+    # After generation, check if budget report was generated and append to warning if reductions applied
+    if getattr(vmf_spec, "_urban_budget_report", None):
+        report = vmf_spec._urban_budget_report
+
+        # Add the full report string
+        report_str = (
+            f"Urban Compile Budget Report:\n"
+            f"  Brushes: {report.brush_count}\n"
+            f"  Static Props: {report.static_prop_count}\n"
+            f"  Detail Props: {report.detail_prop_count}\n"
+            f"  Roofs: {report.roof_count}\n"
+            f"  Ruined Blocks: {report.ruined_block_count}\n"
+            f"  Total Entities: {report.entity_count}\n"
+            f"  Est. Vis Complexity: {report.estimated_vis_complexity}\n"
+            f"  Within Budget: {report.within_budget}\n"
+        )
+
+        if report.reductions_applied:
+            report_str += "\nUrban Compile Budget Reductions Applied:\n- " + "\n- ".join(report.reductions_applied)
+
+        warning = (warning + "\n\n" if warning else "") + report_str
 
     origin_x = -(map_width // 2)
     origin_y = -(map_height // 2)

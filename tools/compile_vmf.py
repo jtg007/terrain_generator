@@ -61,7 +61,7 @@ def compile_vmf(
     vmf_name = vmf_path.name
     # Project root is the parent of mapsrc/
     project_root = vmf_path.parent.parent
-    mapsrc_dir = project_root / "mapsrc"
+    project_root / "mapsrc"
     maps_dir = project_root / "maps"
     maps_dir.mkdir(parents=True, exist_ok=True)
 

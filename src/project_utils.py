@@ -2,12 +2,11 @@ import json
 import zlib
 import base64
 import numpy as np
-from dataclasses import asdict, is_dataclass
-from typing import Dict, Any, List, Tuple, Optional
-from pathlib import Path
+from dataclasses import asdict
+from typing import Dict, Any, Tuple
 
 from src.config_model import GUIConfigModel
-from src.terrain_spec import LayoutNode, LayoutConnection, ZoneType
+from src.terrain_spec import LayoutNode, LayoutConnection
 
 CURRENT_PROJECT_VERSION = 1
 

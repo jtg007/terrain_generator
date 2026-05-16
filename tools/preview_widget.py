@@ -1605,7 +1605,7 @@ class MapPreviewWidget(QWidget):
             max_h = mid_h + 256.0
 
         mid_h = (min_h + max_h) * 0.5
-        half_range = max((max_h - min_h) * 0.5, 1.0)
+        max((max_h - min_h) * 0.5, 1.0)
 
         # Soft tone mapping: linear near the center, compresses extreme edits smoothly.
         normalized = (combined - min_h) / max(max_h - min_h, 1.0)

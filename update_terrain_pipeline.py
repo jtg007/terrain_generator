@@ -1,4 +1,3 @@
-import re
 
 with open('src/terrain_pipeline.py', 'r') as f:
     content = f.read()

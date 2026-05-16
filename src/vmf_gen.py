@@ -8,11 +8,10 @@ import os
 import sys
 import math
 import json
-import random
 import numpy as np
 from PIL import Image
 from pathlib import Path
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, List, Tuple, Dict, Any
 
 from src.terrain_pipeline import slope_to_alpha
@@ -20,7 +19,7 @@ from src.material_manager import THEME_BLEND_MATERIAL
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "tools" / "vmflib"))
 from vmflib import vmf
-from vmflib.types import Vertex, Output
+from vmflib.types import Vertex
 from vmflib.brush import DispInfo
 from vmflib.tools import Block
 from vmflib import vmf as vmf_lib
@@ -30,13 +29,11 @@ from src.displacement_builder import (
     apply_nodraw_to_terrain_except_top,
     point_to_segment_dist,
     flatten_terrain_at_location,
-    calculate_yaw_to_center,
     get_terrain_height_at
 )
 
 from src.entity_placer import (
     spawn_base_entities_enhanced,
-    spawn_base_buildings,
     spawn_resource_nodes_enhanced,
     spawn_custom_resources,
     spawn_info_nodes,
@@ -46,9 +43,6 @@ from src.entity_placer import (
 )
 
 from src.skybox_manager import (
-    SAFE_EMPIRES_SKYBOXES,
-    SAFE_EMPIRES_SKYBOX_SET,
-    DEFAULT_SAFE_SKYBOX,
     WORLD_MIN_COORD,
     WORLD_MAX_COORD,
     choose_safe_skybox,
@@ -102,6 +96,12 @@ class PipelineSpec:
     custom_tile_materials: Optional[Dict[Tuple[int, int], str]] = None
     custom_tile_paint_target: str = "floor"
     
+    topology: str = "canyon"
+    urban_blocks: Optional[List[Any]] = None
+    street_cover_points: Optional[List[Any]] = None
+    compile_budget: Optional[Any] = None
+    resource_elevation: Optional[Any] = None
+
     current_theme: str = "Temperate"
     terrain_texture_scale: Optional[float] = None  # None = Auto (theme-based)
     corridor_detail_width: int = 2048
@@ -274,6 +274,53 @@ class DisplacementVMF:
         self.heightmap = arr
         self.heightmap_height, self.heightmap_width = arr.shape
         return arr
+
+    def _spawn_urban_entities(self, spec, heightmap: np.ndarray, vmf_map, blocks):
+        rules: Dict[str, Any] = {}
+        rules_path = Path(spec.rules_file)
+        if rules_path.exists():
+            import json
+            with open(rules_path, "r") as f:
+                rules = json.load(f)
+        rules["base_clear_radius"] = spec.base_clear_radius
+
+        skip_commander = spec.disable_commander or spec.minimal_map or spec.terrain_only
+        skip_buildings = spec.disable_buildings or spec.minimal_map or spec.terrain_only
+        skip_resources = spec.disable_resource_nodes or spec.minimal_map or spec.terrain_only
+        skip_misc = spec.disable_capture_points or spec.minimal_map or spec.terrain_only
+        skip_player_spawns = spec.terrain_only
+
+        tiles_x = spec.terrain_tiles_x
+        tiles_y = spec.terrain_tiles_y
+        power = spec.terrain_power
+        tile_size = spec.terrain_tile_size
+        height_scale = spec.terrain_max_height
+
+        map_width = tiles_x * tile_size
+        map_height = tiles_y * tile_size
+
+        origin_x = int(-map_width / 2)
+        origin_y = int(-map_height / 2)
+        map_center_x = 0.0
+        map_center_y = 0.0
+
+        imp_base_x = int(spec.custom_imp_base_x) if spec.custom_imp_base_x is not None else spec.default_imp_base()[0]
+        imp_base_y = int(spec.custom_imp_base_y) if spec.custom_imp_base_y is not None else spec.default_imp_base()[1]
+        nf_base_x = int(spec.custom_nf_base_x) if spec.custom_nf_base_x is not None else spec.default_nf_base()[0]
+        nf_base_y = int(spec.custom_nf_base_y) if spec.custom_nf_base_y is not None else spec.default_nf_base()[1]
+
+        int(spec.terrain_actual_max) if spec.terrain_actual_max else int(np.max(heightmap) * height_scale)
+
+        from src.entity_placer import spawn_urban_entities_phase7
+        spawn_urban_entities_phase7(
+            vmf_map, spec, blocks, heightmap, origin_x, origin_y,
+            map_width, map_height, max_height=height_scale,
+            tiles_x=tiles_x, tiles_y=tiles_y, power=power, rules=rules,
+            imp_base_x=imp_base_x, imp_base_y=imp_base_y,
+            nf_base_x=nf_base_x, nf_base_y=nf_base_y, map_center_x=map_center_x, map_center_y=map_center_y,
+            skip_commander=skip_commander, skip_buildings=skip_buildings, skip_resources=skip_resources,
+            skip_misc=skip_misc, skip_player_spawns=skip_player_spawns
+        )
 
     def _spawn_entities(self, spec, heightmap: np.ndarray, vmf_map, enhanced: bool):
         rules: Dict[str, Any] = {}
@@ -497,8 +544,6 @@ class DisplacementVMF:
                 "must stay within "
                 f"[{WORLD_MIN_COORD + WORLD_SAFE_MARGIN}, {WORLD_MAX_COORD - WORLD_SAFE_MARGIN}]."
             )
-        map_center_x = 0.0
-        map_center_y = 0.0
 
         base_layout = rules.get("base_layout", {})
 
@@ -779,19 +824,16 @@ class DisplacementVMF:
                 # Calculate if this tile is deep scenery, under bases, or beneath water
                 tile_cx = offset_x + tile_size / 2
                 tile_cy = offset_y + tile_size / 2
-                is_scenery = zone_score < 0.3
-                is_under_base = False
                 base_radius = self.spec.base_clear_radius
 
                 if imp_base_x is not None and imp_base_y is not None:
                     if math.sqrt((tile_cx - imp_base_x)**2 + (tile_cy - imp_base_y)**2) <= base_radius:
-                        is_under_base = True
+                        pass
                 if nf_base_x is not None and nf_base_y is not None:
                     if math.sqrt((tile_cx - nf_base_x)**2 + (tile_cy - nf_base_y)**2) <= base_radius:
-                        is_under_base = True
+                        pass
 
                 # Check if tile is completely underwater
-                is_underwater = False
                 if "water_level" in rules:
                     water_level = float(rules["water_level"])
                     # Check if the highest point of the tile is below water level
@@ -804,7 +846,7 @@ class DisplacementVMF:
                             if hz > max_tile_z:
                                 max_tile_z = hz
                     if max_tile_z < water_level:
-                        is_underwater = True
+                        pass
 
                 # Detail props are now handled by the Smart Detail system
                 # which globally scales density based on map size.
@@ -1078,7 +1120,11 @@ class DisplacementVMF:
 
         spawn_lighting(valve_map, rules, skyname)
 
-        self._spawn_entities(self.spec, height_array, valve_map, enhanced=self.spec.use_enhanced_spawning)
+        if getattr(self.spec, "topology", "").lower() == "urban" and getattr(self.spec, "urban_blocks", None):
+            # Phase 7: Use urban blocks for spawning bases/resources if needed
+            self._spawn_urban_entities(self.spec, height_array, valve_map, self.spec.urban_blocks)
+        else:
+            self._spawn_entities(self.spec, height_array, valve_map, enhanced=self.spec.use_enhanced_spawning)
 
         # Spawn func_detail_blocker for bases
         if getattr(self.spec, "use_smart_details", False):
@@ -1097,7 +1143,7 @@ class DisplacementVMF:
                 h = blocker_size
                 thickness = 128
 
-                blocker = vmf_lib.Entity("func_detail_blocker")
+                vmf_lib.Entity("func_detail_blocker")
                 # Add brush using block
                 blocker_brush = Block(
                     Vertex(bx, by, bz + 32), # centered at z + 32
@@ -1135,6 +1181,22 @@ class DisplacementVMF:
             origin_x=origin_x,
             origin_y=origin_y,
         )
+
+        # Phase 4, 6 & 8: Urban Vertical Layers, Props, and Budget
+        if getattr(self.spec, "topology", "").lower() == "urban" and getattr(self.spec, "urban_blocks", None):
+            from src.urban_generator import generate_vertical_layers
+            from src.entity_placer import spawn_urban_props
+            from src.urban_budget import enforce_budget
+
+            valve_map._urban_initial_world_len = len(valve_map.world.children)
+            valve_map._urban_initial_children_len = len(valve_map.children)
+
+            generate_vertical_layers(self.spec, self.spec.urban_blocks, valve_map)
+            spawn_urban_props(valve_map, self.spec, self.spec.urban_blocks)
+
+            blocks, report = enforce_budget(self.spec, self.spec.urban_blocks, valve_map, self.spec.compile_budget)
+            self.spec.urban_blocks = blocks
+            self.spec._urban_budget_report = report
 
         valve_map.write_vmf(output_path)
         print(f"VMF saved: {output_path}")
