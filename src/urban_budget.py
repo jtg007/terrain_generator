@@ -4,8 +4,9 @@ from typing import List, Tuple, Any
 @dataclass
 class CompileBudget:
     max_brushes: int = 4096
-    max_static_props: int = 512
-    max_detail_props: int = 1024
+    # Source SDK 2013 hard limit (public/bspfile.h MAX_MAP_STATIC_PROPS)
+    max_static_props: int = 4096
+    max_detail_props: int = 4096
     max_roofs: int = 64
     max_ruined_blocks: int = 32
     max_total_entity_count: int = 1024
