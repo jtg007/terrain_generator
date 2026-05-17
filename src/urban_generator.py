@@ -170,10 +170,10 @@ def generate_urban_street_network(spec: UrbanSpec, districts: List[UrbanDistrict
 
                 if dist < spec.street_width * 2:
                     ctype = ZoneType.MAIN_LANE
-                    width = max(384.0, spec.street_width * 1.5)
+                    width = spec.street_width * 1.5
                 else:
                     ctype = ZoneType.SIDE_ROUTE
-                    width = max(384.0, spec.street_width)
+                    width = spec.street_width
 
                 connections.append(LayoutConnection(curr_node, right_node, width, ctype, [(curr_node.x, curr_node.y), (right_node.x, right_node.y)]))
 
@@ -188,10 +188,10 @@ def generate_urban_street_network(spec: UrbanSpec, districts: List[UrbanDistrict
 
                 if dist < spec.street_width * 2:
                     ctype = ZoneType.MAIN_LANE
-                    width = max(384.0, spec.street_width * 1.5)
+                    width = spec.street_width * 1.5
                 else:
                     ctype = ZoneType.SIDE_ROUTE
-                    width = max(384.0, spec.street_width)
+                    width = spec.street_width
 
                 connections.append(LayoutConnection(curr_node, down_node, width, ctype, [(curr_node.x, curr_node.y), (down_node.x, down_node.y)]))
 
@@ -310,6 +310,7 @@ def place_blocks(spec: UrbanSpec, districts: List[UrbanDistrict], streets: List[
 
             # Block dimensions
             block_w = rng.uniform(spec.block_size_min, min(spec.block_size_max, actual_spacing_x - spec.street_width))
+            block_d = rng.uniform(spec.block_size_min, min(spec.block_size_max, actual_spacing_y - spec.street_width))
 
             # Block Height
             base_height = rng.uniform(spec.block_height_min, spec.block_height_max)
@@ -349,8 +350,9 @@ def place_blocks(spec: UrbanSpec, districts: List[UrbanDistrict], streets: List[
                 grid_y=gy,
                 world_x=cell_center_x,
                 world_y=cell_center_y,
-                width=block_w,
-                height=height,
+                footprint_w=block_w,
+                footprint_d=block_d,
+                elevation_h=height,
                 block_type=btype,
                 ramp_side=ramp_side,
                 district=target_district.district_type,
@@ -390,18 +392,13 @@ def generate_urban_heightmap(spec: UrbanSpec, grid: HeightGrid, blocks: List[Urb
             continue
 
         # Add floor_height to the block's relative height to get absolute world Z
-        abs_height = floor_height + block.height
+        abs_height = floor_height + block.elevation_h
 
         # Determine bounds
-        min_x = block.world_x - block.width / 2
-        max_x = block.world_x + block.width / 2
-        min_y = block.world_y - block.height / 2  # NOTE: block.height here refers to Block's Y-size, but block has no length property. We'll use width for both or assume width is square. Wait, in place_blocks I did `block_h_dim`. Ah, `UrbanBlock` only has `width` and `height`. We assigned Z-elevation to `height`. We need block depth. Let's assume square footprints (width x width) for now.
-
-        # Let's fix min_y / max_y using width as size dimension (square block)
-        # Actually the UrbanBlock only has width and height (which is used for Z).
-        # So we'll use width for X and Y dimensions.
-        min_y = block.world_y - block.width / 2
-        max_y = block.world_y + block.width / 2
+        min_x = block.world_x - block.footprint_w / 2
+        max_x = block.world_x + block.footprint_w / 2
+        min_y = block.world_y - block.footprint_d / 2
+        max_y = block.world_y + block.footprint_d / 2
 
         mask = (WX >= min_x) & (WX <= max_x) & (WY >= min_y) & (WY <= max_y)
         new_heights[mask] = abs_height
@@ -479,42 +476,13 @@ def validate_vehicle_paths(spec: UrbanSpec, nodes: List[LayoutNode], connections
 
     # 2 & 3. CLEARANCE
     for c in adjusted_conns:
-        target_width = 384.0
+        # Strictly reporting issues, no mutation of connection widths
         if c.type == ZoneType.MAIN_LANE:
-            target_width = 768.0
-
-        if c.width < target_width:
-            deficit = target_width - c.width
-            c.width = target_width
-            result["warnings"].append(f"Connection between ({c.start_node.x:.0f}, {c.start_node.y:.0f}) and ({c.end_node.x:.0f}, {c.end_node.y:.0f}) widened from {c.width-deficit:.0f} to {target_width:.0f}")
-
-            # Shrink adjacent blocks
-            # Connection is either horizontal or vertical
-            is_horizontal = abs(c.start_node.y - c.end_node.y) < 1.0
-            mid_x = (c.start_node.x + c.end_node.x) / 2
-            mid_y = (c.start_node.y + c.end_node.y) / 2
-
-            for b in blocks:
-                if b.block_type == BlockType.OPEN_LOT:
-                    continue
-                # If block is roughly adjacent to this connection
-                if is_horizontal:
-                    # Check if block is above or below the street and within its horizontal span
-                    min_sx = min(c.start_node.x, c.end_node.x)
-                    max_sx = max(c.start_node.x, c.end_node.x)
-                    if min_sx <= b.world_x <= max_sx and abs(b.world_y - mid_y) < (b.width/2 + target_width):
-                        # Attempt to shrink block width
-                        b.width = max(128.0, b.width - deficit)
-                        # Push block center away
-                        sign = 1 if b.world_y > mid_y else -1
-                        b.world_y += sign * (deficit / 2)
-                else:
-                    min_sy = min(c.start_node.y, c.end_node.y)
-                    max_sy = max(c.start_node.y, c.end_node.y)
-                    if min_sy <= b.world_y <= max_sy and abs(b.world_x - mid_x) < (b.width/2 + target_width):
-                        b.width = max(128.0, b.width - deficit)
-                        sign = 1 if b.world_x > mid_x else -1
-                        b.world_x += sign * (deficit / 2)
+            if c.width < 512.0:
+                result["warnings"].append(f"Main lane between ({c.start_node.x:.0f}, {c.start_node.y:.0f}) and ({c.end_node.x:.0f}, {c.end_node.y:.0f}) is narrower than recommended ({c.width:.0f} < 512).")
+        else:
+            if c.width < 384.0:
+                result["warnings"].append(f"Side route between ({c.start_node.x:.0f}, {c.start_node.y:.0f}) and ({c.end_node.x:.0f}, {c.end_node.y:.0f}) is narrower than recommended ({c.width:.0f} < 384).")
 
     # 4. DEADLOCK DETECTION
     for node in nodes:
@@ -531,16 +499,14 @@ def validate_vehicle_paths(spec: UrbanSpec, nodes: List[LayoutNode], connections
             if b.block_type == BlockType.OPEN_LOT:
                 continue
             dist = math.sqrt((b.world_x - node.x)**2 + (b.world_y - node.y)**2)
-            if dist < (b.width/2 + 384):
+            max_dim = max(b.footprint_w, b.footprint_d)
+            if dist < (max_dim/2 + 384):
                 close_blocks.append(b)
 
         if len(close_blocks) >= 4:
             # Check clearance in all 4 directions (+x, -x, +y, -y)
-            # If constrained, downgrade one block to open lot
-            # For simplicity, if we have 4 very close blocks, we downgrade the furthest one.
-            furthest = max(close_blocks, key=lambda b: math.sqrt((b.world_x - node.x)**2 + (b.world_y - node.y)**2))
-            furthest.block_type = BlockType.OPEN_LOT
-            result["warnings"].append(f"Downgraded block at {furthest.world_x:.0f}, {furthest.world_y:.0f} to OPEN_LOT to prevent deadlock.")
+            # If constrained, report warning without downgrading or moving blocks
+            result["warnings"].append(f"Deadlock potential at intersection {node.x:.0f}, {node.y:.0f} - enclosed tightly by 4 blocks.")
 
     # 5. TURN RADIUS
     for node in nodes:
@@ -562,19 +528,8 @@ def validate_vehicle_paths(spec: UrbanSpec, nodes: List[LayoutNode], connections
                 break
 
         if adj_node and adj_node.radius < target_radius:
-            deficit = target_radius - adj_node.radius
-            adj_node.radius = target_radius
-            node.radius = target_radius
-
-            result["warnings"].append(f"Intersection at ({node.x:.0f}, {node.y:.0f}) turn radius increased to {target_radius:.0f}")
-
-            # Shrink adjacent blocks
-            for b in blocks:
-                if b.block_type == BlockType.OPEN_LOT:
-                    continue
-                dist = math.sqrt((b.world_x - node.x)**2 + (b.world_y - node.y)**2)
-                if dist < (b.width/2 + target_radius):
-                    b.width = max(128.0, b.width - deficit)
+            # Report issue without modifying radius
+            result["warnings"].append(f"Intersection at ({node.x:.0f}, {node.y:.0f}) has a small turn radius ({adj_node.radius:.0f} < {target_radius:.0f}).")
 
     return result
 
@@ -605,11 +560,12 @@ def validate_los(spec: UrbanSpec, blocks: List[UrbanBlock], connections: List[La
         if block.block_type not in (BlockType.INTACT, BlockType.RUINED):
             return False, float('inf')
 
-        bw2 = block.width / 2.0
+        bw2 = block.footprint_w / 2.0
+        bd2 = block.footprint_d / 2.0
         min_x = block.world_x - bw2
         max_x = block.world_x + bw2
-        min_y = block.world_y - bw2
-        max_y = block.world_y + bw2
+        min_y = block.world_y - bd2
+        max_y = block.world_y + bd2
 
         tmin = float('-inf')
         tmax = float('inf')
@@ -785,50 +741,41 @@ def _create_wedge_brush(x: float, y: float, z: float, width: float, length: floa
         pt_ne = VMFVertex(x + w2, y + l2, z + height)
 
         top = VMFSide(VMFPlane(pt_ne, pt_nw, p_sw), material)
-        back = VMFSide(VMFPlane(p_nw, p_ne, pt_ne), material)
+        back = VMFSide(VMFPlane(p_nw, p_ne, pt_ne), material) # North face
         east = VMFSide(VMFPlane(p_se, pt_ne, p_ne), material)
         west = VMFSide(VMFPlane(pt_nw, p_sw, p_nw), material)
+        b.children.extend([bottom, top, back, east, west])
 
     elif direction == RampPlacement.SOUTH: # high in South, low in North
         pt_sw = VMFVertex(x - w2, y - l2, z + height)
         pt_se = VMFVertex(x + w2, y - l2, z + height)
 
         top = VMFSide(VMFPlane(pt_sw, pt_se, p_ne), material)
-        back = VMFSide(VMFPlane(p_se, p_sw, pt_sw), material)
+        back = VMFSide(VMFPlane(p_se, p_sw, pt_sw), material) # South face
         east = VMFSide(VMFPlane(pt_se, p_se, p_ne), material)
         west = VMFSide(VMFPlane(p_sw, pt_sw, p_nw), material)
+        b.children.extend([bottom, top, back, east, west])
 
     elif direction == RampPlacement.EAST: # high in East, low in West
         pt_se = VMFVertex(x + w2, y - l2, z + height)
         pt_ne = VMFVertex(x + w2, y + l2, z + height)
 
         top = VMFSide(VMFPlane(pt_ne, pt_se, p_sw), material)
-        back = VMFSide(VMFPlane(p_ne, p_se, pt_se), material)
-        east = VMFSide(VMFPlane(pt_se, p_ne, pt_ne), material) # Wait, east is the back face?
-        # Actually back is the high face. For East ramp, high face is East.
-        # East face (Back):
-        back = VMFSide(VMFPlane(p_se, p_ne, pt_ne), material)
-        # North face:
+        back = VMFSide(VMFPlane(p_se, p_ne, pt_ne), material) # East face
         north = VMFSide(VMFPlane(pt_ne, p_ne, p_nw), material)
-        # South face:
         south = VMFSide(VMFPlane(p_sw, p_se, pt_se), material)
-
         b.children.extend([bottom, top, back, north, south])
-        return b
 
     elif direction == RampPlacement.WEST: # high in West, low in East
         pt_sw = VMFVertex(x - w2, y - l2, z + height)
         pt_nw = VMFVertex(x - w2, y + l2, z + height)
 
         top = VMFSide(VMFPlane(pt_sw, pt_nw, p_ne), material)
-        back = VMFSide(VMFPlane(p_nw, p_sw, pt_sw), material)
+        back = VMFSide(VMFPlane(p_nw, p_sw, pt_sw), material) # West face
         north = VMFSide(VMFPlane(p_nw, pt_nw, p_ne), material)
         south = VMFSide(VMFPlane(pt_sw, p_sw, p_se), material)
-
         b.children.extend([bottom, top, back, north, south])
-        return b
 
-    b.children.extend([bottom, top, back, east, west])
     return b
 
 def generate_vertical_layers(spec: UrbanSpec, blocks: List[UrbanBlock], vmf_doc) -> None:
@@ -898,33 +845,34 @@ def generate_vertical_layers(spec: UrbanSpec, blocks: List[UrbanBlock], vmf_doc)
         if state.current_type == BlockType.OPEN_LOT:
             return
 
-        bw2 = b.width / 2.0
+        bw2 = b.footprint_w / 2.0
+        bd2 = b.footprint_d / 2.0
         wall_thickness = 64.0
 
         if state.current_type in (BlockType.INTACT, BlockType.RUINED):
             # 4 Perimeter walls
             # North Wall
-            n_y = b.world_y + bw2 - wall_thickness / 2.0
+            n_y = b.world_y + bd2 - wall_thickness / 2.0
             # South Wall
-            s_y = b.world_y - bw2 + wall_thickness / 2.0
+            s_y = b.world_y - bd2 + wall_thickness / 2.0
             # East Wall
             e_x = b.world_x + bw2 - wall_thickness / 2.0
             # West Wall
             w_x = b.world_x - bw2 + wall_thickness / 2.0
 
             walls = [
-                (b.world_x, n_y, b.width, wall_thickness),
-                (b.world_x, s_y, b.width, wall_thickness),
-                (e_x, b.world_y, wall_thickness, b.width - wall_thickness * 2),
-                (w_x, b.world_y, wall_thickness, b.width - wall_thickness * 2)
+                (b.world_x, n_y, b.footprint_w, wall_thickness),
+                (b.world_x, s_y, b.footprint_w, wall_thickness),
+                (e_x, b.world_y, wall_thickness, b.footprint_d - wall_thickness * 2),
+                (w_x, b.world_y, wall_thickness, b.footprint_d - wall_thickness * 2)
             ]
 
             for wx, wy, ww, wl in walls:
                 if state.irregular_walls:
-                    offset = b.height * rng.uniform(-0.15, 0.15)
-                    h = max(64.0, b.height + offset)
+                    offset = b.elevation_h * rng.uniform(-0.15, 0.15)
+                    h = max(64.0, b.elevation_h + offset)
                 else:
-                    h = b.height
+                    h = b.elevation_h
 
                 wall_block = VMFBlock(VMFVertex(wx, wy, floor_height + h/2.0), (ww, wl, h), facade_material)
                 apply_nodraw_to_terrain_except_top(wall_block, facade_material)
@@ -937,7 +885,7 @@ def generate_vertical_layers(spec: UrbanSpec, blocks: List[UrbanBlock], vmf_doc)
             if state.current_type == BlockType.INTACT:
                 # Roof
                 roof_thickness = 32.0
-                roof_block = VMFBlock(VMFVertex(b.world_x, b.world_y, floor_height + b.height - roof_thickness/2.0), (b.width, b.width, roof_thickness), facade_material)
+                roof_block = VMFBlock(VMFVertex(b.world_x, b.world_y, floor_height + b.elevation_h - roof_thickness/2.0), (b.footprint_w, b.footprint_d, roof_thickness), facade_material)
                 for side in roof_block.brush.children:
                     side.material = "tools/toolsnodraw"
                 roof_block.brush.children[0].material = facade_material # Top face
@@ -946,25 +894,26 @@ def generate_vertical_layers(spec: UrbanSpec, blocks: List[UrbanBlock], vmf_doc)
                 # Ramp
                 if state.ramp_enabled and b.ramp_side:
                     ramp_w = 192.0
-                    ramp_l = b.width
+                    ramp_l = b.footprint_w
 
                     if b.ramp_side in (RampPlacement.NORTH, RampPlacement.SOUTH):
                         rx = b.world_x
-                        ry = b.world_y + (b.width/2.0 + ramp_w/2.0) if b.ramp_side == RampPlacement.NORTH else b.world_y - (b.width/2.0 + ramp_w/2.0)
-                        ramp_brush = _create_wedge_brush(rx, ry, floor_height, ramp_l, ramp_w, b.height, b.ramp_side, facade_material)
+                        ry = b.world_y + (b.footprint_d/2.0 + ramp_w/2.0) if b.ramp_side == RampPlacement.NORTH else b.world_y - (b.footprint_d/2.0 + ramp_w/2.0)
+                        ramp_brush = _create_wedge_brush(rx, ry, floor_height, ramp_l, ramp_w, b.elevation_h, b.ramp_side, facade_material)
                         state.brushes.append(ramp_brush)
                     else:
-                        rx = b.world_x + (b.width/2.0 + ramp_w/2.0) if b.ramp_side == RampPlacement.EAST else b.world_x - (b.width/2.0 + ramp_w/2.0)
+                        ramp_l = b.footprint_d
+                        rx = b.world_x + (b.footprint_w/2.0 + ramp_w/2.0) if b.ramp_side == RampPlacement.EAST else b.world_x - (b.footprint_w/2.0 + ramp_w/2.0)
                         ry = b.world_y
-                        ramp_brush = _create_wedge_brush(rx, ry, floor_height, ramp_w, ramp_l, b.height, b.ramp_side, facade_material)
+                        ramp_brush = _create_wedge_brush(rx, ry, floor_height, ramp_w, ramp_l, b.elevation_h, b.ramp_side, facade_material)
                         state.brushes.append(ramp_brush)
 
                 # INTERNAL_ACCESS: TODO reserve enum value, skip implementation
 
         elif state.current_type == BlockType.RUBBLE:
             # Low raised brush
-            rubble_h = b.height
-            rubble_block = VMFBlock(VMFVertex(b.world_x, b.world_y, floor_height + rubble_h/2.0), (b.width, b.width, rubble_h), facade_material)
+            rubble_h = b.elevation_h
+            rubble_block = VMFBlock(VMFVertex(b.world_x, b.world_y, floor_height + rubble_h/2.0), (b.footprint_w, b.footprint_d, rubble_h), facade_material)
             apply_nodraw_to_terrain_except_top(rubble_block, facade_material)
             state.brushes.append(rubble_block.brush)
 

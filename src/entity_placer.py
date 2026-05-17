@@ -760,12 +760,13 @@ def spawn_urban_props(vmf_doc, spec, blocks) -> None:
             if block.block_type == BlockType.RUBBLE:
                 density = 0.6 * density_modifier
                 # perimeter edges
-                bw2 = block.width / 2.0
+                bw2 = block.footprint_w / 2.0
+                bd2 = block.footprint_d / 2.0
                 corners = [
-                    (block.world_x - bw2, block.world_y - bw2),
-                    (block.world_x + bw2, block.world_y - bw2),
-                    (block.world_x + bw2, block.world_y + bw2),
-                    (block.world_x - bw2, block.world_y + bw2)
+                    (block.world_x - bw2, block.world_y - bd2),
+                    (block.world_x + bw2, block.world_y - bd2),
+                    (block.world_x + bw2, block.world_y + bd2),
+                    (block.world_x - bw2, block.world_y + bd2)
                 ]
                 # Split each edge into segments of say 256 units
                 for i in range(4):
@@ -797,27 +798,27 @@ def spawn_urban_props(vmf_doc, spec, blocks) -> None:
                 if block.downgraded_flat_walls:
                     # Place partial wall props along the edge
                     # Just add one per block roughly
-                    add_prop(block.world_x, block.world_y + block.width/2 - 32, floor_height + block.height, rng.choice(partial_wall_models))
+                    add_prop(block.world_x, block.world_y + block.footprint_d/2 - 32, floor_height + block.elevation_h, rng.choice(partial_wall_models))
 
                 # 1-3 debris piles
                 num_debris = int(rng.uniform(1, 4) * density_modifier)
                 for _ in range(num_debris):
-                    px = block.world_x + rng.uniform(-block.width/2.5, block.width/2.5)
-                    py = block.world_y + rng.uniform(-block.width/2.5, block.width/2.5)
-                    add_prop(px, py, floor_height + block.height, rng.choice(debris_models))
+                    px = block.world_x + rng.uniform(-block.footprint_w/2.5, block.footprint_w/2.5)
+                    py = block.world_y + rng.uniform(-block.footprint_d/2.5, block.footprint_d/2.5)
+                    add_prop(px, py, floor_height + block.elevation_h, rng.choice(debris_models))
 
                 if getattr(block, "needs_rooftop_cover", False):
                     num_sb = int(rng.uniform(2, 5) * density_modifier)
                     for _ in range(num_sb):
-                        px = block.world_x + rng.uniform(-block.width/3, block.width/3)
-                        py = block.world_y + rng.uniform(-block.width/3, block.width/3)
-                        add_prop(px, py, floor_height + block.height + 16, rng.choice(sandbag_models))
+                        px = block.world_x + rng.uniform(-block.footprint_w/3, block.footprint_w/3)
+                        py = block.world_y + rng.uniform(-block.footprint_d/3, block.footprint_d/3)
+                        add_prop(px, py, floor_height + block.elevation_h + 16, rng.choice(sandbag_models))
 
             elif block.block_type == BlockType.OPEN_LOT:
                 num_debris = int(rng.uniform(1, 4) * density_modifier * 0.2) # scattered
                 for _ in range(num_debris):
-                    px = block.world_x + rng.uniform(-block.width/2, block.width/2)
-                    py = block.world_y + rng.uniform(-block.width/2, block.width/2)
+                    px = block.world_x + rng.uniform(-block.footprint_w/2, block.footprint_w/2)
+                    py = block.world_y + rng.uniform(-block.footprint_d/2, block.footprint_d/2)
                     add_prop(px, py, floor_height, rng.choice(debris_models))
 
                 # Craters (displacement brushes)
