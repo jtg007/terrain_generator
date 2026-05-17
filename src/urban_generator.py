@@ -461,7 +461,7 @@ def generate_urban_heightmap_terrain_first(spec: UrbanSpec, grid: HeightGrid, bl
     """
     import numpy as np
     import random
-    from scipy.ndimage import gaussian_filter
+    from src.compat_utils import scipy_gaussian_filter_equivalent
 
     rng = random.Random(spec.seed)
     rows = grid.rows
@@ -545,12 +545,12 @@ def generate_urban_heightmap_terrain_first(spec: UrbanSpec, grid: HeightGrid, bl
     urban_alpha[grid.street_mask] = 0
 
     # Feathering (blur alpha map)
-    urban_alpha = gaussian_filter(urban_alpha, sigma=2.0) # approx 64 units depending on cell size
+    urban_alpha = scipy_gaussian_filter_equivalent(urban_alpha, sigma=2.0) # approx 64 units depending on cell size
 
     grid.urban_alpha_map = np.clip(np.round(urban_alpha), 0, 255).astype(np.uint8)
 
     # Final very cautious smoothing to avoid sharp edges
-    new_heights = gaussian_filter(new_heights, sigma=1.0)
+    new_heights = scipy_gaussian_filter_equivalent(new_heights, sigma=1.0)
     grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
 
     grid.urban_blocks = blocks
