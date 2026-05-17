@@ -19,7 +19,6 @@ All coordinate calculations use integer grid positions to prevent T-junctions.
 """
 
 import copy
-import logging
 import math
 import random
 import struct
@@ -997,13 +996,13 @@ def smooth_heights(grid: HeightGrid, iterations: int = 1) -> HeightGrid:
     Each vertex becomes the average of itself and 8 neighbors.
     Border vertices remain unchanged (no neighbors outside grid).
     """
-    from scipy.ndimage import uniform_filter
+    from src.compat_utils import scipy_uniform_filter_equivalent
 
     original_heights = grid.heights.copy()
     current_heights = grid.heights.copy()
 
     for _ in range(iterations):
-        new_heights = uniform_filter(current_heights, size=3, mode='reflect')
+        new_heights = scipy_uniform_filter_equivalent(current_heights, size=3)
 
         # Explicitly overwrite 1-pixel border to remain unchanged
         new_heights[0, :] = current_heights[0, :]
