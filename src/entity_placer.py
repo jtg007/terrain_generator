@@ -1162,30 +1162,47 @@ def spawn_urban_props_terrain_first(spec, grid, blocks, connections) -> None:
         row = max(0, min(row, grid.rows - 1))
         col = max(0, min(col, grid.cols - 1))
 
-        # sample slope from HeightGrid slopes
-        if grid.slopes is not None and row < len(grid.slopes) and col < len(grid.slopes[0]):
+        # Sample slope from HeightGrid slopes if available
+        if hasattr(grid, "slopes") and grid.slopes is not None and row < len(grid.slopes) and col < len(grid.slopes[0]):
             slope = grid.slopes[row][col]
             if slope > 0.8: # Roughly > 38 degrees
                 return False
+        else:
+            # Fallback: estimate slope locally from heights if slopes array is missing
+            h_center = grid.heights[row][col]
+            h_dx = grid.heights[row][min(col+1, grid.cols-1)] if col+1 < grid.cols else h_center
+            h_dy = grid.heights[min(row+1, grid.rows-1)][col] if row+1 < grid.rows else h_center
+
+            slope_x = (h_dx - h_center) / grid.cell_size
+            slope_y = (h_dy - h_center) / grid.cell_size
+            import math
+            slope = math.sqrt(slope_x**2 + slope_y**2)
+            if slope > 0.8:
+                return False
+
         return True
 
     def check_occupancy(px, py, radius):
         row, col = world_to_grid(px, py)
         if (row, col) in grid.occupied_cells:
             return False
+        if radius >= 64 and (row, col) in getattr(grid, "blocked_los_zones", set()):
+            return False
         return True
 
     def mark_occupancy(px, py, radius):
         row, col = world_to_grid(px, py)
         grid.occupied_cells.add((row, col))
-        # Add a block in blocked_los_zones if it's a large prop
         if radius >= 64:
+            if not hasattr(grid, "blocked_los_zones"):
+                grid.blocked_los_zones = set()
             grid.blocked_los_zones.add((row, col))
 
     def add_prop(x, y, model, angles="0 0 0", radius=0):
         row, col = world_to_grid(x, y)
         row = max(0, min(row, grid.rows - 1))
         col = max(0, min(col, grid.cols - 1))
+        # Ensure Z aligns exactly to warped terrain
         z = grid.heights[row][col]
 
         placed_props.append({
@@ -1228,10 +1245,27 @@ def spawn_urban_props_terrain_first(spec, grid, blocks, connections) -> None:
             num_props = rng.randint(4, 8)
             attempts = 0
             placed = 0
-            while placed < num_props and attempts < 50:
+            while placed < num_props and attempts < 100:
                 attempts += 1
-                px = block.world_x + rng.uniform(-bw2 + 64, bw2 - 64)
-                py = block.world_y + rng.uniform(-bd2 + 64, bd2 - 64)
+                # Bias toward edges for RUINED
+                if rng.random() > 0.3:
+                    # Edge placement
+                    edge = rng.choice(['n', 's', 'e', 'w'])
+                    if edge == 'n':
+                        px = block.world_x + rng.uniform(-bw2 + 64, bw2 - 64)
+                        py = block.world_y + bd2 - rng.uniform(32, 128)
+                    elif edge == 's':
+                        px = block.world_x + rng.uniform(-bw2 + 64, bw2 - 64)
+                        py = block.world_y - bd2 + rng.uniform(32, 128)
+                    elif edge == 'e':
+                        px = block.world_x + bw2 - rng.uniform(32, 128)
+                        py = block.world_y + rng.uniform(-bd2 + 64, bd2 - 64)
+                    else:
+                        px = block.world_x - bw2 + rng.uniform(32, 128)
+                        py = block.world_y + rng.uniform(-bd2 + 64, bd2 - 64)
+                else:
+                    px = block.world_x + rng.uniform(-bw2 + 64, bw2 - 64)
+                    py = block.world_y + rng.uniform(-bd2 + 64, bd2 - 64)
 
                 if not check_clearance(px, py, 128):
                     continue
@@ -1249,10 +1283,27 @@ def spawn_urban_props_terrain_first(spec, grid, blocks, connections) -> None:
             num_props = rng.randint(6, 12)
             attempts = 0
             placed = 0
-            while placed < num_props and attempts < 50:
+            while placed < num_props and attempts < 100:
                 attempts += 1
-                px = block.world_x + rng.uniform(-bw2 + 32, bw2 - 32)
-                py = block.world_y + rng.uniform(-bd2 + 32, bd2 - 32)
+                # Strongly bias toward edges for RUBBLE
+                if rng.random() > 0.2:
+                    # Edge placement
+                    edge = rng.choice(['n', 's', 'e', 'w'])
+                    if edge == 'n':
+                        px = block.world_x + rng.uniform(-bw2 + 32, bw2 - 32)
+                        py = block.world_y + bd2 - rng.uniform(16, 96)
+                    elif edge == 's':
+                        px = block.world_x + rng.uniform(-bw2 + 32, bw2 - 32)
+                        py = block.world_y - bd2 + rng.uniform(16, 96)
+                    elif edge == 'e':
+                        px = block.world_x + bw2 - rng.uniform(16, 96)
+                        py = block.world_y + rng.uniform(-bd2 + 32, bd2 - 32)
+                    else:
+                        px = block.world_x - bw2 + rng.uniform(16, 96)
+                        py = block.world_y + rng.uniform(-bd2 + 32, bd2 - 32)
+                else:
+                    px = block.world_x + rng.uniform(-bw2 + 32, bw2 - 32)
+                    py = block.world_y + rng.uniform(-bd2 + 32, bd2 - 32)
 
                 if not check_clearance(px, py, 64):
                     continue
