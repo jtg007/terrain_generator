@@ -44,6 +44,7 @@ class UrbanBlock:
     adjacent_streets: list
     needs_rooftop_cover: bool = False
     downgraded_flat_walls: bool = False
+    mound_height: float = 0.0
 
 @dataclass
 class UrbanDistrict:
@@ -71,6 +72,25 @@ class UrbanSpec(TerrainSpec):
     compile_budget: CompileBudget = field(default_factory=CompileBudget)
     max_los_length: float = 3072.0
     street_cover_points: List[Tuple[float, float]] = field(default_factory=list)
+
+    # Terrain-first generation mode
+    urban_generation_mode: str = "terrain_first" # "legacy" or "terrain_first"
+
+    # Tuning parameters for terrain-first mode
+    crater_depth_min: float = 40.0
+    crater_depth_max: float = 100.0
+    crater_radius_min: float = 200.0
+    crater_radius_max: float = 400.0
+    crater_count_min: int = 3
+    crater_count_max: int = 8
+    crater_depth_scale: float = 1.0 # max relative crater depth multiplier
+
+    mound_height_rubble_min: float = 40.0
+    mound_height_rubble_max: float = 120.0
+    mound_height_ruined_min: float = 120.0
+    mound_height_ruined_max: float = 280.0
+    mound_height_intact_min: float = 280.0
+    mound_height_intact_max: float = 480.0
 
     def __post_init__(self):
         super().__post_init__()

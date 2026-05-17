@@ -1,3 +1,4 @@
+import logging
 #!/usr/bin/env python3
 """
 Terrain Generation Pipeline
@@ -2361,7 +2362,8 @@ def run_pipeline(
     else:
         if getattr(spec, "topology", "").lower() == "urban":
             print("  Step 2a: Generate urban layout (Districts and Streets)")
-            from src.urban_generator import plan_districts, generate_urban_street_network, place_blocks, generate_urban_heightmap, validate_vehicle_paths, validate_los, tune_cover
+            from src.urban_generator import plan_districts, generate_urban_street_network, place_blocks, generate_urban_heightmap, generate_semantic_masks, generate_urban_heightmap_terrain_first, validate_urban_terrain_first_output, validate_vehicle_paths, validate_los, tune_cover
+            from src.entity_placer import spawn_urban_props_terrain_first
             districts = plan_districts(spec)
             nodes, connections = generate_urban_street_network(spec, districts)
 
@@ -2393,8 +2395,17 @@ def run_pipeline(
             )
             grid.playability_mask = hard_mask
 
-            print("  Step 2c: Generate urban heightmap")
-            grid = generate_urban_heightmap(spec, grid, blocks)
+            if getattr(spec, "urban_generation_mode", "legacy") == "terrain_first":
+                print("  Step 2c: Generate terrain-first semantic masks")
+                generate_semantic_masks(spec, grid, blocks, connections)
+                print("  Step 2d: Generate urban heightmap (terrain-first)")
+                grid = generate_urban_heightmap_terrain_first(spec, grid, blocks, connections)
+            else:
+                print("  Step 2c: Generate urban heightmap")
+                grid = generate_urban_heightmap(spec, grid, blocks)
+
+            spec.urban_connections = connections
+            spec.urban_blocks = blocks
         else:
             if spec.generate_lanes:
                 print("  Step 2a: Generate playability mask (Smoothstep distance field)")
@@ -2507,6 +2518,20 @@ def run_pipeline(
     print("  Step 10: Build underlay")
     underlay = build_underlay(spec, grid)
     print(f"    Underlay: z={underlay.bottom_z} to {underlay.top_z}")
+
+    if getattr(spec, "topology", "").lower() == "urban" and getattr(spec, "urban_generation_mode", "legacy") == "terrain_first":
+        print("  Step 11: Spawn urban props (terrain-first)")
+        from src.entity_placer import spawn_urban_props_terrain_first
+        from src.urban_generator import validate_urban_terrain_first_output
+        import logging
+        spawn_urban_props_terrain_first(spec, grid, spec.urban_blocks, spec.urban_connections)
+
+        print("  Step 12: Validate terrain-first output")
+        tf_validation = validate_urban_terrain_first_output(spec, grid, spec.urban_blocks, spec.urban_connections)
+        for warning in tf_validation["warnings"]:
+            logging.getLogger(__name__).warning(warning)
+        if not tf_validation["valid"] and tf_validation["errors"]:
+            raise ValueError("Invalid terrain-first output:\n" + "\n".join(tf_validation["errors"]))
 
     if map_name and output_dir:
         print("  Step 11: Export minimap")
