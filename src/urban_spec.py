@@ -33,8 +33,9 @@ class UrbanBlock:
     grid_y: int
     world_x: float
     world_y: float
-    width: float
-    height: float
+    footprint_w: float
+    footprint_d: float
+    elevation_h: float
     block_type: BlockType
     ramp_side: Optional[RampPlacement]
     district: DistrictType
@@ -73,5 +74,3 @@ class UrbanSpec(TerrainSpec):
 
     def __post_init__(self):
         super().__post_init__()
-        if self.street_width < 384.0:
-            self.street_width = 384.0
