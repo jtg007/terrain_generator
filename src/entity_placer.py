@@ -1081,3 +1081,257 @@ def spawn_urban_entities_phase7(
     if not res.valid:
         import logging
         logging.getLogger(__name__).warning("Layout Validator failed: " + ", ".join(res.errors))
+
+def spawn_urban_props_terrain_first(spec, grid, blocks, connections) -> None:
+    """
+    Terrain-first urban prop placement. Populates grid.placed_props and occupancy grids.
+    """
+    import math
+    import random
+    import logging
+    from src.urban_spec import BlockType
+    from src.terrain_spec import ZoneType
+
+    logger = logging.getLogger(__name__)
+    rng = random.Random(spec.seed)
+
+    # Models
+    building_shells = [
+        "models/props_c17/concrete_barrier001a.mdl",
+        "models/props_wasteland/exterior_fence001a.mdl",
+        "models/props_c17/gravestone001a.mdl",
+        "models/props_debris/concrete_chunk01a.mdl",
+        "models/props_debris/concrete_chunk02a.mdl",
+        "models/props_wasteland/controlroom_desk001a.mdl"
+    ]
+    rubble_cover = [
+        "models/props_debris/concrete_rubble001a.mdl",
+        "models/props_debris/plaster_medium_chunk01a.mdl",
+        "models/props_junk/garbage_metalcan001a.mdl",
+        "models/props_c17/oildrum001.mdl",
+        "models/props_junk/woodcrate001a.mdl"
+    ]
+    vehicle_wrecks = [
+        "models/props_vehicles/car001.mdl",
+        "models/props_vehicles/van001.mdl",
+        "models/props_c17/trashcontainer01a.mdl"
+    ]
+
+    placed_props = grid.placed_props
+    if placed_props is None:
+        grid.placed_props = []
+        placed_props = grid.placed_props
+
+    def world_to_grid(x, y):
+        col = int((x - grid.origin_x) / grid.cell_size)
+        row = int((y - grid.origin_y) / grid.cell_size)
+        return row, col
+
+    def check_clearance(px, py, min_spacing):
+        for prop in placed_props:
+            opx, opy = prop['x'], prop['y']
+            oradius = prop['radius']
+            if math.sqrt((px - opx)**2 + (py - opy)**2) < (min_spacing + oradius):
+                return False
+        return True
+
+    def check_street_clearance(px, py, required_clearance):
+        for conn in connections:
+            pts = conn.path_points
+            for i in range(len(pts) - 1):
+                x1, y1 = pts[i]
+                x2, y2 = pts[i + 1]
+                dx = x2 - x1
+                dy = y2 - y1
+                l2 = dx*dx + dy*dy
+                if l2 == 0:
+                    dist = math.sqrt((px - x1)**2 + (py - y1)**2)
+                else:
+                    t = ((px - x1)*dx + (py - y1)*dy) / l2
+                    t = max(0, min(1, t))
+                    proj_x = x1 + t * dx
+                    proj_y = y1 + t * dy
+                    dist = math.sqrt((px - proj_x)**2 + (py - proj_y)**2)
+
+                if dist < required_clearance / 2.0:
+                    return False
+        return True
+
+    def check_slope(px, py):
+        row, col = world_to_grid(px, py)
+        row = max(0, min(row, grid.rows - 1))
+        col = max(0, min(col, grid.cols - 1))
+
+        # sample slope from HeightGrid slopes
+        if grid.slopes is not None and row < len(grid.slopes) and col < len(grid.slopes[0]):
+            slope = grid.slopes[row][col]
+            if slope > 0.8: # Roughly > 38 degrees
+                return False
+        return True
+
+    def check_occupancy(px, py, radius):
+        row, col = world_to_grid(px, py)
+        if (row, col) in grid.occupied_cells:
+            return False
+        return True
+
+    def mark_occupancy(px, py, radius):
+        row, col = world_to_grid(px, py)
+        grid.occupied_cells.add((row, col))
+        # Add a block in blocked_los_zones if it's a large prop
+        if radius >= 64:
+            grid.blocked_los_zones.add((row, col))
+
+    def add_prop(x, y, model, angles="0 0 0", radius=0):
+        row, col = world_to_grid(x, y)
+        row = max(0, min(row, grid.rows - 1))
+        col = max(0, min(col, grid.cols - 1))
+        z = grid.heights[row][col]
+
+        placed_props.append({
+            'x': x,
+            'y': y,
+            'z': z,
+            'model': model,
+            'angles': angles,
+            'radius': radius
+        })
+        mark_occupancy(x, y, radius)
+
+    for block in blocks:
+        bw2 = block.footprint_w / 2.0
+        bd2 = block.footprint_d / 2.0
+
+        if block.block_type == BlockType.INTACT:
+            num_props = rng.randint(3, 6)
+            attempts = 0
+            placed = 0
+            while placed < num_props and attempts < 50:
+                attempts += 1
+                px = block.world_x + rng.uniform(-bw2 + 64, bw2 - 64)
+                py = block.world_y + rng.uniform(-bd2 + 64, bd2 - 64)
+
+                if not check_clearance(px, py, 192):
+                    continue
+                if not check_street_clearance(px, py, 384*2):
+                    continue
+                if not check_slope(px, py):
+                    continue
+                if not check_occupancy(px, py, 96):
+                    continue
+
+                angle = rng.choice([0, 90, 180, 270])
+                add_prop(px, py, rng.choice(building_shells), f"0 {angle} 0", 192/2)
+                placed += 1
+
+        elif block.block_type == BlockType.RUINED:
+            num_props = rng.randint(4, 8)
+            attempts = 0
+            placed = 0
+            while placed < num_props and attempts < 50:
+                attempts += 1
+                px = block.world_x + rng.uniform(-bw2 + 64, bw2 - 64)
+                py = block.world_y + rng.uniform(-bd2 + 64, bd2 - 64)
+
+                if not check_clearance(px, py, 128):
+                    continue
+                if not check_slope(px, py):
+                    continue
+                if not check_occupancy(px, py, 64):
+                    continue
+
+                angle = rng.uniform(-45, 45)
+                model_list = building_shells if rng.random() > 0.5 else rubble_cover
+                add_prop(px, py, rng.choice(model_list), f"0 {angle:.1f} 0", 128/2)
+                placed += 1
+
+        elif block.block_type == BlockType.RUBBLE:
+            num_props = rng.randint(6, 12)
+            attempts = 0
+            placed = 0
+            while placed < num_props and attempts < 50:
+                attempts += 1
+                px = block.world_x + rng.uniform(-bw2 + 32, bw2 - 32)
+                py = block.world_y + rng.uniform(-bd2 + 32, bd2 - 32)
+
+                if not check_clearance(px, py, 64):
+                    continue
+                if not check_slope(px, py):
+                    continue
+                if not check_occupancy(px, py, 32):
+                    continue
+
+                angle = rng.uniform(0, 360)
+                add_prop(px, py, rng.choice(rubble_cover), f"0 {angle:.1f} 0", 64/2)
+                placed += 1
+
+        elif block.block_type == BlockType.OPEN_LOT:
+            num_props = rng.randint(0, 3)
+            attempts = 0
+            placed = 0
+            while placed < num_props and attempts < 20:
+                attempts += 1
+                px = block.world_x + rng.uniform(-bw2 + 32, bw2 - 32)
+                py = block.world_y + rng.uniform(-bd2 + 32, bd2 - 32)
+
+                if not check_clearance(px, py, 128):
+                    continue
+                if not check_slope(px, py):
+                    continue
+                if not check_occupancy(px, py, 32):
+                    continue
+
+                angle = rng.uniform(0, 360)
+                add_prop(px, py, rng.choice(rubble_cover), f"0 {angle:.1f} 0", 64/2)
+                placed += 1
+
+    # Streets
+    for conn in connections:
+        dist = math.sqrt((conn.end_node.x - conn.start_node.x)**2 + (conn.end_node.y - conn.start_node.y)**2)
+        if conn.type == ZoneType.MAIN_LANE:
+            num_wrecks = int(rng.uniform(1, 3) * (dist / 1024.0))
+            for _ in range(num_wrecks):
+                t = rng.uniform(0.1, 0.9)
+                px = conn.start_node.x + (conn.end_node.x - conn.start_node.x) * t
+                py = conn.start_node.y + (conn.end_node.y - conn.start_node.y) * t
+
+                nx = (conn.end_node.y - conn.start_node.y) / dist
+                ny = -(conn.end_node.x - conn.start_node.x) / dist
+
+                offset_dir = 1 if rng.random() > 0.5 else -1
+                offset_dist = rng.uniform(256, conn.width / 2.0)
+
+                px += nx * offset_dir * offset_dist
+                py += ny * offset_dir * offset_dist
+
+                if not check_slope(px, py):
+                    continue
+                if not check_occupancy(px, py, 64):
+                    continue
+
+                angle = rng.uniform(-30, 30)
+                add_prop(px, py, rng.choice(vehicle_wrecks), f"0 {angle:.1f} 0", 128)
+
+        else: # SIDE_ROUTE
+            num_props = int(rng.uniform(0, 2) * (dist / 512.0))
+            for _ in range(num_props):
+                t = rng.uniform(0.1, 0.9)
+                px = conn.start_node.x + (conn.end_node.x - conn.start_node.x) * t
+                py = conn.start_node.y + (conn.end_node.y - conn.start_node.y) * t
+
+                nx = (conn.end_node.y - conn.start_node.y) / dist
+                ny = -(conn.end_node.x - conn.start_node.x) / dist
+
+                offset_dir = 1 if rng.random() > 0.5 else -1
+                offset_dist = rng.uniform(192, conn.width / 2.0)
+
+                px += nx * offset_dir * offset_dist
+                py += ny * offset_dir * offset_dist
+
+                if not check_slope(px, py):
+                    continue
+                if not check_occupancy(px, py, 32):
+                    continue
+
+                angle = rng.uniform(0, 360)
+                add_prop(px, py, rng.choice(rubble_cover), f"0 {angle:.1f} 0", 64)

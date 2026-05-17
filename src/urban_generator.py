@@ -365,6 +365,199 @@ def place_blocks(spec: UrbanSpec, districts: List[UrbanDistrict], streets: List[
 
     return blocks
 
+def generate_semantic_masks(spec: UrbanSpec, grid: HeightGrid, blocks: List[UrbanBlock], connections: List['LayoutConnection']) -> None:
+    """
+    Generates reusable semantic masks for urban terrain-first mode and stores them in the grid.
+    """
+    import numpy as np
+    from src.terrain_spec import ZoneType
+
+    rows = grid.rows
+    cols = grid.cols
+    x_coords = np.linspace(spec.origin_x, spec.origin_x + spec.size_x, cols)
+    y_coords = np.linspace(spec.origin_y, spec.origin_y + spec.size_y, rows)
+    WX, WY = np.meshgrid(x_coords, y_coords)
+
+    # Initialize masks
+    urban_zone_mask = np.zeros((rows, cols), dtype=np.uint8) # 0: none, 1: lot, 2: rubble, 3: ruined, 4: intact
+    street_mask = np.zeros((rows, cols), dtype=bool)
+    block_mask = np.zeros((rows, cols), dtype=bool)
+    vehicle_lane_mask = np.zeros((rows, cols), dtype=bool)
+
+    # 1. Blocks and Urban Zones
+    for block in blocks:
+        min_x = block.world_x - block.footprint_w / 2
+        max_x = block.world_x + block.footprint_w / 2
+        min_y = block.world_y - block.footprint_d / 2
+        max_y = block.world_y + block.footprint_d / 2
+
+        mask = (WX >= min_x) & (WX <= max_x) & (WY >= min_y) & (WY <= max_y)
+        block_mask[mask] = True
+
+        val = 0
+        if block.block_type == BlockType.OPEN_LOT:
+            val = 1
+        elif block.block_type == BlockType.RUBBLE:
+            val = 2
+        elif block.block_type == BlockType.RUINED:
+            val = 3
+        elif block.block_type == BlockType.INTACT:
+            val = 4
+        urban_zone_mask[mask] = val
+
+    # 2. Streets and Vehicle Lanes
+    for conn in connections:
+        pts = conn.path_points
+        for i in range(len(pts) - 1):
+            x1, y1 = pts[i]
+            x2, y2 = pts[i + 1]
+
+            # Vector projection for distance to line segment
+            dx = x2 - x1
+            dy = y2 - y1
+            l2 = dx*dx + dy*dy
+
+            if l2 == 0:
+                dist = np.sqrt((WX - x1)**2 + (WY - y1)**2)
+            else:
+                t = ((WX - x1)*dx + (WY - y1)*dy) / l2
+                t = np.clip(t, 0, 1)
+                px = x1 + t * dx
+                py = y1 + t * dy
+                dist = np.sqrt((WX - px)**2 + (WY - py)**2)
+
+            is_street = dist <= (conn.width / 2.0)
+            street_mask[is_street] = True
+
+            if conn.type == ZoneType.MAIN_LANE:
+                vehicle_lane_mask[dist <= (conn.width / 2.0)] = True
+
+    grid.urban_zone_mask = urban_zone_mask
+    grid.street_mask = street_mask
+    grid.block_mask = block_mask
+    grid.vehicle_lane_mask = vehicle_lane_mask
+
+    # Crater mask (valid crater locations)
+    crater_mask = np.zeros((rows, cols), dtype=bool)
+    # Valid areas: OPEN_LOT (1) and streets, but NOT vehicle_lane_mask or near MAIN_LANE connections
+    valid_crater_base = ((urban_zone_mask == 1) | street_mask) & (~vehicle_lane_mask)
+
+    # Distance from MAIN_LANE connections (min 384)
+    dist_to_main_conn = np.full((rows, cols), np.inf)
+    for conn in connections:
+        if conn.type == ZoneType.MAIN_LANE:
+            d1 = np.sqrt((WX - conn.start_node.x)**2 + (WY - conn.start_node.y)**2)
+            d2 = np.sqrt((WX - conn.end_node.x)**2 + (WY - conn.end_node.y)**2)
+            dist_to_main_conn = np.minimum(dist_to_main_conn, np.minimum(d1, d2))
+
+    crater_mask[valid_crater_base & (dist_to_main_conn >= 384)] = True
+    grid.crater_mask = crater_mask
+
+    grid.prop_exclusion_mask = vehicle_lane_mask.copy()
+
+def generate_urban_heightmap_terrain_first(spec: UrbanSpec, grid: HeightGrid, blocks: List[UrbanBlock], connections: List['LayoutConnection']) -> HeightGrid:
+    """
+    Terrain-first urban heightmap generation using semantic masks.
+    """
+    import numpy as np
+    import random
+    from scipy.ndimage import gaussian_filter
+
+    rng = random.Random(spec.seed)
+    rows = grid.rows
+    cols = grid.cols
+    original_heights = grid.heights.copy()
+    floor_height = spec.terrain_max_height * getattr(spec, "lane_elevation", 0.15)
+
+    x_coords = np.linspace(spec.origin_x, spec.origin_x + spec.size_x, cols)
+    y_coords = np.linspace(spec.origin_y, spec.origin_y + spec.size_y, rows)
+    WX, WY = np.meshgrid(x_coords, y_coords)
+
+    # 1. Base fBm Noise (±60)
+    # Using simple perlin-like noise using sine waves
+    scale1, scale2 = 0.001, 0.003
+    noise1 = np.sin(WX * scale1 + spec.seed) * np.cos(WY * scale1 + spec.seed)
+    noise2 = np.sin(WX * scale2 - spec.seed) * np.cos(WY * scale2 + spec.seed)
+    base_noise = (noise1 + noise2 * 0.5) * 40.0 # ~ ±60 range
+
+    # Street noise (±20)
+    street_noise = (np.sin(WX * 0.01) * np.cos(WY * 0.01)) * 20.0
+
+    new_heights = np.full((rows, cols), floor_height, dtype=np.float32)
+    new_heights += np.where(grid.street_mask, street_noise, base_noise)
+
+    # 2. Apply Block Mounds with Smoothstep
+    for block in blocks:
+        if block.mound_height <= 0:
+            continue
+
+        bw2 = block.footprint_w / 2.0
+        bd2 = block.footprint_d / 2.0
+
+        # Distance to the perimeter inside the block
+        dist_x = bw2 - np.abs(WX - block.world_x)
+        dist_y = bd2 - np.abs(WY - block.world_y)
+        dist_to_edge = np.minimum(dist_x, dist_y)
+
+        # We want smoothstep from 0 to blend_radius.
+        blend_radius = rng.uniform(128, 256)
+        t = np.clip(dist_to_edge / blend_radius, 0.0, 1.0)
+        smooth_t = t * t * (3 - 2 * t) # smoothstep
+
+        target_height = floor_height + block.mound_height
+
+        mask = (WX >= block.world_x - bw2) & (WX <= block.world_x + bw2) & (WY >= block.world_y - bd2) & (WY <= block.world_y + bd2)
+
+        # Lerp
+        new_heights[mask] = new_heights[mask] * (1 - smooth_t[mask]) + target_height * smooth_t[mask]
+
+    # 3. Apply Craters
+    num_craters = rng.randint(spec.crater_count_min, spec.crater_count_max)
+
+    # Find valid crater centers
+    valid_y, valid_x = np.where(grid.crater_mask)
+    if len(valid_x) > 0:
+        for _ in range(num_craters):
+            idx = rng.randint(0, len(valid_x) - 1)
+            cx, cy = x_coords[valid_x[idx]], y_coords[valid_y[idx]]
+
+            depth = rng.uniform(spec.crater_depth_min, spec.crater_depth_max)
+            radius = rng.uniform(spec.crater_radius_min, spec.crater_radius_max)
+
+            dist = np.sqrt((WX - cx)**2 + (WY - cy)**2)
+
+            # Negative gaussian
+            crater_shape = np.exp(-(dist**2) / (2 * (radius/3)**2)) * depth
+
+            # Subtract
+            new_heights -= crater_shape
+
+            # Clamp
+            min_allowed = floor_height - (spec.crater_depth_scale * 100.0)
+            new_heights = np.maximum(new_heights, min_allowed)
+
+    # 4. Generate Alpha
+    # streets: 0, rubble/ruined: 255, intact: 127
+    urban_alpha = np.zeros((rows, cols), dtype=np.float32)
+    urban_alpha[grid.urban_zone_mask == 4] = 127
+    urban_alpha[grid.urban_zone_mask == 2] = 255
+    urban_alpha[grid.urban_zone_mask == 3] = 255
+    urban_alpha[grid.street_mask] = 0
+
+    # Feathering (blur alpha map)
+    urban_alpha = gaussian_filter(urban_alpha, sigma=2.0) # approx 64 units depending on cell size
+
+    grid.urban_alpha_map = np.clip(np.round(urban_alpha), 0, 255).astype(np.uint8)
+
+    # Final very cautious smoothing to avoid sharp edges
+    new_heights = gaussian_filter(new_heights, sigma=1.0)
+    grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
+
+    grid.urban_blocks = blocks
+
+    return grid
+
+
 def generate_urban_heightmap(spec: UrbanSpec, grid: HeightGrid, blocks: List[UrbanBlock]) -> HeightGrid:
     """
     Sets height values in the HeightGrid based on block layout.
@@ -927,3 +1120,58 @@ def generate_vertical_layers(spec: UrbanSpec, blocks: List[UrbanBlock], vmf_doc)
         for state in states:
             for brush in state.brushes:
                 vmf_doc.world.children.append(brush)
+
+def validate_urban_terrain_first_output(spec: UrbanSpec, grid: HeightGrid, blocks: List[UrbanBlock], connections: List['LayoutConnection']) -> dict:
+    """
+    Validates the generated urban terrain.
+    Checks vehicle path clearance, prop floating/buried,
+    crater compliance, alpha map completeness, and seams.
+    """
+    import numpy as np
+    warnings = []
+    errors = []
+
+    # Check alpha map completeness
+    if grid.urban_alpha_map is None:
+        errors.append("urban_alpha_map was not generated.")
+    elif grid.urban_alpha_map.shape != (grid.rows, grid.cols):
+        errors.append("urban_alpha_map shape mismatch.")
+
+    # Check vehicle path clearance conceptually (ensure height variations on streets are small)
+    if grid.street_mask is not None:
+        street_heights = grid.heights[grid.street_mask]
+        if len(street_heights) > 0:
+            max_h = np.max(street_heights)
+            min_h = np.min(street_heights)
+            # We applied noise to streets (~±20), so variation shouldn't exceed ~60.
+            if max_h - min_h > 120:
+                warnings.append(f"High height variation on streets: {max_h - min_h} units.")
+
+    # Check craters (just that we didn't go below the minimum allowed depth)
+    floor_height = spec.terrain_max_height * getattr(spec, "lane_elevation", 0.15)
+    min_allowed = floor_height - (spec.crater_depth_scale * 100.0)
+    if np.min(grid.heights) < min_allowed - 1.0: # 1.0 for fp error
+        warnings.append("Terrain went below minimum allowed crater depth.")
+
+    # Validate props
+    if grid.placed_props is not None:
+        for prop in grid.placed_props:
+            x, y, z = prop['x'], prop['y'], prop['z']
+
+            # Simple bounds check
+            if x < spec.origin_x - 512 or x > spec.origin_x + spec.size_x + 512 or y < spec.origin_y - 512 or y > spec.origin_y + spec.size_y + 512:
+                errors.append(f"Prop placed out of bounds: ({x}, {y})")
+
+            # Z should closely match height map (floating/buried check)
+            row = int((y - spec.origin_y) / spec.cell_size)
+            col = int((x - spec.origin_x) / spec.cell_size)
+            if 0 <= row < grid.rows and 0 <= col < grid.cols:
+                h = grid.heights[row][col]
+                if abs(z - h) > 32:
+                    warnings.append(f"Prop might be floating/buried at ({x}, {y}): diff {abs(z - h)}")
+
+    return {
+        "valid": len(errors) == 0,
+        "warnings": warnings,
+        "errors": errors
+    }

@@ -22,7 +22,6 @@ from vmflib import vmf
 from vmflib.types import Vertex
 from vmflib.brush import DispInfo
 from vmflib.tools import Block
-from vmflib import vmf as vmf_lib
 
 from src.displacement_builder import (
     quantize_coord,
@@ -1085,7 +1084,7 @@ class DisplacementVMF:
                                         print(f"[Props] Skipping unavailable: {prop_model}")
                                         continue
 
-                                prop = vmf_lib.Entity("prop_static")
+                                prop = vmf.Entity("prop_static")
                                 prop.origin = f"{px:.1f} {py:.1f} {pz:.1f}"
                                 prop.properties["model"] = prop_model
                                 prop.properties["angles"] = f"0 {sub_hash % 360} 0"
@@ -1143,7 +1142,7 @@ class DisplacementVMF:
                 h = blocker_size
                 thickness = 128
 
-                vmf_lib.Entity("func_detail_blocker")
+                vmf.Entity("func_detail_blocker")
                 # Add brush using block
                 blocker_brush = Block(
                     Vertex(bx, by, bz + 32), # centered at z + 32
@@ -1160,7 +1159,7 @@ class DisplacementVMF:
                 # Wait, vmflib might not have func_detail_blocker as a native type. It's a standard brush entity.
 
                 # Add it as a top-level entity, since func_detail_blocker is an entity with brushes
-                ent = vmf_lib.Entity("func_detail_blocker")
+                ent = vmf.Entity("func_detail_blocker")
                 ent.children.append(blocker_brush.brush)
                 valve_map.children.append(ent)
 
@@ -1191,8 +1190,19 @@ class DisplacementVMF:
             valve_map._urban_initial_world_len = len(valve_map.world.children)
             valve_map._urban_initial_children_len = len(valve_map.children)
 
-            generate_vertical_layers(self.spec, self.spec.urban_blocks, valve_map)
-            spawn_urban_props(valve_map, self.spec, self.spec.urban_blocks)
+            if getattr(self.spec, "urban_generation_mode", "legacy") == "terrain_first":
+                # Export placed props from heightgrid
+                placed_props = getattr(self.heightgrid, "placed_props", []) if self.heightgrid is not None else []
+                for prop in placed_props:
+                    ent = vmf.Entity("prop_static")
+                    ent.origin = f"{prop['x']:.1f} {prop['y']:.1f} {prop['z']:.1f}"
+                    ent.properties["model"] = prop['model']
+                    ent.properties["angles"] = prop['angles']
+                    ent.properties["solid"] = "6"
+                    valve_map.world.children.append(ent)
+            else:
+                generate_vertical_layers(self.spec, self.spec.urban_blocks, valve_map)
+                spawn_urban_props(valve_map, self.spec, self.spec.urban_blocks)
 
             blocks, report = enforce_budget(self.spec, self.spec.urban_blocks, valve_map, self.spec.compile_budget)
             self.spec.urban_blocks = blocks
