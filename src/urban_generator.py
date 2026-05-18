@@ -480,13 +480,71 @@ def generate_urban_heightmap_terrain_first(spec: UrbanSpec, grid: HeightGrid, bl
     noise2 = np.sin(WX * scale2 - spec.seed) * np.cos(WY * scale2 + spec.seed)
     base_noise = (noise1 + noise2 * 0.5) * 40.0 # ~ ±60 range
 
-    # Street noise (±20)
-    street_noise = (np.sin(WX * 0.01) * np.cos(WY * 0.01)) * 20.0
+    # Street noise (±15) only where actually carving
+    street_noise = (np.sin(WX * 0.015) * np.cos(WY * 0.015)) * 15.0
 
     new_heights = np.full((rows, cols), floor_height, dtype=np.float32)
+    # Apply base noise outside streets, street noise inside
     new_heights += np.where(grid.street_mask, street_noise, base_noise)
 
-    # 2. Apply Block Mounds with Smoothstep
+    # Actively Carve Street Negative Space
+    # Calculate distance to nearest street connection
+    dist_to_street = np.full((rows, cols), np.inf)
+    street_carve_depth = np.full((rows, cols), 0.0)
+
+    for conn in connections:
+        # For each connection, compute distance from all points to the line segment
+        pts = conn.path_points
+        for i in range(len(pts) - 1):
+            x1, y1 = pts[i]
+            x2, y2 = pts[i + 1]
+            dx = x2 - x1
+            dy = y2 - y1
+            l2 = dx*dx + dy*dy
+            if l2 == 0:
+                dist = np.sqrt((WX - x1)**2 + (WY - y1)**2)
+            else:
+                t = ((WX - x1)*dx + (WY - y1)*dy) / l2
+                t = np.clip(t, 0, 1)
+                proj_x = x1 + t * dx
+                proj_y = y1 + t * dy
+                dist = np.sqrt((WX - proj_x)**2 + (WY - proj_y)**2)
+
+            # Identify max carve depth based on connection type
+            from src.terrain_spec import ZoneType
+            max_depth = 128.0 if conn.type == ZoneType.MAIN_LANE else 80.0
+
+            dist_to_street = np.minimum(dist_to_street, dist)
+
+            # Smoothly carve out based on distance to center
+            carve_radius = conn.width / 2.0
+            influence_radius = carve_radius * 1.5
+
+            # Inverse smoothstep for carving (deepest at center)
+            t_carve = np.clip(1.0 - (dist / influence_radius), 0.0, 1.0)
+            smooth_carve = t_carve * t_carve * (3 - 2 * t_carve)
+
+            street_carve_depth = np.maximum(street_carve_depth, smooth_carve * max_depth)
+
+    # Carve out widened bowls at intersections using LayoutNodes
+    # Find unique nodes from connections
+    nodes = set([c.start_node for c in connections] + [c.end_node for c in connections])
+    for node in nodes:
+        dist = np.sqrt((WX - node.x)**2 + (WY - node.y)**2)
+        carve_radius = node.radius
+        influence_radius = carve_radius * 1.5
+        max_depth = 128.0 if node.type == ZoneType.MAIN_LANE else 80.0
+
+        t_carve = np.clip(1.0 - (dist / influence_radius), 0.0, 1.0)
+        smooth_carve = t_carve * t_carve * (3 - 2 * t_carve)
+        street_carve_depth = np.maximum(street_carve_depth, smooth_carve * max_depth)
+
+    # Subtract carve depth only within the street mask to avoid pulling down adjacent OPEN_LOTs
+    carve_mask = (street_carve_depth > 0) & grid.street_mask
+    new_heights[carve_mask] -= street_carve_depth[carve_mask]
+
+    # 2. Apply Block Mounds with Smoothstep and Domain Warping
+    from src.urban_spec import BlockType
     for block in blocks:
         if block.mound_height <= 0:
             continue
@@ -494,22 +552,60 @@ def generate_urban_heightmap_terrain_first(spec: UrbanSpec, grid: HeightGrid, bl
         bw2 = block.footprint_w / 2.0
         bd2 = block.footprint_d / 2.0
 
+        warp_amplitude = rng.uniform(20.0, 60.0)
+        blend_radius = rng.uniform(128, 256)
+
+        # Expand the mask to catch the domain warp + blend falloff
+        expansion = warp_amplitude + blend_radius + 32.0
+        mask = (WX >= block.world_x - bw2 - expansion) & (WX <= block.world_x + bw2 + expansion) & \
+               (WY >= block.world_y - bd2 - expansion) & (WY <= block.world_y + bd2 + expansion)
+
+        if not np.any(mask):
+            continue
+
+        # Medium-frequency noise for domain-warping the block edge distance
+        warp_scale = 0.005
+        warp_seed = spec.seed + int(block.world_x) % 1000
+        warp_noise_x = np.sin((WX[mask] + warp_seed) * warp_scale) * np.cos(WY[mask] * warp_scale)
+        warp_noise_y = np.cos(WX[mask] * warp_scale) * np.sin((WY[mask] + warp_seed) * warp_scale)
+
+        # Apply warp to coordinate fields to break the rectangular outline
+        warped_WX = WX[mask] + warp_noise_x * warp_amplitude
+        warped_WY = WY[mask] + warp_noise_y * warp_amplitude
+
         # Distance to the perimeter inside the block
-        dist_x = bw2 - np.abs(WX - block.world_x)
-        dist_y = bd2 - np.abs(WY - block.world_y)
+        dist_x = bw2 - np.abs(warped_WX - block.world_x)
+        dist_y = bd2 - np.abs(warped_WY - block.world_y)
         dist_to_edge = np.minimum(dist_x, dist_y)
 
         # We want smoothstep from 0 to blend_radius.
-        blend_radius = rng.uniform(128, 256)
         t = np.clip(dist_to_edge / blend_radius, 0.0, 1.0)
         smooth_t = t * t * (3 - 2 * t) # smoothstep
 
-        target_height = floor_height + block.mound_height
+        # Block-type dependent local noise for interior warping
+        if block.block_type == BlockType.OPEN_LOT:
+            interior_noise_amp = 5.0
+        elif block.block_type == BlockType.INTACT:
+            interior_noise_amp = 15.0
+        elif block.block_type == BlockType.RUINED:
+            interior_noise_amp = 40.0
+        elif block.block_type == BlockType.RUBBLE:
+            interior_noise_amp = 80.0
+        else:
+            interior_noise_amp = 10.0
 
-        mask = (WX >= block.world_x - bw2) & (WX <= block.world_x + bw2) & (WY >= block.world_y - bd2) & (WY <= block.world_y + bd2)
+        int_noise_scale = 0.015
+        int_seed = spec.seed + int(block.world_y) % 1000
+        interior_noise = (np.sin(WX[mask] * int_noise_scale + int_seed) +
+                          np.cos(WY[mask] * int_noise_scale - int_seed)) * 0.5 * interior_noise_amp
+
+        # Fade the interior noise out towards the block edge to keep it contained
+        interior_noise *= smooth_t
+
+        target_height = floor_height + block.mound_height + interior_noise
 
         # Lerp
-        new_heights[mask] = new_heights[mask] * (1 - smooth_t[mask]) + target_height * smooth_t[mask]
+        new_heights[mask] = new_heights[mask] * (1 - smooth_t) + target_height * smooth_t
 
     # 3. Apply Craters
     num_craters = rng.randint(spec.crater_count_min, spec.crater_count_max)
@@ -550,7 +646,8 @@ def generate_urban_heightmap_terrain_first(spec: UrbanSpec, grid: HeightGrid, bl
     grid.urban_alpha_map = np.clip(np.round(urban_alpha), 0, 255).astype(np.uint8)
 
     # Final very cautious smoothing to avoid sharp edges
-    new_heights = scipy_gaussian_filter_equivalent(new_heights, sigma=1.0)
+    # Reduced sigma to 0.3 to keep the craggy structure and sharp street carves.
+    new_heights = scipy_gaussian_filter_equivalent(new_heights, sigma=0.3)
     grid.heights = np.where(grid.global_selection_mask, new_heights, original_heights)
 
     grid.urban_blocks = blocks
