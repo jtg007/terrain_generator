@@ -1010,6 +1010,7 @@ class TerrainGeneratorGUI(QMainWindow):
         self.combo_topology.addItems([
                 "Canyon Maze",
                 "Urban",
+                "Warzone"
             ])
         self.combo_topology.setCurrentIndex(0)
         topo_row.addWidget(self.combo_topology, 1)
@@ -2805,6 +2806,8 @@ class TerrainGeneratorGUI(QMainWindow):
 
         if self.combo_topology.currentText() == "Urban":
             self.config_model.topology = "urban"
+        elif self.combo_topology.currentText() == "Warzone":
+            self.config_model.topology = "warzone"
         else:
             self.config_model.topology = "canyon"
         self.config_model.canyon_natural = False
@@ -3053,6 +3056,15 @@ class TerrainGeneratorGUI(QMainWindow):
         if not is_valid:
             QMessageBox.warning(self, "Invalid Configuration", msg)
             return
+
+        if self.config_model.topology == "warzone":
+            if self.config_model.custom_imp_base_x is None or self.config_model.custom_nf_base_x is None:
+                QMessageBox.warning(
+                    self,
+                    "Invalid Layout",
+                    "Warzone topology requires explicitly setting base positions (Imp Base and NF Base) in the 2D Layout editor."
+                )
+                return
 
         spec = self.config_model.make_spec()
         layout_result = spec.validate_layout()

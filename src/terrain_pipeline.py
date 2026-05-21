@@ -2428,10 +2428,16 @@ def run_pipeline(
                 )
                 grid.playability_mask = None
 
-            print(
-                f"  Step 2c: Generate heights with fBm (seed={spec.seed}, octaves={spec.noise_octaves})"
-            )
-            grid = generate_heights(spec, grid)
+            if getattr(spec, "topology", "").lower() == "warzone":
+                print(f"  Step 2c: Generate Warzone heightmap (seed={spec.seed})")
+                from src.warzone_generator import generate_warzone_heightmap
+                grid = generate_warzone_heightmap(spec, grid, nodes, connections)
+                spec.warzone_connections = connections # Store for alpha/props
+            else:
+                print(
+                    f"  Step 2c: Generate heights with fBm (seed={spec.seed}, octaves={spec.noise_octaves})"
+                )
+                grid = generate_heights(spec, grid)
 
     if pure_heights is None:
         pure_heights = grid.heights.copy()
@@ -2513,6 +2519,11 @@ def run_pipeline(
             print(f"      - {e}")
     else:
         print("    Validation passed!")
+
+    if getattr(spec, "topology", "").lower() == "warzone":
+        print("  Step 9b: Generate Warzone alpha")
+        from src.warzone_generator import generate_warzone_alpha
+        grid.alphas = generate_warzone_alpha(spec, grid, nodes, connections)
 
     print("  Step 10: Build underlay")
     underlay = build_underlay(spec, grid)
