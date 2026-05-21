@@ -2,7 +2,6 @@ import math
 import random
 import numpy as np
 from typing import List, Tuple
-from scipy.ndimage import uniform_filter
 
 from src.terrain_spec import LayoutNode, LayoutConnection, ZoneType
 from src.warzone_spec import WarzoneSpec
@@ -274,40 +273,37 @@ def generate_warzone_heightmap(
 
     # 5. FINAL PASS (Smoothing)
     # 8-neighbor weighted average, W=1.0 for same zone, W=0.3 for different zone
-    from scipy.ndimage import generic_filter
+    # Implemented in pure NumPy to avoid SciPy dependency
 
-    def smooth_weights(values):
-        center = values[4]
-        center_zone = center > 0.5 # since we pass combined
-
-        sum_h = 0.0
-        sum_w = 0.0
-
-        for i, val in enumerate(values):
-            if i == 4:
-                continue
-            # extract height and zone
-            # val was packed as height + 1000000 if zone==1
-            h = val % 1000000
-            zone = val >= 1000000
-
-            w = 1.0 if zone == center_zone else 0.3
-            sum_h += h * w
-            sum_w += w
-
-        if sum_w > 0:
-            return sum_h / sum_w
-        return center % 1000000
-
-    # We pack height and zone together to use generic_filter
+    # We pack height and zone together
     packed = grid.heights.copy()
     packed[zone_mask == 1] += 1000000.0
 
-    smoothed = generic_filter(packed, smooth_weights, size=3)
+    rows, cols = packed.shape
+    # center is packed[1:-1, 1:-1]
+    center = packed[1:-1, 1:-1]
+    center_zone = center >= 1000000.0
 
-    # Blend smoothed result back
+    sum_h_w = np.zeros_like(center, dtype=np.float32)
+    sum_w = np.zeros_like(center, dtype=np.float32)
+
+    for dr in [-1, 0, 1]:
+        for dc in [-1, 0, 1]:
+            if dr == 0 and dc == 0:
+                continue
+
+            neighbor = packed[1+dr:rows-1+dr, 1+dc:cols-1+dc]
+            neighbor_h = neighbor % 1000000.0
+            neighbor_zone = neighbor >= 1000000.0
+
+            # w = 1.0 if zone == center_zone else 0.3
+            w = np.where(neighbor_zone == center_zone, 1.0, 0.3)
+
+            sum_h_w += neighbor_h * w
+            sum_w += w
+
     # Just replace inner part to avoid edge issues
-    grid.heights[1:-1, 1:-1] = smoothed[1:-1, 1:-1]
+    grid.heights[1:-1, 1:-1] = sum_h_w / np.maximum(sum_w, 1e-5)
 
     return grid
 
@@ -435,7 +431,8 @@ def generate_warzone_alpha(
 
     # Ensure no large jumps (smooth final alphas a bit)
     # The requirement is max jump <= 0.45
-    alphas = uniform_filter(alphas, size=3)
+    from src.compat_utils import scipy_uniform_filter_equivalent
+    alphas = scipy_uniform_filter_equivalent(alphas, size=3)
 
     # 3. After smoothing, apply a scorch clamp pass:
     # For every vertex within (crater_radius * 0.85) of any crater center, clamp alpha to max 0.20
