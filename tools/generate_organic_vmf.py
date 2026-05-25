@@ -21,9 +21,9 @@ from terrain_pipeline import run_pipeline
 from vmf_gen import (
     PipelineSpec,
     DisplacementVMF,
-    DEFAULT_SAFE_SKYBOX,
     MAX_MAP_DISPINFO,
 )
+from src.skybox_manager import DEFAULT_SAFE_SKYBOX
 from material_manager import THEME_BLEND_MATERIAL
 
 
@@ -271,6 +271,11 @@ def main():
         output_dir=str(output_dir),
         use_enhanced_spawning=not args.no_enhanced,
         current_theme=args.theme,
+        topology=getattr(spec, "topology", ""),
+        urban_blocks=getattr(grid, "urban_blocks", []),
+        street_cover_points=getattr(spec, "street_cover_points", None),
+        compile_budget=getattr(spec, "compile_budget", None),
+        resource_elevation=getattr(spec, "resource_elevation", None),
     )
     print(
         f"DEBUG: Creating PipelineSpec with terrain_actual_max={vmf_spec.terrain_actual_max}"

@@ -1,6 +1,5 @@
 import math
 import numpy as np
-from typing import Optional
 import sys
 from pathlib import Path
 

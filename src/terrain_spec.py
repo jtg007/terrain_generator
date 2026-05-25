@@ -20,7 +20,7 @@ class ZoneType:
     RESOURCE = "resource_zone"
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class LayoutNode:
     x: float
     y: float
@@ -251,6 +251,21 @@ class HeightGrid:
     slopes: Optional[List[List[float]]] = None
     global_selection_mask: Optional[np.ndarray] = None
 
+    # Semantic masks for urban terrain-first generation
+    urban_alpha_map: Optional[np.ndarray] = None
+    urban_zone_mask: Optional[np.ndarray] = None
+    street_mask: Optional[np.ndarray] = None
+    block_mask: Optional[np.ndarray] = None
+    crater_mask: Optional[np.ndarray] = None
+    vehicle_lane_mask: Optional[np.ndarray] = None
+    prop_exclusion_mask: Optional[np.ndarray] = None
+
+    # Runtime occupancy tracking
+    occupied_cells: Optional[set] = None
+    reserved_vehicle_corridors: Optional[set] = None
+    blocked_los_zones: Optional[set] = None
+    placed_props: Optional[list] = None
+
     def __post_init__(self):
         if isinstance(self.heights, list):
             self.heights = np.array(self.heights, dtype=np.float32)
@@ -261,6 +276,15 @@ class HeightGrid:
             self.slopes = [[0.0 for _ in range(self._cols)] for _ in range(self._rows)]
         if self.global_selection_mask is None:
             self.global_selection_mask = np.ones((self._rows, self._cols), dtype=bool)
+
+        if self.occupied_cells is None:
+            self.occupied_cells = set()
+        if self.reserved_vehicle_corridors is None:
+            self.reserved_vehicle_corridors = set()
+        if self.blocked_los_zones is None:
+            self.blocked_los_zones = set()
+        if self.placed_props is None:
+            self.placed_props = []
 
     @property
     def rows(self) -> int:

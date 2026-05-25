@@ -12,7 +12,6 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.terrain_spec import create_default_spec, TerrainSpec
 from src.terrain_pipeline import run_pipeline
 from src.export_utils import heightgrid_to_heightmap
 from src.config_model import GUIConfigModel

@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Tuple, Optional
-import sys
 
 from src.terrain_spec import TerrainSpec
 
@@ -30,7 +29,7 @@ class GUIConfigModel:
     height_scale: int = 2048  # Absolute max height
     skybox_ceiling: int = 4096  # Skybox Ceiling Height
 
-    topology: str = "canyon"
+    topology: str = "canyon"  # also allows "urban", "warzone"
     lane_width_scale: float = 0.5
     mountain_height_scale: float = 1.0
     lane_elevation: float = 0.15
@@ -228,7 +227,16 @@ class GUIConfigModel:
         # This gives full range from flat (0%) to full mountains (100%)
         effective_mountain_height_scale = self.mountain_height_scale
 
-        return TerrainSpec(
+        if self.topology.lower() == "urban":
+            from src.urban_spec import UrbanSpec
+            spec_cls = UrbanSpec
+        elif self.topology.lower() == "warzone":
+            from src.warzone_spec import WarzoneSpec
+            spec_cls = WarzoneSpec
+        else:
+            spec_cls = TerrainSpec
+
+        return spec_cls(
             origin_x=origin_x,
             origin_y=origin_y,
             size_x=self.map_size_x,

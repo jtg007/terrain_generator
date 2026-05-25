@@ -478,7 +478,6 @@ def generate_canyon_base(
         logging.getLogger(__name__).warning("Canyon generation failed connectivity check. Falling back to pure noise canyon.")
 
         # Fall back to pure noise canyon
-        is_pure_noise = True
 
         # Create an organic mask for the fallback
         fallback_df = generate_noise_canyon_mask(
@@ -490,32 +489,34 @@ def generate_canyon_base(
             feature_scale=feature_scale
         )
 
-        # Recalculate using pure noise mask
-        best_heightmap, new_report = generate_canyon_base(
-            rows=rows,
-            cols=cols,
-            distance_field=fallback_df,
-            map_world_size_x=map_world_size_x,
-            map_world_size_y=map_world_size_y,
-            height_world_units=height_world_units,
-            min_clearance_units=min_clearance_units,
-            seed=seed,
-            feature_scale=feature_scale,
-            warp_strength=warp_strength,
-            lane_width=lane_width,
-            lane_depth=lane_depth,
-            wall_slope=wall_slope,
-            plateau_noise=plateau_noise,
-            roughness=roughness,
-            blur_radius=blur_radius,
-            octaves=octaves,
-            base_terrain=base_terrain,
-            is_pure_noise=True,
-            max_attempts=1  # Prevent infinite recursion
-        )
+        if not is_pure_noise:
+            # Recalculate using pure noise mask
+            best_heightmap, new_report = generate_canyon_base(
+                rows=rows,
+                cols=cols,
+                distance_field=fallback_df,
+                map_world_size_x=map_world_size_x,
+                map_world_size_y=map_world_size_y,
+                height_world_units=height_world_units,
+                min_clearance_units=min_clearance_units,
+                seed=seed,
+                feature_scale=feature_scale,
+                warp_strength=warp_strength,
+                lane_width=lane_width,
+                lane_depth=lane_depth,
+                wall_slope=wall_slope,
+                plateau_noise=plateau_noise,
+                roughness=roughness,
+                blur_radius=blur_radius,
+                octaves=octaves,
+                base_terrain=base_terrain,
+                is_pure_noise=True,
+                max_attempts=1  # Prevent infinite recursion
+            )
 
         best_report["fallback_used"] = True
         # Keep original failure info but update the map
-        best_report["spawn_candidates"] = new_report["spawn_candidates"]
+        if not is_pure_noise:
+            best_report["spawn_candidates"] = new_report["spawn_candidates"]
 
     return best_heightmap.astype(np.float32), best_report
